@@ -65,10 +65,34 @@ class CurieGrid(object):
 
         return data
 
+    def remove_trend_linear(self, data):
+        """
+        Remove the best-fitting linear trend from the data
+
+        This may come in handy if the magnetic data has not been
+        reduced to the pole.
+
+        Parameters
+        ----------
+         data    : 2D numpy array
+
+        Returns
+        -------
+         data    : 2D numpy array
+        """
+        data = data.copy()
+        nr, nc = data.shape
+        xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+
+        A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
+        c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+
+        data.flat[:] -= np.dot(A, c)
+        return data
+
     def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, *args):
         """
-        Compute the radial spectrum for a point (xc,yc)
-        for a square window
+        Compute the radial spectrum for a square grid.
 
         Parameters
         ----------
@@ -136,8 +160,54 @@ class CurieGrid(object):
         return S, k, sigma2
 
 
-    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, *args):
-        pass
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta, *args):
+        """
+        Compute azimuthal spectrum for a square grid.
+
+        Parameters
+        ----------
+         subgrid : window of the original data
+                 : (see subgrid method)
+         taper   : taper function (np.hanning is default)
+                 : set to None for no taper function
+         scale   : scaling factor to get k into rad/km
+                 : (0.001 by default)
+         theta   : angle increment in degrees
+
+        Returns
+        -------
+         S       : Azimuthal spectrum
+         k       : wavenumber [rad/km]
+         theta   : angles
+        """
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            raise RuntimeWarning("subgrid is not square {}".format((nr,nc)))
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+
+        dtheta = np.arange(0.0, 180.0, theta)
+        sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+        S = np.zeros((dtheta.size, kbins.size))
+
+        # control taper
+        if taper is None:
+            vtaper = 1.0
+        else:
+            vtaper = taper(sinogram.shape[0])
+
+        nk = 1 + 2*kbins.size
+        for i in range(0, theta.size):
+            PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
+            S[i,:] = 2.0*np.log( PSD[1:-1] )
+
+        return S, kbins, theta
 
 
 # Helper functions to calculate Curie depth
