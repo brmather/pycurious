@@ -3,7 +3,6 @@ import numpy as np
 from scipy.special import gamma, kv, lambertw
 from scipy.optimize import minimize
 from scipy.signal import tukey
-import time
 
 try: range = xrange
 except: pass
@@ -13,6 +12,8 @@ class CurieGrid(object):
     """
     Accepts a 2D array and Cartesian coordinates specifying the
     bounding box of the array
+
+    Grid must be projected in metres
 
     Parameters
     ----------
@@ -90,7 +91,7 @@ class CurieGrid(object):
         data.flat[:] -= np.dot(A, c)
         return data
 
-    def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, *args):
+    def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """
         Compute the radial spectrum for a square grid.
 
@@ -102,7 +103,7 @@ class CurieGrid(object):
                  : set to None for no taper function
          scale   : scaling factor to get k into rad/km
                  : (0.001 by default)
-         args    : arguments to pass to taper
+         args    : keyword arguments to pass to taper
 
         Returns
         -------
@@ -123,8 +124,8 @@ class CurieGrid(object):
             vtaper = 1.0
         else:
             vtaper = np.ones((nr, nc))
-            rt = taper(nr)
-            ct = taper(nc)
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
 
             for col in range(0, nc):
                 vtaper[:,col] *= rt
@@ -160,7 +161,7 @@ class CurieGrid(object):
         return S, k, sigma2
 
 
-    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta, *args):
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
         """
         Compute azimuthal spectrum for a square grid.
 
@@ -173,6 +174,7 @@ class CurieGrid(object):
          scale   : scaling factor to get k into rad/km
                  : (0.001 by default)
          theta   : angle increment in degrees
+         args    : arguments to pass to taper
 
         Returns
         -------
@@ -180,6 +182,7 @@ class CurieGrid(object):
          k       : wavenumber [rad/km]
          theta   : angles
         """
+        import radon
         data = subgrid
         nr, nc = data.shape
         nw = nr
@@ -200,14 +203,14 @@ class CurieGrid(object):
         if taper is None:
             vtaper = 1.0
         else:
-            vtaper = taper(sinogram.shape[0])
+            vtaper = taper(sinogram.shape[0], **kwargs)
 
         nk = 1 + 2*kbins.size
-        for i in range(0, theta.size):
+        for i in range(0, dtheta.size):
             PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
-            S[i,:] = 2.0*np.log( PSD[1:-1] )
+            S[i,:] = 2.0*np.log( PSD[1:kbins.size+1] )
 
-        return S, kbins, theta
+        return S, kbins, dtheta
 
 
 # Helper functions to calculate Curie depth
