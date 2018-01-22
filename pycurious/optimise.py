@@ -7,7 +7,23 @@ try: range=xrange
 except: pass
 
 class CurieOptimise(CurieGrid):
+    """
+    Extends the CurieGrid class to include optimisation routines
+    see scipy.optimize.minimize for a description of the algorithm
 
+    Parameters
+    ----------
+     grid     : 2D array of magnetic data
+     xmin     : minimum x bound in metres
+     xmax     : maximum x bound in metres
+     ymin     : minimum y bound in metres
+     ymax     : maximum y bound in metres
+    
+    Attributes
+    ----------
+     bounds   : lower and upper bounds for beta, zt, dz, C
+     prior    : dictionary of priors for beta, zt, dz, C
+    """
     def __init__(self, grid, xmin, xmax, ymin, ymax):
 
         super(CurieOptimise, self).__init__(grid, xmin, xmax, ymin, ymax)
@@ -24,6 +40,15 @@ class CurieOptimise(CurieGrid):
         return
 
     def add_prior(self, **kwargs):
+        """
+        Add a prior to the dictionary (tuple)
+
+        Available priors are beta, zt, dz, C
+
+        Usage
+        -----
+         add_prior(beta=(p, sigma_p))
+        """
 
         for key in kwargs:
             if key in self.prior:
@@ -37,7 +62,18 @@ class CurieOptimise(CurieGrid):
 
 
     def objective_routine(self, **kwargs):
+        """
+        Evaluate the objective routine to find the misfit with priors
+        Only keys stored in self.prior will be added to the total misfit
 
+        Example Usage
+        -------------
+         objective_routine(beta=2.5)
+
+        Returns
+        -------
+         misfit  : sum of misfit (float)
+        """
         c = 0.0
 
         for key in kwargs:
@@ -49,12 +85,25 @@ class CurieOptimise(CurieGrid):
         return c
 
     def objective_function(self, x, x0, sigma_x0):
+        """
+        Objective function used in objective_routine
+        """
         return np.sum((x - x0)**2/sigma_x0**2)
 
 
     def min_func(self, x, Phi_exp, kh):
         """
         Function to minimise
+
+        Parameters
+        ----------
+         x        : array of variables [beta, zt, dz, C]
+         Phi_exp  : radial spectrum
+         kh       : wavenumbers [rad/km]
+
+        Returns
+        -------
+         misfit   : sum of misfit (float)
         """
         beta = x[0]
         zt = x[1]
@@ -70,6 +119,22 @@ class CurieOptimise(CurieGrid):
         Find the optimal parameters of beta, zt, dz, C for a given
         centroid (xc,yc) and window size.
 
+        Parameters
+        ----------
+         window  : size of window in metres
+         xc_list : centroid x values shape(l,)
+         yc_list : centroid y values shape(l,)
+         beta    : fractal parameter (starting value)
+         zt      : top of magnetic layer (starting value)
+         dz      : thickness of magnetic layer (starting value)
+         C       : field constant (starting value)
+
+        Returns
+        -------
+         beta    : fractal parameters
+         zt      : top of magnetic layer
+         dz      : thickness of magnetic layer
+         C       : field constant
         """
 
         if type(process_subgrid) == type(None):
@@ -102,24 +167,24 @@ class CurieOptimise(CurieGrid):
         Use this routine to iteratively improve the precision of various
         parameters (see notes)
 
-        CAUTION! Priors will be different at the end of this routine!
+        CAUTION! Priors will be altered at the end of this routine!
         
         Parameters
         ----------
          window  : size of window in metres
-	 xc_list : centroid x values shape(l,)
-	 yc_list : centroid y values shape(l,)
-	 beta    : fractal parameter (starting value)
-	 zt      : top of magnetic layer (starting value)
-	 dz      : thickness of magnetic layer (starting value)
-	 C       : field constant (starting value)
-	
-	Returns
-	-------
-	 beta    : fractal parameters shape(l,)
-	 zt      : top of magnetic layer shape(l,)
-	 dz      : thickness of magnetic layer shape(l,)
-	 C       : field constant shape(l,)
+         xc_list : centroid x values shape(l,)
+         yc_list : centroid y values shape(l,)
+         beta    : fractal parameter shape(l,)
+         zt      : top of magnetic layer shape(l,)
+         dz      : thickness of magnetic layer shape(l,)
+         C       : field constant shape(l,)
+
+        Returns
+        -------
+         beta    : fractal parameters shape(l,)
+         zt      : top of magnetic layer shape(l,)
+         dz      : thickness of magnetic layer shape(l,)
+         C       : field constant shape(l,)
 
         Notes
         -----
@@ -175,6 +240,16 @@ class CurieOptimise(CurieGrid):
 
 
     def _prioritise(self, mask, **kwargs):
+        """
+        Calculate mean and stdev for beta, zt, dz, C that were provided
+        in optimise_routine and set as priors.
+
+        mask selects entries that are within the window size
+
+        Returns
+        ----------
+         x0   : initial x variables
+        """
 
         x0 = np.array([3.0, 1.0, 20.0, 5.0])
 

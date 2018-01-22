@@ -18,11 +18,11 @@ class CurieGrid(object):
 
     Parameters
     ----------
-     data     : 2D array of magnetic data
-     xmin     : minimum x bound
-     xmax     : maximum x bound
-     ymin     : minimum y bound
-     ymax     : maximum y bound
+     grid     : 2D array of magnetic data
+     xmin     : minimum x bound in metres
+     xmax     : maximum x bound in metres
+     ymin     : minimum y bound in metres
+     ymax     : maximum y bound in metres
     """
     def __init__(self, grid, xmin, xmax, ymin, ymax):
         
@@ -316,10 +316,8 @@ def bouligand2009(beta, zt, dz, kh, C=0.0):
 
 def maus1995(beta, zt, kh, C=0.0):
     """
-    Calculate the synthetic radial power spectrum
-    of magnetic anomalies
-
-    Maus and Dimri (1995)
+    Calculate the synthetic radial power spectrum of
+    magnetic anomalies (Maus and Dimri; 1995)
 
     This is not all that useful except when testing
     overflow errors which occur for the second term
@@ -329,7 +327,6 @@ def maus1995(beta, zt, kh, C=0.0):
     ----------
      beta  : fractal parameter
      zt    : top of magnetic sources
-     dz    : thickness of magnetic sources
      kh    : norm of the wave number in the horizontal plane
      C     : field constant (Maus et al., 1997)
 
@@ -347,5 +344,4 @@ def maus1995(beta, zt, kh, C=0.0):
        estimation using a self-similar magnetization model, Geophys. J. Int.,
        129, 163–168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
-    khdz = kh*dz
     return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)
