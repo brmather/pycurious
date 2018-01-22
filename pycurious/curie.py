@@ -3,6 +3,7 @@ import numpy as np
 from scipy.special import gamma, kv, lambertw
 from scipy.optimize import minimize
 from scipy.signal import tukey
+import warnings
 
 try: range = xrange
 except: pass
@@ -29,9 +30,13 @@ class CurieGrid(object):
         ny, nx = self.data.shape
         self.xmin, self.xmax = xmin, xmax
         self.ymin, self.ymax = ymin, ymax
-        self.xcoords, self.dx = np.linspace(xmin, xmax, nx, retstep=True)
-        self.ycoords, self.dy = np.linspace(ymin, ymax, ny, retstep=True)
+        self.xcoords, dx = np.linspace(xmin, xmax, nx, retstep=True)
+        self.ycoords, dy = np.linspace(ymin, ymax, ny, retstep=True)
         self.nx, self.ny = nx, ny
+        self.dx, self.dy = dx, dy
+
+        if not np.isclose(dx, dy):
+            warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
 
 
     def subgrid(self, xc, yc, window):
@@ -52,7 +57,7 @@ class CurieGrid(object):
 
         # check in coordinate in grid
         if xc < self.xmin or xc > self.xmax or yc < self.ymin or yc > self.ymax:
-            raise ValueError("Point (xc,yc) outside data range")
+            raise ValueError("Point ({},{}) outside data range".format(xc,yc))
 
         # find nearest index to xc,yc
         ix = np.abs(self.xcoords - xc).argmin()
@@ -62,9 +67,61 @@ class CurieGrid(object):
         n2w = nw//2
 
         # extract a square window from the data
-        data = self.data[ix-n2w:ix+n2w+1, iy-n2w:iy+n2w+1]
+        imin = ix - n2w
+        imax = ix + n2w + 1
+        jmin = iy - n2w
+        jmax = iy + n2w + 1
+
+        # safeguard if window size is larger than grid
+        imin = max(imin, 0)
+        imax = min(imax, self.nx)
+        jmin = max(jmin, 0)
+        jmax = min(jmax, self.ny)
+        
+        data = self.data[jmin:jmax, imin:imax]
 
         return data
+
+
+    def create_centroid_list(self, window, spacingX=None, spacingY=None):
+        """
+        Create a list of xc,yc values to extract subgrids.
+
+        Parameters
+        ----------
+         window   : size of the windows in metres
+         spacingX : specify spacing in metres in the X direction
+                  : (optional) will default to maximum X resolution
+         spacingY : specify spacing in metres in the Y direction
+                    (optional) will default to maximum Y resolution
+
+        Returns
+        -------
+         xc_list  : list of x coordinates
+         yc_list  : list of y coordinates
+        """
+        
+        nx, ny = grd.nx, grd.ny
+        xcoords = self.xcoords
+        ycoords = self.ycoords
+        
+        nw = int(round(window/self.dx))
+        n2w = nw//2
+        
+        # this is the densest spacing possible given the data
+        xc = xcoords[n2w:-n2w]
+        yc = ycoords[n2w:-n2w]
+        
+        # but we can alter it if required
+        if type(spacingX) != type(None):
+            xc = np.arange(xc.min(), xc.max(), spacingX)
+        if type(spacingY) != type(None):
+            yc = np.arange(yc.min(), yc.max(), spacingY)
+
+        xq, yq = np.meshgrid(xc, yc)
+            
+        return xq.ravel(), yq.ravel()
+
 
     def remove_trend_linear(self, data):
         """
@@ -117,7 +174,8 @@ class CurieGrid(object):
         nw = nr
 
         if nr != nc:
-            raise RuntimeWarning("subgrid is not square {}".format((nr,nc)))
+            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+
 
         # control taper
         if taper is None:

@@ -6,6 +6,9 @@ from scipy.sparse import csr_matrix
 
 cimport cradon
 
+try: range=xrange
+except: pass
+
 def radon2d(data, theta):
     
     if np.min(theta) < 0.0 or np.max(theta) >= np.pi:
