@@ -35,7 +35,7 @@ class CurieGrid(object):
         self.nx, self.ny = nx, ny
         self.dx, self.dy = dx, dy
 
-        if not np.isclose(dx, dy):
+        if abs(dx - dy) > 1.0:
             warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
 
 
@@ -101,7 +101,7 @@ class CurieGrid(object):
          yc_list  : list of y coordinates
         """
         
-        nx, ny = grd.nx, grd.ny
+        nx, ny = self.nx, self.ny
         xcoords = self.xcoords
         ycoords = self.ycoords
         
@@ -300,7 +300,7 @@ def bouligand2009(beta, zt, dz, kh, C=0.0):
        doi:10.1029/2009JB006494
      Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
        estimation using a self-similar magnetization model, Geophys. J. Int.,
-       129, 163–168, doi:10.1111/j.1365-246X.1997.tb00945.x
+       129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
     # from scipy.special import kv
     khdz = kh*dz
@@ -342,6 +342,6 @@ def maus1995(beta, zt, kh, C=0.0):
        doi:10.1029/2009JB006494
      Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
        estimation using a self-similar magnetization model, Geophys. J. Int.,
-       129, 163–168, doi:10.1111/j.1365-246X.1997.tb00945.x
+       129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
     return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)

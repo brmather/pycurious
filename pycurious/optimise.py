@@ -104,13 +104,27 @@ class CurieOptimise(CurieGrid):
         Returns
         -------
          misfit   : sum of misfit (float)
+
+        Notes
+        -----
+         We purposely ignore all warnings raised by the bouligand2009
+         function because some combinations of input parameters will
+         trigger an out-of-range warning that will crash the minimiser
+         when this occurs we overwrite the misfit with a very large number
         """
         beta = x[0]
         zt = x[1]
         dz = x[2]
         C = x[3]
-        misfit = np.linalg.norm(w*(Phi_exp - bouligand2009(beta, zt, dz, kh, C)))
-        misfit += self.objective_routine(beta=beta, zt=zt, dz=dz, C=C)
+        with warnings.catch_warnings() as w:
+            warnings.simplefilter("ignore")
+            Phi_syn = bouligand2009(beta, zt, dz, kh, C)
+
+        misfit = np.linalg.norm((Phi_exp - Phi_syn))
+        if not np.isfinite(misfit):
+            misfit = 1e99
+        else:
+            misfit += self.objective_routine(beta=beta, zt=zt, dz=dz, C=C)
         return misfit
 
 
@@ -159,7 +173,7 @@ class CurieOptimise(CurieGrid):
         return res.x
 
 
-    def optimise_routine(self, window, xc_list, yc_list, beta=None, zt=None, dz=None, C=None, taper=np.hanning, process_subgrid=None, **kwargs):
+    def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=20.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the optimal values
         of beta, zt, dz, C for a given window size.
@@ -191,18 +205,14 @@ class CurieOptimise(CurieGrid):
          Parameters such as beta and C vary over long wavelengths,
          thus keeping these somewhat rigid can improve the precision
          of zt and dz.
-         The mean and stdev of any vectors for beta, zt, dz, C will
-         be added as priors in the objective routine.
+         The mean and stdev of any vectors for beta, zt, dz, C can
+         be added as priors in the objective routine using add_prior
 
          Recommended usage is two passes:
          1. keep beta, zt, dz, C set to None with no prior
-         2. provide these vectors in the second pass
+         2. add the mean and stdev of beta, zt, dz, C as priors
+            and run through a second pass
         """
-        
-        if type(process_subgrid) == type(None):
-            # dummy function
-            def process_subgrid(subgrid):
-                return subgrid
 
         n = len(xc_list)
         
@@ -211,28 +221,17 @@ class CurieOptimise(CurieGrid):
 
 
         # storage vectors
-        Bopt  = np.zeros(n)
-        ztopt = np.zeros(n)
-        dzopt = np.zeros(n)
-        Copt  = np.zeros(n)
-        
-        d2w = window/2
+        Bopt  = np.empty(n)
+        ztopt = np.empty(n)
+        dzopt = np.empty(n)
+        Copt  = np.empty(n)
 
         for i in range(0, n):
             xc = xc_list[i]
             yc = yc_list[i]
 
-            # find all values of beta, zt, dz, C inside the window
-            xcmask = np.logical_and(xc_list >= xc-d2w, xc_list <= xc+d2w)
-            ycmask = np.logical_and(yc_list >= yc-d2w, yc_list <= yc+d2w)
-            lcmask = np.logical_and(xcmask, ycmask)
-
-            # update priors
-            x0 = self._prioritise(lcmask, beta=beta, zt=zt, dz=dz, C=C)
-            B0, zt0, dz0, C0 = x0
-
             Bopt[i], ztopt[i], dzopt[i], Copt[i] = self.optimise(window, xc, yc,\
-                                                                 B0, zt0, dz0, C0,\
+                                                                 beta, zt, dz, C,\
                                                                  taper, process_subgrid,\
                                                                  **kwargs)
 
@@ -250,7 +249,7 @@ class CurieOptimise(CurieGrid):
         ----------
          x0   : initial x variables
         """
-
+        self.reset_priors()
         x0 = np.array([3.0, 1.0, 20.0, 5.0])
 
         for i, key in enumerate(['beta', 'zt', 'dz', 'C']):
@@ -259,8 +258,9 @@ class CurieOptimise(CurieGrid):
                 marray = array[mask]
                 v  = np.mean(marray)
                 dv = np.std(marray)
-                self.prior[key] = (v, dv)
-                x0[i] = v
+                if dv != 0.0:
+                    self.prior[key] = (v, dv)
+                    x0[i] = v
 
         return x0
 
