@@ -9,6 +9,17 @@ Magnetic data is one of the most common geophysics datasets available on the sur
 - Scipy 0.14 and above
 - Cython
 
+Optional dependencies for mapping module:
+
+- Matplotlib
+- [pyproj](https://github.com/jswhit/pyproj)
+- [Cartopy](http://scitools.org.uk/cartopy/docs/latest/index.html)
+
+Optional dependencies for parallel module:
+
+- [mpi4py](https://mpi4py.readthedocs.io/en/stable/)
+- [petsc4py](http://www.mcs.anl.gov/petsc/petsc4py-current/docs/usrman/install.html)
+
 ## Installation
 
 To install:

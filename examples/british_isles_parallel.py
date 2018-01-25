@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pycurious
 
+from mpi4py import MPI
+
 """
 **EMAG2_V3_20170530.csv**
 
@@ -70,17 +72,17 @@ mag_sphere = pycurious.grid(mag_data[:,:2], mag_data[:,3], extent_sphere, shape=
 
 
 # initialise CurieOptimise object
-grd = pycurious.CurieOptimise(mag_grid, xmin, xmax, ymin, ymax)
+max_window = 100e3
 
-# let's pick a point in the centre of the study area
-xpt = 0.5*(xmax + xmin)
-ypt = 0.5*(ymax + ymin)
+grd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, max_window)
 
-# get a subsection of the grid
-subgrd = grd.subgrid(xpt, ypt, 100000.)
+comm = grd.comm
+rank = comm.rank
+print("{} old shape {} new shape {}".format(rank, mag_grid.shape, grd.data.shape))
+print("{} old extent {}".format(rank, (xmin, xmax, ymin, ymax)))
+print("{} new extent {}".format(rank, (grd.xmin, grd.xmax, grd.ymin, grd.ymax)))
 
-# compute radial spectrum
-S, k, sigma2 = grd.radial_spectrum(subgrd, taper=None)
+
 
 """
 ## Optimise
@@ -112,16 +114,16 @@ Ensure there is no *a priori* information and commence with
 suitable starting values.
 """
 
-xc_list, yc_list = grd.create_centroid_list(100e3, spacingX=20e3, spacingY=20e3)
-# xc_list, yc_list = grd.create_centroid_list(100e3)
+xc_list, yc_list = grd.create_centroid_list(max_window, spacingX=5e3, spacingY=5e3)
+# xc_list, yc_list = grd.create_centroid_list(max_window)
 
-print("number of centroids = {}".format(len(xc_list)))
+print("{} number of centroids = {}".format(rank, len(xc_list)))
 
 
 
 
 grd.reset_priors()
-betaN, ztN, dzN, CN = grd.optimise_routine(100e3, xc_list, yc_list, 3.0, 1.0, 20.0, 5.0, taper=None)
+betaN, ztN, dzN, CN = grd.optimise_routine(max_window, xc_list, yc_list, 3.0, 1.0, 20.0, 5.0, taper=None)
 
 
 
@@ -142,9 +144,9 @@ for i, ax in enumerate([ax1, ax2, ax3, ax4]):
     ax.set_title(title)
     sci = ax.scatter(xc_list[mask]/1e3, yc_list[mask]/1e3, c=data[mask])
     fig.colorbar(sci, ax=ax)
-    fig.savefig('CPD_initial.png', bbox_inches='tight')
+    fig.savefig('{}-CPD_initial.png'.format(rank), bbox_inches='tight')
     
-    print "{:5} mean={:.2f} std={:.2f}".format(title, data.mean(), np.std(data))
+    print "{} {:5} mean={:.2f} std={:.2f}".format(rank, title, data.mean(), np.std(data))
 
 """
 **Second pass**
@@ -171,13 +173,20 @@ grd.add_prior(zt=(zt_mu, zt_std))
 grd.add_prior(dz=(20.0, 100.))
 grd.add_prior(C=(C_mu, C_std))
 
+g_sigma = np.array(0.0)
+g_mu = np.array(0.0)
+
 for p in ['beta', 'zt', 'dz', 'C']:
     prior = grd.prior[p]
     if type(prior) != type(None):
-        mu, sigma = prior
+        mu, sigma = prior # local
+        comm.Allreduce([np.array(mu), MPI.DOUBLE], [g_mu, MPI.DOUBLE], op=MPI.SUM)
+        comm.Allreduce([np.array(sigma), MPI.DOUBLE], [g_sigma, MPI.DOUBLE], op=MPI.SUM)
+        grd.prior[p] = (g_mu/comm.size, g_sigma/comm.size)
+        mu, sigma = grd.prior[p]
     else:
         mu, sigma = 0,0
-    print("prior {:5} mean={:.2f} std={:.2f}".format(p, mu, sigma))
+    print("{} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
 
 betaOpt, ztOpt, dzOpt, COpt = grd.optimise_routine(100e3, xc_list, yc_list, taper=None)
 
@@ -194,9 +203,9 @@ for i, ax in enumerate([ax1, ax2, ax3, ax4]):
     ax.set_title(title)
     sci = ax.scatter(xc_list[mask]/1e3, yc_list[mask]/1e3, c=data[mask])
     fig.colorbar(sci, ax=ax)
-    fig.savefig('CPD_optimised.png', bbox_inches='tight')
+    fig.savefig('{}-CPD_optimised.png'.format(rank), bbox_inches='tight')
     
-    print "{:5} mean={:.2f} std={:.2f}".format(title, data.mean(), np.std(data))
+    print "{} {:5} mean={:.2f} std={:.2f}".format(rank, title, data.mean(), np.std(data))
 
 """
 Not bad!
@@ -204,10 +213,10 @@ The Curie depth can be refined further if an average geotherm is assumed,
 but then it is no longer an independent constraint on the temperature field.
 """
 
-
 # Write to file
 curie_depth = ztOpt + dzOpt
 
 lonc, latc = pycurious.transform_coordinates(xc_list, yc_list, epsg_in=2157, epsg_out=4326)
-np.savetxt('british_isles_cpd.csv', np.column_stack([lonc, latc, curie_depth]),\
+np.savetxt('{}-british_isles_cpd.csv'.format(rank), np.column_stack([lonc, latc, curie_depth]),\
            fmt='%.6f', delimiter=',', header='lon, lat, curie_depth')
+

@@ -46,8 +46,8 @@ class CurieParallel(CurieOptimise):
         ny, nx = grid.shape
         dx = (xmax - xmin)/nx
         dy = (ymax - ymin)/ny
-        nw = int(round(max_window)/dx)
-        n2w = nw//2
+        nw = max_window/dx
+        n2w = int(np.ceil(nw/2))
 
         if abs(dx - dy) > 1.0:
             warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
@@ -94,7 +94,7 @@ class CurieParallel(CurieOptimise):
         if window > self.max_window:
             raise ValueError("Max window size is {}".format(self.max_window))
 
-        super(CurieParallel, self).subgrid(xc, yc, window)
+        return super(CurieParallel, self).subgrid(xc, yc, window)
 
     
     def sync(self, vector):
