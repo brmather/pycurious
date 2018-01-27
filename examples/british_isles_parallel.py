@@ -72,7 +72,7 @@ mag_sphere = pycurious.grid(mag_data[:,:2], mag_data[:,3], extent_sphere, shape=
 
 
 # initialise CurieOptimise object
-max_window = 100e3
+max_window = 150e3
 
 grd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, max_window)
 
@@ -188,7 +188,7 @@ for p in ['beta', 'zt', 'dz', 'C']:
         mu, sigma = 0,0
     print("{} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
 
-betaOpt, ztOpt, dzOpt, COpt = grd.optimise_routine(100e3, xc_list, yc_list, taper=None)
+betaOpt, ztOpt, dzOpt, COpt = grd.optimise_routine(max_window, xc_list, yc_list, taper=None)
 
 
 

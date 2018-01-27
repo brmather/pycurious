@@ -88,7 +88,7 @@ class CurieOptimise(CurieGrid):
         """
         Objective function used in objective_routine
         """
-        return np.sum((x - x0)**2/sigma_x0**2)
+        return np.linalg.norm((x - x0)/sigma_x0)**2
 
 
     def min_func(self, x, Phi_exp, kh):
@@ -112,15 +112,12 @@ class CurieOptimise(CurieGrid):
          trigger an out-of-range warning that will crash the minimiser
          when this occurs we overwrite the misfit with a very large number
         """
-        beta = x[0]
-        zt = x[1]
-        dz = x[2]
-        C = x[3]
+        beta, zt, dz, C = x
         with warnings.catch_warnings() as w:
             warnings.simplefilter("ignore")
             Phi_syn = bouligand2009(beta, zt, dz, kh, C)
 
-        misfit = np.linalg.norm((Phi_exp - Phi_syn))
+        misfit = np.linalg.norm(Phi_exp - Phi_syn)
         if not np.isfinite(misfit):
             misfit = 1e99
         else:
@@ -157,7 +154,7 @@ class CurieOptimise(CurieGrid):
                 return subgrid
 
         # initial constants for minimisation
-        w = 1.0 # weight low frequency?
+        # w = 1.0 # weight low frequency?
 
         x0 = np.array([beta, zt, dz, C])
 

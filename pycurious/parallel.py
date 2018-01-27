@@ -31,6 +31,7 @@ class CurieParallel(CurieOptimise):
     ----------
      bounds     : lower and upper bounds for beta, zt, dz, C
      prior      : dictionary of priors for beta, zt, dz, C
+     coords     : local xy coordinates
     """
 
     def __init__(self, grid, xmin, xmax, ymin, ymax, max_window):
@@ -47,7 +48,7 @@ class CurieParallel(CurieOptimise):
         dx = (xmax - xmin)/nx
         dy = (ymax - ymin)/ny
         nw = max_window/dx
-        n2w = int(np.ceil(nw/2))
+        n2w = int(nw/2) + 1 # add some buffer
 
         if abs(dx - dy) > 1.0:
             warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
