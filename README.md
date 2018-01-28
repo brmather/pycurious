@@ -1,16 +1,20 @@
 # PyCurious
 
-Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. The Curie depth is most often interpreted to be the Curie point of magnetite, because it is the most magnetic mineral, thus Curie depth offers a very desirable isotherm in the lower crust. This is useful for many applications that require constraints on lithospheric geotherms.
+Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. This is most often interpreted as the 580C isotherm, which is the Curie point of magnetite - the most prevalent magnetic mineral.
+
+All methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. Initial methods plotted the radial spectrum, obtained from FFT, against the wavenumber (rad/km) and used the gradient between two points to estimate the Curie depth ([Tanaka *et al.* 1999](http://linkinghub.elsevier.com/retrieve/pii/S0040195199000724)). The drawback here being that the choice of points is subjective and potentially meaningless if the window size is too small to capture long wavelength signals. Alternatively, [Bouligand *et al.* (2009)](http://doi.wiley.com/10.1029/2009JB006494) formulated an analytical expression for the radial power spectum using four parameters: *beta* - a fractal parameter, *zt* - the top of magnetic sources, *dz* - the thickness of the magnetic layer, and *C* - a field constant. The Curie depth is determined by minimising the misfit between the analytical power spectrum and the power spectrum computed from FFT.
+
+This Python package implements the latter method for computing Curie depth. It was heavily inspired from the [pycpd](https://github.com/groupeLIAMG/pycpd) package which implements a user inferface. We have simplified the API and extended it for parallel computation. Significant effort has been made towards repurposing Curie depth determination within a Bayesian inverse framework. PyCurious implements an objective function that accepts *a priori* information, and sensitivity analyses quantify uncertainty from an ensemble of Curie depth realisations.
 
 ## Usage
 
 PyCurious consists of 3 classes that inherit from each other:
 
 1. **CurieGrid**: base class that computes radial power spectrum, centroids for processing, decomposition of subgrids.
-2. **CurieOptimise**: optimisation module for fitting the synthetic power spectrum [(Bouligand *et al.* 2009)](http://doi.wiley.com/10.1029/2009JB006494) (inherits CurieGrid).
+2. **CurieOptimise**: optimisation module for fitting the synthetic power spectrum (inherits CurieGrid).
 3. **CurieParallel**: parallel implementation based on the decomposition of subgrids (inherits CurieOptimise).
 
-Also included is several functions for mapping, gridding scattered data points, and converting between different coordinate reference systems (CRS).
+Also included is several functions for mapping, gridding scattered data points, and converting between coordinate reference systems (CRS).
 
 ## Dependencies
 
@@ -38,4 +42,4 @@ To install:
 
 This will compile all C and Fortran sources and install them to the user directory (omit the `--user` flag to install to the system directory).
 
-Remember to delete the `build` directory if you are upgrading this package.
+Remember to delete the build folder if you are upgrading this package.
