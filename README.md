@@ -2,6 +2,16 @@
 
 Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. The Curie depth is most often interpreted to be the Curie point of magnetite, because it is the most magnetic mineral, thus Curie depth offers a very desirable isotherm in the lower crust. This is useful for many applications that require constraints on lithospheric geotherms.
 
+## Usage
+
+PyCurious consists of 3 classes that inherit from each other:
+
+1. **CurieGrid**: base class that computes radial power spectrum, centroids for processing, decomposition of subgrids.
+2. **CurieOptimise**: optimisation module for fitting the synthetic power spectrum [(Bouligand *et al.* 2009)](http://doi.wiley.com/10.1029/2009JB006494) (inherits CurieGrid).
+3. **CurieParallel**: parallel implementation based on the decomposition of subgrids (inherits CurieOptimise).
+
+Also included is several functions for mapping, gridding scattered data points, and converting between different coordinate reference systems (CRS).
+
 ## Dependencies
 
 - Python 2.7 and above
