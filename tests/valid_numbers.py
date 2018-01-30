@@ -15,10 +15,9 @@ def func(x, Phi_exp, kh):
         warnings.simplefilter("ignore")
         Phi_syn = bouligand2009(beta, zt, dz, kh, C)
         if np.isnan(Phi_syn).any():
-            print "fill"
             Phi_syn.fill(1e5)
 
-    misfit = np.linalg.norm((Phi_exp - Phi_syn))
+    misfit = np.linalg.norm((Phi_exp - Phi_syn))**2
 
     # print (Phi_syn), misfit
 #     misfit = np.sum((Phi_exp - pycurious.bouligand2009(beta, zt, dz, kh, C))**2/np.sqrt(sigma2)**2)
@@ -26,7 +25,6 @@ def func(x, Phi_exp, kh):
     misfit += (zt - 0.14)**2/0.28**2
     misfit += (dz - 22.73)**2/29.63**2
     misfit += (C - 11.88)**2/1.38**2
-    print misfit
     return misfit
 
 def bouligand2009(beta, zt, dz, kh, C=0.0):
@@ -109,5 +107,5 @@ ub = [None]*len(lb)
 # xi = func([5, 0., 45., 6.], S, k)
 xi = func(x0, S, k)
 
-res = minimize(func, x0, args=(S, k), method='TNC', bounds=zip(lb,ub))
-print res.x
+res = minimize(func, x0, args=(S, k), method='TNC', bounds=list(zip(lb,ub)))
+print("beta={:.2f}, zt={:.2f}, dz={:.2f}, C={:.2f}".format(*res.x))

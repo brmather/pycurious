@@ -59,7 +59,7 @@ for i, ax in enumerate([ax1, ax2, ax3, ax4]):
     fig.colorbar(sci, ax=ax)
     fig.savefig('CPD_initial.png', bbox_inches='tight')
     
-    print "{:5} mean={:.2f} std={:.2f}".format(title, data.mean(), np.std(data))
+    print("{:5} mean={:.2f} std={:.2f}".format(title, data.mean(), np.std(data)))
 
 
 
@@ -94,4 +94,4 @@ for i, ax in enumerate([ax1, ax2, ax3, ax4]):
     fig.colorbar(sci, ax=ax)
     fig.savefig('CPD_optimised.png', bbox_inches='tight')
     
-    print "{:5} mean={:.2f} std={:.2f}".format(title, data.mean(), np.std(data))
+    print("{:5} mean={:.2f} std={:.2f}".format(title, data.mean(), np.std(data)))

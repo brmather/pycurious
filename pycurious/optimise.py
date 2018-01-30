@@ -2,6 +2,7 @@
 from .curie import *
 import numpy as np
 from scipy.optimize import minimize
+from scipy.special import polygamma
 
 try: range=xrange
 except: pass
@@ -34,7 +35,7 @@ class CurieOptimise(CurieGrid):
         # lower / upper bounds
         lb = np.zeros(4)
         ub = [None]*len(lb)
-        bounds = zip(lb,ub)
+        bounds = list(zip(lb,ub))
         self.bounds = bounds
 
         return
@@ -260,4 +261,3 @@ class CurieOptimise(CurieGrid):
                     x0[i] = v
 
         return x0
-
