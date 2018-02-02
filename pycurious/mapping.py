@@ -15,6 +15,7 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     proj_out = pyproj.Proj("+init=EPSG:"+str(epsg_out))
     return pyproj.transform(proj_in, proj_out, x, y)
 
+
 def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs):
     """
     Grid a smaller section of a large dataset taking into
@@ -100,3 +101,47 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
 
     vq = griddata(coords_trim, data_trim, (xq, yq), **kwargs)
     return vq
+
+
+def optimise_surfaces(surface1, surface2, sigma):
+    """
+    Optimise the misfit between surface1 and surface2
+
+    surface1 and surface2 are normalised between 0 and 1
+    and their residual is minimised, weighted by sigma
+
+    Parameters
+    ----------
+     surface1  : starting surface (can be flat)
+     surface2  : surface to match to
+     sigma     : uncertainty of fitting coefficients
+
+    Returns
+    -------
+     surface3  : optimised surface
+
+    Notes
+    -----
+     The Krylov method uses a Krylov approximation for the
+     inverse Jacobian as it is suitable for large problems
+    """
+    from scipy.optimize import root
+    
+    def objective_function(x, x0, sigma_x0):
+        return (x - x0)**2/sigma_x0**2
+    
+    sigma = sigma.ravel()
+    
+    s1 = surface1.flatten()
+    s1 -= s1.min()
+    s1 /= s1.max()
+    
+    s2 = surface2.flatten()
+    s2 -= s2.min()
+    s2 /= s2.max()
+    
+    # starting point should be at prior
+    x0 = s1
+    
+    sol = root(objective_function, x0, method='krylov')
+    return sol.x.reshape(surface1.shape)
