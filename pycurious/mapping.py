@@ -57,10 +57,14 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     # Extract only the data within the extent
     data_mask = np.ones(data.shape[0], dtype=bool)
 
-    mask_e = coords[:,0] < xtmin
-    mask_w = coords[:,0] > xtmax
-    mask_n = coords[:,1] < ytmin
-    mask_s = coords[:,1] > ytmax
+    # Add a 1 percent buffer zone
+    x_buffer = 0.01*(xtmax - xtmin)
+    y_buffer = 0.01*(ytmax - ytmin)
+
+    mask_e = coords[:,0] < xtmin - x_buffer
+    mask_w = coords[:,0] > xtmax + x_buffer
+    mask_n = coords[:,1] < ytmin - y_buffer
+    mask_s = coords[:,1] > ytmax + y_buffer
     data_mask[mask_n] = False
     data_mask[mask_s] = False
     data_mask[mask_e] = False
