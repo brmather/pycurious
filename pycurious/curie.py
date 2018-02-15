@@ -271,6 +271,145 @@ class CurieGrid(object):
         return S, kbins, dtheta
 
 
+    def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
+        """
+        Reduce total field magnetic anomaly data to the pole.
+
+        The reduction to the pole if a phase transformation that can be
+        applied to total field magnetic anomaly data. It simulates how
+        the data would be if both the Geomagnetic field and the
+        magnetization of the source were vertical (Blakely, 1996).
+
+        Parameters
+        ----------
+         data : 1d-array
+            The total field anomaly data at each point.
+         inc, dec : floats
+            The inclination and declination of the inducing Geomagnetic field
+         sinc, sdec : floats (optional)
+            The inclination and declination of the total magnetization of the
+            anomaly source. The total magnetization is the vector sum of the
+            induced and remanent magnetization. If there is only induced
+            magnetization, use the *inc* and *dec* of the Geomagnetic field.
+
+        Returns
+        -------
+         rtp : 2d-array
+            The data reduced to the pole.
+        
+        References
+        ----------
+         Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+         Applications, Cambridge University Press.
+
+        Notes
+        -----
+         This functions performs the reduction in the frequency domain
+         (using the FFT). The transform filter is (in the freq domain):
+             RTP(k_x, k_y) = \frac{|k|}{
+                 a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                 i|k|(b_1 k_x + b_2 k_y)}
+         in which k_x and k_y are the wave-numbers in the x and y
+         directions and
+             |k| = \sqrt{k_x^2 + k_y^2} \\
+             a_1 = m_z f_z - m_x f_x \\
+             a_2 = m_z f_z - m_y f_y \\
+             a_3 = -m_y f_x - m_x f_y \\
+             b_1 = m_x f_z + m_z f_x \\
+             b_2 = m_y f_z + m_z f_y
+         \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+         magnetization of the source and
+         \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+         Geomagnetic field.
+        """
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+
+        fx, fy, fz = ang2vec(1.0, inc, dec)
+        if sinc is None or sdec is None:
+            mx, my, mz = fx, fy, fz
+        else:
+            mx, my, mz = ang2vec(1.0, sinc, sdec)
+
+        kx, ky = [k for k in _fftfreqs(self.dx, self.dy, data.shape)]
+        kz = np.hypot(kx, ky)
+
+        a1 = mz*fz - mx*fx
+        a2 = mz*fz - my*fy
+        a3 = -my*fx - mx*fy
+        b1 = mx*fz + mz*fx
+        b2 = my*fz + mz*fy
+
+        # The division gives a RuntimeWarning because of the zero frequency term.
+        # This suppresses the warning.
+        with np.errstate(divide='ignore', invalid='ignore'):
+            rtp = (kz)/(a1*kx**2 + a2*ky**2 + a3*kx*ky + \
+                            1j*np.sqrt(kz)*(b1*kx + b2*ky))
+        
+        rtp[0, 0] = 0
+        ft_pole = rtp*np.fft.fft2(data)
+        return np.real(np.fft.ifft2(ft_pole))
+
+
+    def upward_continuation(self, data, height):
+        """
+        Upward continuation of potential field data.
+
+        Calculates the continuation through the Fast Fourier Transform in
+        the wavenumber domain (Blakely, 1996):
+
+            F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+
+        and then transformed back to the space domain. :math:`h_{up}` is the
+        upward continue data, \Delta z is the height increase, F denotes
+        the Fourier Transform, |k| is the wavenumber modulus.
+
+        Parameters
+        ----------
+         data : 2D grid
+            The potential field at the grid points
+         height : float
+            The height increase (delta z) in meters.
+        
+        Returns
+        -------
+         cont : array
+            The upward continued data
+
+        Notes
+        -----
+        It is not possible to get the FFT of a masked grid. The default
+        :func:`fatiando.gridder.interp` call using minimum curvature will
+        not be suitable.  Use extrapolate=True or algorithm='nearest' to
+        get an unmasked grid.
+
+        References
+        ----------
+        Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+        Applications, Cambridge University Press.
+        """
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+
+        if height <= 0:
+            warnings.warn("Using 'height' <= 0 means downward continuation, " +
+                          "which is known to be unstable.")
+
+        fx = 2.0*np.pi*np.fft.fftfreq(nr, self.dx)
+        fy = 2.0*np.pi*np.fft.fftfreq(nc, self.dy)
+
+        kx, ky = np.meshgrid(fy, fx)[::-1]
+        kz = np.hypot(kx, ky)
+
+        upcont_ft = np.fft.fft2(data)*np.exp(-height*kz)
+        cont = np.real(np.fft.ifft2(upcont_ft))
+        return cont
+
+
 # Helper functions to calculate Curie depth
 
 def bouligand2009(beta, zt, dz, kh, C=0.0):
@@ -345,3 +484,80 @@ def maus1995(beta, zt, kh, C=0.0):
        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
     return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)
+
+
+def _fftfreqs(dx, dy, shape):
+    """
+    Get two 2D-arrays with the wave numbers in the x and y directions.
+    """
+    fx = 2.0*np.pi*np.fft.fftfreq(shape[0], dx)
+    fy = 2.0*np.pi*np.fft.fftfreq(shape[1], dy)
+    return np.meshgrid(fy, fx)[::-1]
+
+def ang2vec(intensity, inc, dec):
+    """
+    Convert intensity, inclination and  declination to a 3-component vector
+
+    Parameter
+    ---------
+     intensity : float or array
+        The intensity (norm) of the vector
+     inc : float
+        The inclination of the vector (in degrees)
+     dec : float
+        The declination of the vector (in degrees)
+
+    Returns
+    -------
+     vec : array = [x, y, z]
+        The vector
+
+    Notes
+    -----
+     Coordinate system is assumed to be x->North, y->East, z->Down.
+     Inclination is positive down and declination is measured with respect
+     to x (North).
+
+    Examples
+    --------
+        >>> import numpy
+        >>> print ang2vec(3, 45, 45)
+        [ 1.5         1.5         2.12132034]
+        >>> print ang2vec(numpy.arange(4), 45, 45)
+        [[ 0.          0.          0.        ]
+         [ 0.5         0.5         0.70710678]
+         [ 1.          1.          1.41421356]
+         [ 1.5         1.5         2.12132034]]
+
+    """
+    return np.transpose([intensity * i for i in dircos(inc, dec)])
+
+
+def dircos(inc, dec):
+    """
+    Returns the 3 coordinates of a unit vector given its inclination and
+    declination.
+
+    Parameters
+    ----------
+     inc : float
+        The inclination of the vector (in degrees)
+     dec : float
+        The declination of the vector (in degrees)
+
+    Returns
+    -------
+     vect : list = [x, y, z]
+        The unit vector
+
+    Notes
+    -----
+     Coordinate system is assumed to be x->North, y->East, z->Down.
+     Inclination is positive down and declination is measured with respect
+     to x (North).
+    """
+    d2r = np.pi/180.0
+    vect = [np.cos(d2r * inc) * np.cos(d2r * dec), \
+            np.cos(d2r * inc) * np.sin(d2r * dec), \
+            np.sin(d2r * inc)]
+    return vect
