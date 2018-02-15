@@ -37,6 +37,8 @@ except:
 
 # filter NaNs
 mag_data = mag_data[mag_data[:,3] != 99999.]
+mag_data = mag_data[mag_data[:,4] != -888.]
+mag_data = mag_data[mag_data[:,4] != -999.]
 
 # print min/max
 mincols = mag_data.min(axis=0)
@@ -170,7 +172,7 @@ C_mu, C_std = np.mean(CN), np.std(CN)
 grd.reset_priors()
 grd.add_prior(beta=(beta_mu, beta_std))
 grd.add_prior(zt=(zt_mu, zt_std))
-grd.add_prior(dz=(20.0, 100.))
+grd.add_prior(dz=(20.0, 50.))
 grd.add_prior(C=(C_mu, C_std))
 
 g_sigma = np.array(0.0)

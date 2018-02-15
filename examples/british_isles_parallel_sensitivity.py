@@ -79,6 +79,8 @@ except:
 
 # filter NaNs
 mag_data = mag_data[mag_data[:,3] != 99999.]
+mag_data = mag_data[mag_data[:,4] != -888.]
+mag_data = mag_data[mag_data[:,4] != -999.]
 
 # print min/max
 mincols = mag_data.min(axis=0)
@@ -94,10 +96,10 @@ if rank == 0:
 
 
 
-xmin = 250000.0
-xmax = 1400000.0
-ymin = 200000.0
-ymax = 1500000.0
+xmin = 200000.0
+xmax = 1450000.0
+ymin = 150000.0
+ymax = 1550000.0
 extent = [xmin, xmax, ymin, ymax]
 
 dx, dy = 1e3, 1e3 # 1km resolution
@@ -110,17 +112,17 @@ mag_grid = pycurious.grid(mag_data[:,:2], mag_data[:,3], extent, shape=(ny,nx), 
 
 
 # initialise CurieOptimise object
-max_window = 150e3
+max_window = 200e3
 
 cpd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, max_window)
 
-print("{} old shape {} new shape {}".format(rank, mag_grid.shape, cpd.data.shape))
-print("{} old extent {}".format(rank, (xmin, xmax, ymin, ymax)))
-print("{} new extent {}".format(rank, (cpd.xmin, cpd.xmax, cpd.ymin, cpd.ymax)))
+print("{:3d} old shape {} new shape {}".format(rank, mag_grid.shape, cpd.data.shape))
+print("{:3d} old extent {}".format(rank, (xmin, xmax, ymin, ymax)))
+print("{:3d} new extent {}".format(rank, (cpd.xmin, cpd.xmax, cpd.ymin, cpd.ymax)))
 
 
 
-xc_list, yc_list = cpd.create_centroid_list(max_window, spacingX=5e3, spacingY=5e3)
+xc_list, yc_list = cpd.create_centroid_list(max_window, spacingX=10e3, spacingY=10e3)
 print("{} number of centroids = {}".format(rank, len(xc_list)))
 
 
@@ -146,63 +148,60 @@ dz_mu, dz_std = np.mean(dzN), np.std(dzN)
 C_mu, C_std = np.mean(CN), np.std(CN)
 
 cpd.reset_priors()
-cpd.add_prior(beta=(beta_mu, beta_std))
-cpd.add_prior(zt=(zt_mu, zt_std))
-cpd.add_prior(dz=(20.0, 100.))
-cpd.add_prior(C=(C_mu, C_std))
-
-g_sigma = np.array(0.0)
-g_mu = np.array(0.0)
-
-
-for p in ['beta', 'zt', 'dz', 'C']:
-    prior = cpd.prior[p]
-    if type(prior) != type(None):
-        mu, sigma = prior # local
-        comm.Allreduce([np.array(mu), MPI.DOUBLE], [g_mu, MPI.DOUBLE], op=MPI.SUM)
-        comm.Allreduce([np.array(sigma), MPI.DOUBLE], [g_sigma, MPI.DOUBLE], op=MPI.SUM)
-        cpd.prior[p] = (g_mu/comm.size, g_sigma/comm.size)
-        mu, sigma = cpd.prior[p]
-    else:
-        mu, sigma = 0,0
-    print("{} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
+cpd.distribute_prior('mean', beta=(beta_mu, beta_std), zt=(zt_mu, zt_std), dz=(20.0, 80.), C=(C_mu,C_std))
 
 beta_mu, beta_std = cpd.prior['beta']
 zt_mu, zt_std = cpd.prior['zt']
 dz_mu, dz_std = cpd.prior['dz']
 C_mu, C_std = cpd.prior['C']
 
+for p in ['beta', 'zt', 'dz', 'C']:
+    prior = cpd.prior[p]
+    if type(prior) != type(None):
+        mu, sigma = prior # local
+    else:
+        mu, sigma = None, None
+    print("{:3d} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
+
+
 
 lonc, latc = pycurious.transform_coordinates(xc_list, yc_list, epsg_in=2157, epsg_out=4326)
-data_out = np.empty((lonc.size, 3))
-data_out[:,0] = lonc
-data_out[:,1] = latc
+posterior = np.empty((lonc.size, 6))
+posterior[:,0] = lonc
+posterior[:,1] = latc
 
-# second pass - with priors
-nsim = 200
-xi = np.zeros((nsim,4))
+# second pass - with distributed priors
+nsim = 1000
+
+prior = np.zeros((nsim,4))
+prior[:,0] = np.random.normal(beta_mu, beta_std, nsim)
+prior[:,1] = np.random.normal(zt_mu, zt_std, nsim)
+prior[:,2] = np.random.normal(dz_mu, dz_std, nsim)
+prior[:,3] = np.random.normal(C_mu, C_std, nsim)
+
+# prior will be identical across all processors
+comm.Bcast([prior, MPI.DOUBLE], root=0)
+
 
 for i in xrange(0, nsim):
-    # randomly sample prior distributions
-    beta  = np.random.normal(beta_mu, beta_std)
-    zt    = np.random.normal(zt_mu, zt_std)
-    dz    = np.random.normal(dz_mu, dz_std)
-    C     = np.random.normal(C_mu, C_std)
-
-    xi[i] = [beta, zt, dz, C]
-
-    cpd.add_prior(beta=(beta,beta_std), zt=(zt,zt_std), dz=(dz,dz_std), C=(C,C_std))
+    # random priors from root processor
+    beta, zt, dz, C = prior[i]
+    cpd.reset_priors()
+    cpd.add_prior(beta=(beta,beta_std), zt=(zt,zt_std), dz=(dz,dz_std))
 
     betaOpt, ztOpt, dzOpt, COpt = cpd.optimise_routine(max_window, xc_list, yc_list, taper=np.hanning)
 
 
     # Write to file
-    data_out[:,2] = ztOpt + dzOpt # curie depth
-    np.savetxt('{:03d}-british_isles_cpd_s{:06d}.csv'.format(rank, i), data_out,\
-               fmt='%.6f', delimiter=',', header='lon, lat, curie_depth')
+    posterior[:,2] = betaOpt
+    posterior[:,3] = ztOpt
+    posterior[:,4] = dzOpt
+    posterior[:,5] = COpt
+    np.savetxt('{:03d}-british_isles_cpd_s{:06d}.csv'.format(rank, i), posterior,\
+               fmt='%.6f', delimiter=',', header='lon, lat, beta, zt, dz, C')
 
-    if i % 10 == 0:
-        print("{} {:3d}/{} simulations complete".format(rank, i+1, nsim))
+    if i % 10 == 0 and i > 0:
+        print("{:3d} {:3d}/{} simulations complete".format(rank, i, nsim))
 
-
-np.savetxt('{:03d}-british_isles_cpd_sx.csv'.format(rank), xi, fmt='%.6f', delimiter=',', header='beta, zt, dz, C')
+if rank == 0:
+    np.savetxt('british_isles_cpd_sx.csv', prior, fmt='%.6f', delimiter=',', header='beta, zt, dz, C')

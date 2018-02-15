@@ -6,6 +6,7 @@ from .optimise import CurieOptimise
 try: range=xrange
 except: pass
 
+
 class CurieParallel(CurieOptimise):
     """
     A parallel implementation built on the PETSc DMDA mesh structure
@@ -40,6 +41,7 @@ class CurieParallel(CurieOptimise):
         from mpi4py import MPI
         comm = MPI.COMM_WORLD
         self.comm = comm
+        self.MPI = MPI
 
         # super(CurieParallel, self).__init__(grid, xmin, xmax, ymin, ymax)
 
@@ -76,6 +78,9 @@ class CurieParallel(CurieOptimise):
 
         super(CurieParallel, self).__init__(grid_chunk, xmin, xmax, ymin, ymax)
 
+        reduce_methods = {'sum': MPI.SUM, 'max': MPI.MAX, 'min': MPI.MIN, 'mean': MPI.SUM}
+        self._reduce_methods = reduce_methods
+
 
     def subgrid(self, xc, yc, window):
         """
@@ -106,3 +111,76 @@ class CurieParallel(CurieOptimise):
         self.dm.localToGlobal(self.lvec, self.gvec)
         self.dm.globalToLocal(self.gvec, self.lvec)
         return self.lvec.array.copy()
+
+
+    def add_parallel_prior(self, **kwargs):
+        """
+        Add a prior to the dictionary (tuple)
+        This version broadcasts just the values from the root processor
+
+        Available priors are beta, zt, dz, C
+
+        Usage
+        -----
+         add_parallel_prior(beta=(p, sigma_p))
+        """
+
+        comm = self.comm
+        MPI = self.MPI
+
+        for key in kwargs:
+            if key in self.prior:
+                prior = kwargs[key]
+                p  = np.array(prior[0]) # prior
+                dp = np.array(prior[1]) # uncertainty
+
+                comm.Bcast([p, MPI.DOUBLE], root=0)
+                comm.Bcast([dp,MPI.DOUBLE], root=0)
+
+                self.prior[key] = (float(p), float(dp))
+            else:
+                raise ValueError("prior must be one of {}".format(self.prior.keys()))
+
+
+    def distribute_prior(self, method, **kwargs):
+        """
+        Distribute priors across all processors using a specific method.
+
+        Parameters
+        ----------
+         method  : operation to reduce the local priors to a single value
+                 : choose from one of 'sum', 'mean', 'min', 'max'
+         kwargs  : (prior, sigma_prior) tuple
+
+        Notes
+        -----
+         add_prior will broadcast the prior on the root processor (rank=0)
+         distribute_prior enacts a MPI Allreduce operation.
+        """
+
+        comm = self.comm
+        MPI = self.MPI
+
+        if method in self._reduce_methods:
+            op = self._reduce_methods[method]
+        else:
+            raise ValueError("choose one of the following methods {}".format(self._reduce_methods.keys()))
+
+        for key in kwargs:
+            if key in self.prior:
+                prior = kwargs[key]
+                local_p  = np.array(prior[0]) # prior
+                local_dp = np.array(prior[1]) # uncertainty
+
+                global_p = np.array(0.0)
+                global_dp = np.array(0.0)
+
+                comm.Allreduce([local_p, MPI.DOUBLE], [global_p, MPI.DOUBLE], op=op)
+                comm.Allreduce([local_dp, MPI.DOUBLE], [global_dp, MPI.DOUBLE], op=op)
+                if method == 'mean':
+                    global_p  /= comm.size
+                    global_dp /= comm.size
+
+                self.prior[key] = (float(global_p), float(global_dp))
+            else:
+                raise ValueError("prior must be one of {}".format(self.prior.keys()))

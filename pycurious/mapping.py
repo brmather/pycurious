@@ -16,6 +16,49 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     return pyproj.transform(proj_in, proj_out, x, y)
 
 
+def trim(coords, data, extent, buffer_amount=0.0):
+    """
+    Grid a smaller section of a large dataset taking into
+    consideration transformations into various coordinate
+    reference systems (CRS)
+    
+    Parameters
+    ----------
+     coords      : geographical / projected coordinates
+     data        : values corresponding to coordinates
+     extent      : box contained within the data
+     buffer      : amount of buffer to include (default=0.0)
+
+    Returns
+    -------
+     coords_trim : trimmed coordinates
+     data_trim   : trimmed data array
+    """
+    xmin, xmax, ymin, ymax = extent
+
+    # Extract only the data within the extent
+    data_mask = np.ones(data.shape[0], dtype=bool)
+
+    # Add a 1 percent buffer zone
+    x_buffer = buffer_amount*(xmax - xmin)
+    y_buffer = buffer_amount*(ymax - ymin)
+
+    mask_e = coords[:,0] < xmin - x_buffer
+    mask_w = coords[:,0] > xmax + x_buffer
+    mask_n = coords[:,1] < ymin - y_buffer
+    mask_s = coords[:,1] > ymax + y_buffer
+    data_mask[mask_n] = False
+    data_mask[mask_s] = False
+    data_mask[mask_e] = False
+    data_mask[mask_w] = False
+    
+    data_trim = data[data_mask]
+    coords_trim = coords[data_mask]
+
+    return coords_trim, data_trim
+
+
+
 def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs):
     """
     Grid a smaller section of a large dataset taking into
@@ -54,26 +97,20 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
         xtmin, xtmax = xmin, xmax
         ytmin, ytmax = ymin, ymax
 
-    
-    # Extract only the data within the extent
-    data_mask = np.ones(data.shape[0], dtype=bool)
+    xtextent = [xtmin, xtmax, ytmin, ytmax]
 
-    # Add a 1 percent buffer zone
-    x_buffer = 0.01*(xtmax - xtmin)
-    y_buffer = 0.01*(ytmax - ytmin)
+    # trim data - buffer = 1%
+    coords_trim, data_trim = trim(coords, data, xtextent, 0.01)
 
-    mask_e = coords[:,0] < xtmin - x_buffer
-    mask_w = coords[:,0] > xtmax + x_buffer
-    mask_n = coords[:,1] < ytmin - y_buffer
-    mask_s = coords[:,1] > ytmax + y_buffer
-    data_mask[mask_n] = False
-    data_mask[mask_s] = False
-    data_mask[mask_e] = False
-    data_mask[mask_w] = False
-    
-    data_trim = data[data_mask]
-    coords_trim = coords[data_mask]
-    
+
+    if type(epsg_in) != type(None):
+        # convert back to output CRS
+        xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
+                                             coords_trim[:,1],\
+                                             epsg_in, epsg_out)
+        coords_trim = np.column_stack([xtrim, ytrim])
+
+
     if shape == None:
         # estimate based on the data spacing
         xunique = np.unique(coords_trim[:,0])
@@ -85,16 +122,9 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
         print("using nrows={}, ncols={} with cell spacing of {}".format(nr,nc,(dy,dx)))
     else:
         nr, nc = shape
-    
-    
-    if type(epsg_in) != type(None):
-        # convert back to output CRS
-        xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
-                                             coords_trim[:,1],\
-                                             epsg_in, epsg_out)
-        coords_trim = np.column_stack([xtrim, ytrim])
 
     # interpolate
+
     xcoords = np.linspace(xmin, xmax, nc)
     ycoords = np.linspace(ymin, ymax, nr)
     xq, yq = np.meshgrid(xcoords, ycoords)
