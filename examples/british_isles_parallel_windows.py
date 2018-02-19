@@ -1,5 +1,13 @@
 # coding: utf-8
 
+import numpy as np
+import matplotlib.pyplot as plt
+import pycurious
+
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.rank
+
 """
 **EMAG2_V3_20170530.csv**
 
@@ -15,8 +23,6 @@
 Code 888 is assigned in certain cells on grid edges where the data source is ambiguous and assigned an error of -888 nT
 
 Code 999 is assigned in cells where no data is reported with the anomaly value assigned 99999 nT and an error of -999 nT
-
-
 
 ## Optimise
 
@@ -55,18 +61,7 @@ beta, C, and z_t have the lowest standard deviation therefore the
 effect of perturbing these greatly increases the misfit compared to dz.
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-import pycurious
-
-from mpi4py import MPI
-comm = MPI.COMM_WORLD
-rank = comm.rank
-
-
-
 filedir = '/mnt/ben_raid/'
-outputdir = filedir + 'pycurious-examples/'
 
 try:
     with np.load(filedir+'EMAG2_V3_20170530.npz') as f:
@@ -87,61 +82,53 @@ mag_data = mag_data[mag_data[:,4] != -999.]
 mincols = mag_data.min(axis=0)
 maxcols = mag_data.max(axis=0)
 
-
+fmt = "min/max {:.2f} -> {:.2f}"
 if rank == 0:
-    fmt = "min/max {:.2f} -> {:.2f}"
     for col in xrange(mag_data.shape[1]):
         print(fmt.format(mincols[col], maxcols[col]))
 
 
+# In[7]:
 
 
-
-xmin = 200000.0
-xmax = 1450000.0
-ymin = 150000.0
-ymax = 1550000.0
+xmin = 250000.0
+xmax = 1400000.0
+ymin = 200000.0
+ymax = 1500000.0
 extent = [xmin, xmax, ymin, ymax]
 
 dx, dy = 1e3, 1e3 # 1km resolution
 nx, ny = int(round((xmax-xmin)/dx)), int(round((ymax-ymin)/dy))
 
+# also get WGS84 extent
+tlon, tlat = pycurious.transform_coordinates([xmin,xmin,xmax,xmax], [ymin,ymax,ymin,ymax], 2157, 4326)
+lonmin, lonmax = min(tlon), max(tlon)
+latmin, latmax = min(tlat), max(tlat)
+extent_sphere = [lonmin, lonmax, latmin, latmax]
 
 # grid data
 mag_grid = pycurious.grid(mag_data[:,:2], mag_data[:,3], extent, shape=(ny,nx), epsg_in=4326, epsg_out=2157)
-
-
-
-# initialise CurieOptimise object
-max_window = 200e3
-
-cpd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, max_window)
-
-print("{:3d} old shape {} new shape {}".format(rank, mag_grid.shape, cpd.data.shape))
-print("{:3d} old extent {}".format(rank, (xmin, xmax, ymin, ymax)))
-print("{:3d} new extent {}".format(rank, (cpd.xmin, cpd.xmax, cpd.ymin, cpd.ymax)))
-
-
-
-xc_list, yc_list = cpd.create_centroid_list(max_window, spacingX=10e3, spacingY=10e3)
-print("{} number of centroids = {}".format(rank, len(xc_list)))
+mag_sphere = pycurious.grid(mag_data[:,:2], mag_data[:,3], extent_sphere, shape=(ny,nx), epsg_in=4326, epsg_out=4326)
 
 
 
 
-# first pass - no priors
-betaN, ztN, dzN, CN = cpd.optimise_routine(max_window, xc_list, yc_list, taper=np.hanning)
+
+# 2 arc minutes is approximately 4km
+max_window = 350e3
+window_sizes = np.arange(100e3, max_window+50e3, 50e3)
 
 
 
-xc = np.unique(xc_list)
-yc = np.unique(yc_list)
+# first pass
+# use the largest window size first to determine priors
+window = window_sizes[-1]
+cpd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, window)
+xc_list, yc_list = cpd.create_centroid_list(window, spacingX=10e3, spacingY=10e3)
 
-nr, nc = yc.size, xc.size
 
+betaN, ztN, dzN, CN = cpd.optimise_routine(window, xc_list, yc_list)
 
-# these parameters did well based on previous experience...
-# cpd.add_prior(beta=(5.44,0.62), zt=(0.14,0.28), dz=(22.73,29.63), C=(11.88,1.38))
 
 beta_mu, beta_std = np.mean(betaN), np.std(betaN)
 zt_mu, zt_std = np.mean(ztN), np.std(ztN)
@@ -149,61 +136,34 @@ dz_mu, dz_std = np.mean(dzN), np.std(dzN)
 C_mu, C_std = np.mean(CN), np.std(CN)
 
 cpd.reset_priors()
-cpd.distribute_prior('mean', beta=(beta_mu, beta_std), zt=(zt_mu, zt_std), dz=(20.0, 80.), C=(C_mu,C_std))
+cpd.distribute_prior('mean', beta=(beta_mu, beta_std), zt=(zt_mu, zt_std), dz=(dz_mu, dz_std))
 
-beta_mu, beta_std = cpd.prior['beta']
-zt_mu, zt_std = cpd.prior['zt']
-dz_mu, dz_std = cpd.prior['dz']
-C_mu, C_std = cpd.prior['C']
 
 for p in ['beta', 'zt', 'dz', 'C']:
     prior = cpd.prior[p]
     if type(prior) != type(None):
         mu, sigma = prior # local
     else:
-        mu, sigma = None, None
+        mu, sigma = -1, -1
     print("{:3d} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
 
 
 
-lonc, latc = pycurious.transform_coordinates(xc_list, yc_list, epsg_in=2157, epsg_out=4326)
-posterior = np.empty((lonc.size, 6))
-posterior[:,0] = lonc
-posterior[:,1] = latc
+# now priors will remain idential for all iterations
+prior_dict = cpd.prior.copy()
 
-# second pass - with distributed priors
-nsim = 1000
+for window in window_sizes:
+    cpd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, window)
+    cpd.prior = prior_dict
+    xc_list, yc_list = cpd.create_centroid_list(window, spacingX=4e3, spacingY=4e3)
+    print("{} window {:.1f} km, number of centroids = {}".format(rank, window/1e3, len(xc_list)))
 
-prior = np.zeros((nsim,4))
-prior[:,0] = np.random.normal(beta_mu, beta_std, nsim)
-prior[:,1] = np.random.normal(zt_mu, zt_std, nsim)
-prior[:,2] = np.random.normal(dz_mu, dz_std, nsim)
-prior[:,3] = np.random.normal(C_mu, C_std, nsim)
-
-# prior will be identical across all processors
-comm.Bcast([prior, MPI.DOUBLE], root=0)
-
-if rank == 0:
-    np.savetxt(outputdir+'british_isles_cpd_sx.csv', prior, fmt='%.6f', delimiter=',', header='beta, zt, dz, C')
-
-
-for i in xrange(0, nsim):
-    # random priors from root processor
-    beta, zt, dz, C = prior[i]
-    cpd.reset_priors()
-    cpd.add_prior(beta=(beta,beta_std), zt=(zt,zt_std), dz=(dz,dz_std))
-
-    betaOpt, ztOpt, dzOpt, COpt = cpd.optimise_routine(max_window, xc_list, yc_list, taper=np.hanning)
-
+    # second pass
+    betaOpt, ztOpt, dzOpt, COpt = cpd.optimise_routine(window, xc_list, yc_list)
 
     # Write to file
-    posterior[:,2] = betaOpt
-    posterior[:,3] = ztOpt
-    posterior[:,4] = dzOpt
-    posterior[:,5] = COpt
-    np.savetxt(outputdir+'{:03d}-british_isles_cpd_s{:06d}.csv'.format(rank, i), posterior,\
-               fmt='%.6f', delimiter=',', header='lon, lat, beta, zt, dz, C')
-
-    if i % 10 == 0 and i > 0:
-        print("{:3d} {:3d}/{} simulations complete".format(rank, i, nsim))
+    lonc, latc = pycurious.transform_coordinates(xc_list, yc_list, epsg_in=2157, epsg_out=4326)
+    out = np.column_stack([lonc, latc, betaOpt, ztOpt, dzOpt, COpt])
+    np.savetxt('{}-british_isles_cpd_w{:06d}.csv'.format(rank, int(window/1e3)),\
+               out, fmt='%.6f', delimiter=',', header='lon, lat, beta, zt, dz, C')
 

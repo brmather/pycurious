@@ -21,6 +21,42 @@ from mpi4py import MPI
 Code 888 is assigned in certain cells on grid edges where the data source is ambiguous and assigned an error of -888 nT
 
 Code 999 is assigned in cells where no data is reported with the anomaly value assigned 99999 nT and an error of -999 nT
+
+## Optimise
+
+We have 4 parameters we wish to optimise:
+- beta : fractal parameter
+- z_t  : the top of magnetic sources
+- dz   : the thickness of magnetic sources
+- C    : a field constant
+
+We minimise this using `scipy.optimize.minimize` which defaults
+to `L-BFGS-B` for constrained minimisation.
+
+
+### Optimisation strategy
+
+The problem is that $dz$ in Bouligand *et al.* (2009) [eq. 4] is
+least sensitive to the problem, but the most important parameter
+for evaluating Curie depth.
+
+If we revisit the problem, however, we see that beta and C mostly
+vary at long wavelengths, thus if we determine what their average
+value is over the whole field then we can fix them as constants.
+Our strategy is now a two-stage inversion method.
+
+**First pass**
+
+Ensure there is no *a priori* information and commence with
+suitable starting values.
+
+**Second pass**
+
+Take the mean and standard deviation of all parameters and add them
+as priors within the misfit function, then run the optimisation again.
+
+beta, C, and z_t have the lowest standard deviation therefore the
+effect of perturbing these greatly increases the misfit compared to dz.
 """
 
 filedir = '/mnt/ben_raid/'
@@ -76,56 +112,22 @@ mag_sphere = pycurious.grid(mag_data[:,:2], mag_data[:,3], extent_sphere, shape=
 # initialise CurieOptimise object
 max_window = 150e3
 
-grd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, max_window)
+cpd = pycurious.CurieParallel(mag_grid, xmin, xmax, ymin, ymax, max_window)
 
-comm = grd.comm
+comm = cpd.comm
 rank = comm.rank
-print("{} old shape {} new shape {}".format(rank, mag_grid.shape, grd.data.shape))
-print("{} old extent {}".format(rank, (xmin, xmax, ymin, ymax)))
-print("{} new extent {}".format(rank, (grd.xmin, grd.xmax, grd.ymin, grd.ymax)))
 
 
 
-"""
-## Optimise
-
-We have 4 parameters we wish to optimise:
-- beta : fractal parameter
-- z_t  : the top of magnetic sources
-- dz   : the thickness of magnetic sources
-- C    : a field constant
-
-We minimise this using `scipy.optimize.minimize` which defaults
-to `L-BFGS-B` for constrained minimisation.
-
-
-### Optimisation strategy
-
-The problem is that $dz$ in Bouligand *et al.* (2009) [eq. 4] is
-least sensitive to the problem, but the most important parameter
-for evaluating Curie depth.
-
-If we revisit the problem, however, we see that beta and C mostly
-vary at long wavelengths, thus if we determine what their average
-value is over the whole field then we can fix them as constants.
-Our strategy is now a two-stage inversion method.
-
-**First pass**
-
-Ensure there is no *a priori* information and commence with
-suitable starting values.
-"""
-
-xc_list, yc_list = grd.create_centroid_list(max_window, spacingX=5e3, spacingY=5e3)
-# xc_list, yc_list = grd.create_centroid_list(max_window)
+xc_list, yc_list = cpd.create_centroid_list(max_window, spacingX=4e3, spacingY=4e3)
 
 print("{} number of centroids = {}".format(rank, len(xc_list)))
 
 
 
 
-grd.reset_priors()
-betaN, ztN, dzN, CN = grd.optimise_routine(max_window, xc_list, yc_list, 3.0, 1.0, 20.0, 5.0, taper=None)
+cpd.reset_priors()
+betaN, ztN, dzN, CN = cpd.optimise_routine(max_window, xc_list, yc_list, 3.0, 1.0, 20.0, 5.0)
 
 
 
@@ -135,90 +137,35 @@ yc = np.unique(yc_list)
 
 nr, nc = yc.size, xc.size
 
-plot_helper = [(betaN, 'beta'), (ztN, 'zt'), (dzN, 'dz'), (CN, 'C')]
-
-fig, (ax1,ax2,ax3,ax4) = plt.subplots(1, 4, sharey=True, figsize=(16,3.5))
-for i, ax in enumerate([ax1, ax2, ax3, ax4]):
-    title = plot_helper[i][1]
-    data  = plot_helper[i][0]
-    mask  = np.isfinite(data)
-    
-    ax.set_title(title)
-    sci = ax.scatter(xc_list[mask]/1e3, yc_list[mask]/1e3, c=data[mask])
-    fig.colorbar(sci, ax=ax)
-    fig.savefig('{}-CPD_initial.png'.format(rank), bbox_inches='tight')
-    
-    print "{} {:5} mean={:.2f} std={:.2f}".format(rank, title, data.mean(), np.std(data))
-
-"""
-**Second pass**
-
-Take the mean and standard deviation of all parameters and add them
-as priors within the misfit function, then run the optimisation again.
-
-beta, C, and z_t have the lowest standard deviation therefore the
-effect of perturbing these greatly increases the misfit compared to dz.
-"""
 
 
 # these parameters did well based on previous experience...
-# grd.add_prior(beta=(5.44,0.62), zt=(0.14,0.28), dz=(22.73,29.63), C=(11.88,1.38))
-
 beta_mu, beta_std = np.mean(betaN), np.std(betaN)
 zt_mu, zt_std = np.mean(ztN), np.std(ztN)
 dz_mu, dz_std = np.mean(dzN), np.std(dzN)
 C_mu, C_std = np.mean(CN), np.std(CN)
 
-grd.reset_priors()
-grd.add_prior(beta=(beta_mu, beta_std))
-grd.add_prior(zt=(zt_mu, zt_std))
-grd.add_prior(dz=(20.0, 50.))
-grd.add_prior(C=(C_mu, C_std))
+cpd.reset_priors()
+cpd.distribute_prior('mean', beta=(beta_mu, beta_std), zt=(zt_mu, zt_std), dz=(dz_mu, dz_std))
 
-g_sigma = np.array(0.0)
-g_mu = np.array(0.0)
 
 for p in ['beta', 'zt', 'dz', 'C']:
-    prior = grd.prior[p]
+    prior = cpd.prior[p]
     if type(prior) != type(None):
         mu, sigma = prior # local
-        comm.Allreduce([np.array(mu), MPI.DOUBLE], [g_mu, MPI.DOUBLE], op=MPI.SUM)
-        comm.Allreduce([np.array(sigma), MPI.DOUBLE], [g_sigma, MPI.DOUBLE], op=MPI.SUM)
-        grd.prior[p] = (g_mu/comm.size, g_sigma/comm.size)
-        mu, sigma = grd.prior[p]
     else:
-        mu, sigma = 0,0
-    print("{} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
-
-betaOpt, ztOpt, dzOpt, COpt = grd.optimise_routine(max_window, xc_list, yc_list, taper=None)
+        mu, sigma = -1, -1
+    print("{:3d} prior {:5} mean={:.2f} std={:.2f}".format(rank, p, mu, sigma))
 
 
+betaOpt, ztOpt, dzOpt, COpt = cpd.optimise_routine(max_window, xc_list, yc_list)
 
-plot_helper = [(betaOpt, 'beta'), (ztOpt, 'zt'), (dzOpt, 'dz'), (COpt, 'C')]
 
-fig, (ax1,ax2,ax3,ax4) = plt.subplots(1, 4, sharey=True, figsize=(16,3.5))
-for i, ax in enumerate([ax1, ax2, ax3, ax4]):
-    title = plot_helper[i][1]
-    data  = plot_helper[i][0]
-    mask  = np.isfinite(data)
-    
-    ax.set_title(title)
-    sci = ax.scatter(xc_list[mask]/1e3, yc_list[mask]/1e3, c=data[mask])
-    fig.colorbar(sci, ax=ax)
-    fig.savefig('{}-CPD_optimised.png'.format(rank), bbox_inches='tight')
-    
-    print "{} {:5} mean={:.2f} std={:.2f}".format(rank, title, data.mean(), np.std(data))
-
-"""
-Not bad!
-The Curie depth can be refined further if an average geotherm is assumed,
-but then it is no longer an independent constraint on the temperature field.
-"""
 
 # Write to file
-curie_depth = ztOpt + dzOpt
-
 lonc, latc = pycurious.transform_coordinates(xc_list, yc_list, epsg_in=2157, epsg_out=4326)
-np.savetxt('{}-british_isles_cpd.csv'.format(rank), np.column_stack([lonc, latc, curie_depth]),\
-           fmt='%.6f', delimiter=',', header='lon, lat, curie_depth')
+
+out = np.column_stack([lonc, latc, betaOpt, ztOpt, dzOpt, COpt])
+np.savetxt('{}-british_isles_cpd.csv'.format(rank), out,\
+           fmt='%.6f', delimiter=',', header='lon, lat, beta, zt, dz, C')
 
