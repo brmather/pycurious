@@ -211,14 +211,153 @@ class CurieGrid(object):
 
         for i in range(0, nbins):
             mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
-            rr = 2.0*np.log(FT[mask])
+            #rr = np.log(np.sqrt(FT[mask]))(2*np.pi)
+            rr = np.log(np.sqrt(FT[mask]))
             S[i] = rr.mean()
             k[i] = kk[mask].mean()
             sigma2[i] = np.std(rr)/np.sqrt(rr.size)
 
         return S, k, sigma2
 
-
+    def Tanaka(self, S, k, sigma2,kmin=0.05, kmax=0.2):
+        """
+        Compute weighted linear fit of S over spatial frequency window kmin:kmax
+        
+        Parameters
+        ----------
+         S      : Power spectrum of signal (see radial spectrum), expected in ln(sqrt(S)) form
+         k      : Wavenumber
+         sigma2 : Errors of S
+         kmin,kmax  : Minimum and maximum spatial frequencies to fit. Ideally low frequency, straight-ish line
+         
+        Returns
+        -----------
+         Zb     : Estimated Curie point depth, as per Tanaka et al, 1999
+         eZb    : Error of Zb
+                : No geothermal gradient, trivial to estimate.
+                : Possible to extend, return fitted components?
+        """
+        sf=k/(2.0*np.pi)
+        S2=np.log(np.exp(S)/sf)
+        
+        mask2=np.logical_and(sf >=kmin,sf <=kmax)
+        X=sf[mask2]
+        Y=S[mask2]
+        E=np.log(np.exp(sigma2[mask2])/X)
+        TL= sum(X/(E**2))*sum(Y/(E**2)) - sum((np.multiply(X,Y)/(E**2))*sum(1/(E**2)))
+        BL= (sum(X/(E**2)))**2 - (sum((X**2)/(E**2))*sum(1/(E**2)))
+        Ztr=TL/BL
+        btr= (sum(np.multiply(X,Y)/E**2) -Ztr*(sum(X**2/E**2) ))/(sum(X/E**2))
+        eZtr=np.sqrt( sum(1/E**2)/ ( sum(X**2/E**2)*sum(1/E**2)-(sum(X/E**2))**2 ))
+        
+        Y2=np.log(np.exp(S[mask2])/X)
+        TL= sum(X/(E**2))*sum(Y2/(E**2)) - sum((np.multiply(X,Y2)/(E**2))*sum(1/(E**2)))
+        BL= (sum(X/(E**2)))**2 - (sum((X**2)/(E**2))*sum(1/(E**2)))
+        Zor=TL/BL
+        bor= (sum(np.multiply(X,Y2)/E**2) -Zor*(sum(X**2/E**2) ))/(sum(X/E**2))
+        eZor=np.sqrt( sum(1/E**2)/ ( sum(X**2/E**2)*sum(1/E**2)-(sum(X/E**2))**2 ))
+        Zb=2*Zor-Ztr
+        eZb=2*eZor+eZtr
+        return Zb, eZb
+        
+    def Tanakac(self, S, k, sigma2,kmin=0.05, kmax=0.2,k2min=0.05, k2max=0.2):
+        """
+        Compute weighted linear fit of S over spatial frequency window kmin:kmax
+        
+        Parameters
+        ----------
+         S      : Power spectrum of signal (see radial spectrum), expected in ln(sqrt(S)) form
+         k      : Wavenumber
+         sigma2 : Errors of S
+         kmin,kmax  : Minimum and maximum spatial frequencies to fit. Ideally low frequency, straight-ish line
+         
+        Returns
+        -----------
+         Zb     : Estimated Curie point depth, as per Tanaka et al, 1999
+         eZb    : Error of Zb
+                : No geothermal gradient, trivial to estimate.
+                : Possible to extend, return fitted components?
+        """
+        sf=k/(2.0*np.pi)
+        S2=np.log(np.exp(S)/sf)
+        #print(sf)
+        mask2=np.logical_and(sf >=kmin,sf <=kmax)
+        #print(mask2)
+        X=sf[mask2]
+        Y=S[mask2]
+        E=sigma2[mask2]
+        TL= sum(X/(E**2))*sum(Y/(E**2)) - sum((np.multiply(X,Y)/(E**2))*sum(1/(E**2)))
+        BL= (sum(X/(E**2)))**2 - (sum((X**2)/(E**2))*sum(1/(E**2)))
+        Ztr=TL/BL
+        btr= (sum(np.multiply(X,Y)/E**2) -Ztr*(sum(X**2/E**2) ))/(sum(X/E**2))
+        eZtr=np.sqrt( sum(1/E**2)/ ( sum(X**2/E**2)*sum(1/E**2)-(sum(X/E**2))**2 ))
+        
+        mask2=np.logical_and(sf >=k2min,sf <=k2max)
+        X=sf[mask2]
+        Y2=np.log(np.exp(S[mask2])/X)
+        E=np.log(np.exp(sigma2[mask2])/X)
+        TL= sum(X/(E**2))*sum(Y2/(E**2)) - sum((np.multiply(X,Y2)/(E**2))*sum(1/(E**2)))
+        BL= (sum(X/(E**2)))**2 - (sum((X**2)/(E**2))*sum(1/(E**2)))
+        Zor=TL/BL
+        bor= (sum(np.multiply(X,Y2)/E**2) -Zor*(sum(X**2/E**2) ))/(sum(X/E**2))
+        eZor=np.sqrt( sum(1/E**2)/ ( sum(X**2/E**2)*sum(1/E**2)-(sum(X/E**2))**2 ))
+        Zb=2*Zor-Ztr
+        eZb=2*eZor+eZtr
+        #return Zb, eZb
+        return Zb, eZb, Ztr, Zor
+        
+    def Tanakab(self, S, k, kmin=0.05, kmax=0.2):
+        """
+        Compute unweighted linear fit of S over spatial frequency window kmin:kmax
+        
+        Parameters
+        ----------
+         S      : Power spectrum of signal (see radial spectrum), expected in ln(sqrt(S)) form
+         k      : Wavenumber
+         kmin,kmax  : Minimum and maximum spatial frequencies to fit. Ideally low frequency, straight-ish line
+         
+        Returns
+        -----------
+         Zb     : Estimated Curie point depth, as per Tanaka et al, 1999
+         eZb    : Error of Zb
+                : No geothermal gradient, trivial to estimate.
+                : Possible to extend, return fitted components?
+        """
+        sf=k/(2.0*np.pi)
+        S2=np.log(np.exp(S)/sf)
+        
+        mask2=np.logical_and(sf >=kmin,sf <=kmax)
+        X=sf[mask2]
+        Y=S[mask2]
+        TL= X.size*sum(X*Y)-(sum(X)*sum(Y))
+        BL=X.size*sum(X**2)-(sum(X)**2)
+        Ztr=TL/BL
+        
+        
+        Y2=np.log(np.exp(S[mask2])/X)
+        TL= X.size*sum(X*Y2)-(sum(X)*sum(Y2))
+        BL=X.size*sum(X**2)-(sum(X)**2)
+        Zor=TL/BL
+        Zb=2*Zor-Ztr
+        return Zb
+        
+        #TL= sum(X/(E**2))*sum(Y/(E**2)) - sum((np.multiply(X,Y)/(E**2))*sum(1/(E**2)))
+        #BL= (sum(X/(E**2)))**2 - (sum((X**2)/(E**2))*sum(1/(E**2)))
+        #Ztr=TL/BL
+        #btr= (sum(np.multiply(X,Y)/E**2) -Ztr*(sum(X**2/E**2) ))/(sum(X/E**2))
+        #eZtr=np.sqrt( sum(1/E**2)/ ( sum(X**2/E**2)*sum(1/E**2)-(sum(X/E**2))**2 ))
+        
+        #Y2=np.log(np.exp(S[mask2])/X)
+        #TL= sum(X/(E**2))*sum(Y2/(E**2)) - sum((np.multiply(X,Y2)/(E**2))*sum(1/(E**2)))
+        #BL= (sum(X/(E**2)))**2 - (sum((X**2)/(E**2))*sum(1/(E**2)))
+        #Zor=TL/BL
+        #bor= (sum(np.multiply(X,Y2)/E**2) -Zor*(sum(X**2/E**2) ))/(sum(X/E**2))
+        #eZor=np.sqrt( sum(1/E**2)/ ( sum(X**2/E**2)*sum(1/E**2)-(sum(X/E**2))**2 ))
+        #Zb=2*Zor-Ztr
+        #eZb=2*eZor+eZtr
+        #return Zb, eZb
+        
+        
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
         """
         Compute azimuthal spectrum for a square grid.
@@ -239,8 +378,9 @@ class CurieGrid(object):
          S       : Azimuthal spectrum
          k       : wavenumber [rad/km]
          theta   : angles
+         sigma2  : variance of S
         """
-        import radon
+        from pycurious import radon
         data = subgrid
         nr, nc = data.shape
         nw = nr
@@ -256,6 +396,7 @@ class CurieGrid(object):
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
+        sigma2 = np.zeros((dtheta.size, kbins.size))
 
         # control taper
         if taper is None:
@@ -266,8 +407,7 @@ class CurieGrid(object):
         nk = 1 + 2*kbins.size
         for i in range(0, dtheta.size):
             PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
-            S[i,:] = 2.0*np.log( PSD[1:kbins.size+1] )
-
+            S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
         return S, kbins, dtheta
 
 
