@@ -33,7 +33,8 @@ class CurieOptimise(CurieGrid):
         self.reset_priors()
 
         # lower / upper bounds
-        lb = np.zeros(4)
+        # [beta, zt, dz, C]
+        lb = [0.0, 0.0, 0.0, None]
         ub = [None]*len(lb)
         bounds = list(zip(lb,ub))
         self.bounds = bounds
@@ -111,14 +112,14 @@ class CurieOptimise(CurieGrid):
          We purposely ignore all warnings raised by the bouligand2009
          function because some combinations of input parameters will
          trigger an out-of-range warning that will crash the minimiser
-         when this occurs we overwrite the misfit with a very large number
+         when this occurs we set the misfit to a very large number
         """
         beta, zt, dz, C = x
         with warnings.catch_warnings() as w:
             warnings.simplefilter("ignore")
             Phi_syn = bouligand2009(beta, zt, dz, kh, C)
 
-        misfit = np.linalg.norm(Phi_exp - Phi_syn)
+        misfit = self.objective_function(Phi_syn, Phi_exp, 1.0)
         if not np.isfinite(misfit):
             misfit = 1e99
         else:
