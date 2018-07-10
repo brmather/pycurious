@@ -16,6 +16,28 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     return pyproj.transform(proj_in, proj_out, x, y)
 
 
+def convert_extent(extent_in, epsg_in, epsg_out):
+    """
+    Transform extent from epsg_in to epsg_out
+
+    Parameters
+    ----------
+     extent_in  : bounding box [minX, maxX, minY, maxY]
+     epsg_in    : CRS of extent
+     epsg_out   : CRS of output
+
+    Returns
+    -------
+     extent_out : bounding box in new CRS
+    """
+    xmin, xmax, ymin, ymax = extent_in
+    xi = [xmin, xmin, xmax, xmax]
+    yi = [ymin, ymax, ymin, ymax]
+    xo, yo = transform_coordinates(xi, yi, epsg_in, epsg_out)
+    extent_out = [min(xo), max(xo), min(yo), max(yo)]
+    return extent_out
+
+
 def trim(coords, data, extent, buffer_amount=0.0):
     """
     Grid a smaller section of a large dataset taking into
@@ -56,7 +78,6 @@ def trim(coords, data, extent, buffer_amount=0.0):
     coords_trim = coords[data_mask]
 
     return coords_trim, data_trim
-
 
 
 def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs):
@@ -100,7 +121,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     xtextent = [xtmin, xtmax, ytmin, ytmax]
 
     # trim data - buffer = 1%
-    coords_trim, data_trim = trim(coords, data, xtextent, 0.01)
+    coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
 
 
     if type(epsg_in) != type(None):
@@ -133,45 +154,74 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     return vq
 
 
-def optimise_surfaces(surface1, surface2, sigma):
+def import_geotiff(file_path):
     """
-    Optimise the misfit between surface1 and surface2
-
-    surface1 and surface2 are normalised between 0 and 1
-    and their residual is minimised, weighted by sigma
+    Import a GeoTIFF to a numpy array and prints
+    information of the Coordinate Reference System (CRS)
 
     Parameters
     ----------
-     surface1  : starting surface (can be flat)
-     surface2  : surface to match to
-     sigma     : uncertainty of fitting coefficients
+     file_path : path to the GeoTIFF
 
     Returns
     -------
-     surface3  : optimised surface
-
-    Notes
-    -----
-     The Krylov method uses a Krylov approximation for the
-     inverse Jacobian as it is suitable for large problems
+     data   : 2D numpy array
+     extent : extent in the projection of the GeoTIFF
+        e.g. [xmin, xmax, ymin, ymax]
     """
-    from scipy.optimize import root
+    from osgeo import gdal, osr
     
-    def objective_function(x, x0, sigma_x0):
-        return (x - x0)**2/sigma_x0**2
-    
-    sigma = sigma.ravel()
-    
-    s1 = surface1.flatten()
-    s1 -= s1.min()
-    s1 /= s1.max()
-    
-    s2 = surface2.flatten()
-    s2 -= s2.min()
-    s2 /= s2.max()
-    
-    # starting point should be at prior
-    x0 = s1
-    
-    sol = root(objective_function, x0, method='krylov')
-    return sol.x.reshape(surface1.shape)
+    gtiff = gdal.Open(file_path)
+    data = gtiff.ReadAsArray()
+    gt = gtiff.GetGeoTransform()
+    gtproj = gtiff.GetProjection()
+
+    inproj = osr.SpatialReference()
+    inproj.ImportFromWkt(gtproj)
+
+    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],
+                gt[3] + gtiff.RasterYSize*gt[5], gt[3])
+
+    # print projection information
+    print(inproj)
+
+    # this closes the geotiff
+    gtiff = None
+
+    return np.flipud(data), gtextent
+
+
+def export_geotiff(file_path, array, extent, epsg):
+    """
+    Export a GeoTIFF from a numpy array projected in a
+    predefined Coordinate Reference System (CRS)
+
+    Parameters
+    ----------
+     file_path : str, path to write the GeoTIFF
+     array     : 2D numpy array
+     extent    : extent in the projection of the GeoTIFF
+        e.g. [xmin, xmax, ymin, ymax]
+     epsg      : int, CRS of the GeoTIFF
+
+    """
+    from osgeo import gdal, osr
+    # import ogr, gdal, osr, os
+
+    cols = array.shape[1]
+    rows = array.shape[0]
+
+    xmin, xmax, ymin, ymax = extent
+    spacingX = (xmax - xmin)/cols
+    spacingY = (ymax - ymin)/rows
+
+    driver = gdal.GetDriverByName('GTiff')
+    outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Byte)
+    outRaster.SetGeoTransform((xmin, spacingX, 0, ymin, 0, spacingY))
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(array)
+    outRasterSRS = osr.SpatialReference()
+    outRasterSRS.ImportFromEPSG(epsg)
+    outRaster.SetProjection(outRasterSRS.ExportToWkt())
+    outband.FlushCache()
+    return
