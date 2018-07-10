@@ -154,7 +154,7 @@ class CurieOptimise(CurieGrid):
         return misfit
 
 
-    def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=20.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Find the optimal parameters of beta, zt, dz, C for a given
         centroid (xc,yc) and window size.
@@ -199,7 +199,7 @@ class CurieOptimise(CurieGrid):
         return res.x
 
 
-    def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=20.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the optimal values
         of beta, zt, dz, C for a given window size.
@@ -262,7 +262,7 @@ class CurieOptimise(CurieGrid):
         return Bopt, ztopt, dzopt, Copt
 
 
-    def sensitivity_routine(self, nsim, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=20.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def sensitivity_routine(self, nsim, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the mean and
         standard deviation of beta, zt, dz, C by perturbing their
