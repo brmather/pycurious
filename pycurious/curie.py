@@ -280,8 +280,8 @@ class CurieGrid(object):
             sigma2[i] = np.std(rr)/np.sqrt(rr.size)
 
         return S, k, sigma2
-        
-        
+
+
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
         """
         Compute azimuthal spectrum for a square grid.
