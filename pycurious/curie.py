@@ -546,12 +546,16 @@ def tanaka1999(S, k, sigma2, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
         X2E2sum = np.sum(X2/E2)
         Y2E2sum = np.sum(Y2/E2)
 
-        TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
+        #TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
+        # I think summation in second TL term needed to be split
+        TL = XE2sum*YE2sum - np.sum(XY/E2)*rE2sum
         BL = XE2sum**2 - X2E2sum*rE2sum
 
         Z  = TL/BL
         b  = (np.sum(XY/E2) - Z*X2E2sum)/XE2sum
-        dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
+        #dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
+        ## There was a missing **2 term at end of error term.
+        dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum**2) )
         return Z, b, dZ
 
 
@@ -569,13 +573,16 @@ def tanaka1999(S, k, sigma2, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
     kmin, kmax = kmax_range
     mask2 = np.logical_and(sf >=kmin, sf <=kmax)
     X2 = sf[mask2]
-    Y2 = np.log(np.exp(S[mask2])/X2)
-    E2 = np.log(np.exp(sigma2[mask2])/X2)
+    Y2 = np.log(np.exp(S[mask2])/(X2*2*np.pi))
+    E2 = np.log(np.exp(sigma2[mask2])/(X2*2*np.pi))
 
     # compute top and bottom of magnetic layer
     Ztr, btr, dZtr = compute_coefficients(X1, Y1, E1)
     Zor, bor, dZor = compute_coefficients(X2, Y2, E2)
+    return (Ztr,btr,dZtr), (Zor, bor, dZor)
     
+    
+def ComputeTanaka(Ztr, dZtr, Zor, dZor):
     Zb = 2.0*Zor - Ztr
     dZb  = 2.0*dZor - dZtr
     return abs(Zb), dZb
