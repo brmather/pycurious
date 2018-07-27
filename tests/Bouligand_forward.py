@@ -12,14 +12,14 @@ import pycurious
 import time
 
 start_time=time.time()
-cm=1.e-7
+cm=1e-7
 
 ##########################################################
 #A VERIFIER: multiplier facteur cm par 4*pi
 ## TO VERIFY: multiplication factor "cm for 4*pi"
 ###########################################################
 ## Degree of fractal
-b=-3
+b=-3.0
 ## Dimension of pixels (km), should be multiples of the smallest
 dlx=1.0
 dly=1.0
@@ -33,7 +33,7 @@ dz=dlz/dl
 ## Number of pixels.
 nx=305
 ny=305
-nz=16
+nz=10
 nmax=int(max([nx*dx,ny*dy,nz*dz]))
 
 #texte="dimensions x : %d / y : %d / z : %d" % (nx*dlx,ny*dly,nz*dlz)
@@ -63,10 +63,10 @@ l=[0,(nmax-1)*dl,dl]
 #y=np.arange(0,dly*(nx-1),dly)
 #z=np.arange(0,dlz*(nx-1),dlz)
 
-df=1/(nmax*dl)
-dfx=1/(nx*dlx)
-dfy=1/(ny*dly)
-dfz=1/(nz*dlz)
+df=1.0/(nmax*dl)
+dfx=1.0/(nx*dlx)
+dfy=1.0/(ny*dly)
+dfz=1.0/(nz*dlz)
 
 #Center indices of matrix = Nyquist
 c=(nmax+1)/2
@@ -77,19 +77,19 @@ fz=np.zeros((int(np.floor((nmax+1))),1))
 for i in range(0,int(np.floor((nmax+1)/2))-1):
     f[i]=(i)*df
 for i in range(int(np.floor((nmax+1)/2))-1,int(nmax)):
-    f[i]=-1*(nmax-i)*df
+    f[i]=-1.0*(nmax-i)*df
 for i in range(0,int(np.floor((nx+1)/2))-1):
     fx[i]=(i)*dfx
 for i in range(int(np.floor((nx+1)/2))-1,int(nx)):
-    fx[i]=-1*(nx-i)*dfx
+    fx[i]=-1.0*(nx-i)*dfx
 for i in range(1,int(np.floor((ny+1)/2))-1):
     fy[i]=(i)*dfy
 for i in range(int(np.floor((ny+1)/2))-1,int(ny)):
-    fy[i]=-1*(ny-i)*dfy
+    fy[i]=-1.0*(ny-i)*dfy
 for i in range(1,int(np.floor((nz+1)/2))-1):
     fz[i]=(i)*dfz
 for i in range(int(np.floor((nz+1)/2))-1,int(nz)):
-    fz[i]=-1*(nz-i)*dfz
+    fz[i]=-1.0*(nz-i)*dfz
 
 # Normal distribution
 M=M2*np.random.randn(nmax,nmax,nmax)+M1
