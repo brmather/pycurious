@@ -39,7 +39,7 @@ class CurieGrid(object):
             warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
 
 
-    def subgrid(self, xc, yc, window):
+    def subgrid(self, window, xc, yc):
         """
         Extract a subgrid from the data at a window around
         the point (xc,yc)
@@ -212,7 +212,10 @@ class CurieGrid(object):
             k[i] = kk[mask].mean()
             sigma2[i] = np.std(rr)/np.sqrt(rr.size)
 
-        return S, k, sigma2
+
+        sigma_S = np.sqrt(sigma2)
+
+        return k, S, sigma_S
 
 
     def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -278,7 +281,9 @@ class CurieGrid(object):
             k[i] = kk[mask].mean()
             sigma2[i] = np.std(rr)/np.sqrt(rr.size)
 
-        return S, k, sigma2
+        sigma_S = np.sqrt(sigma2)
+
+        return k, S, sigma_S
         
         
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
@@ -330,7 +335,8 @@ class CurieGrid(object):
         for i in range(0, dtheta.size):
             PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
             S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
-        return S, kbins, dtheta
+        
+        return kbins, S, dtheta
 
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
@@ -474,7 +480,7 @@ class CurieGrid(object):
 
 # Helper functions to calculate Curie depth
 
-def bouligand2009(beta, zt, dz, kh, C=0.0):
+def bouligand2009(kh, beta, zt, dz, C):
     """
     Calculate the synthetic radial power spectrum of
     magnetic anomalies
@@ -483,10 +489,10 @@ def bouligand2009(beta, zt, dz, kh, C=0.0):
 
     Parameters
     ----------
+     kh    : norm of the wave number in the horizontal plane
      beta  : fractal parameter
      zt    : top of magnetic sources
      dz    : thickness of magnetic sources
-     kh    : norm of the wave number in the horizontal plane
      C     : field constant (Maus et al., 1997)
 
     Returns
