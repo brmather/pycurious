@@ -179,8 +179,8 @@ def import_geotiff(file_path):
     inproj = osr.SpatialReference()
     inproj.ImportFromWkt(gtproj)
 
-    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],
-                gt[3] + gtiff.RasterYSize*gt[5], gt[3])
+    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],\
+                gt[3], gt[3] + gtiff.RasterYSize*gt[5])
 
     # print projection information
     print(inproj)
@@ -188,7 +188,7 @@ def import_geotiff(file_path):
     # this closes the geotiff
     gtiff = None
 
-    return np.flipud(data), gtextent
+    return data, gtextent
 
 
 def export_geotiff(file_path, array, extent, epsg):
@@ -216,7 +216,7 @@ def export_geotiff(file_path, array, extent, epsg):
     spacingY = (ymax - ymin)/rows
 
     driver = gdal.GetDriverByName('GTiff')
-    outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Byte)
+    outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Float64)
     outRaster.SetGeoTransform((xmin, spacingX, 0, ymin, 0, spacingY))
     outband = outRaster.GetRasterBand(1)
     outband.WriteArray(array)
