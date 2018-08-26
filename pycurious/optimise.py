@@ -117,10 +117,10 @@ class CurieOptimise(CurieGrid):
         -------
          misfit   : float
         """
-        return np.linalg.norm((x - x0)/sigma_x0)**2
+        return 0.5*np.linalg.norm((x - x0)/sigma_x0)**2
 
 
-    def min_func(self, x, Phi_exp, kh):
+    def min_func(self, x, kh, Phi, sigma_Phi):
         """
         Function to minimise
 
@@ -144,9 +144,9 @@ class CurieOptimise(CurieGrid):
         beta, zt, dz, C = x
         with warnings.catch_warnings() as w:
             warnings.simplefilter("ignore")
-            Phi_syn = bouligand2009(beta, zt, dz, kh, C)
+            Phi_syn = bouligand2009(kh, beta, zt, dz, C)
 
-        misfit = self.objective_function(Phi_syn, Phi_exp, 1.0)
+        misfit = self.objective_function(Phi_syn, Phi, sigma_Phi)
         if not np.isfinite(misfit):
             misfit = 1e99
         else:
@@ -188,14 +188,14 @@ class CurieOptimise(CurieGrid):
         x0 = np.array([beta, zt, dz, C])
 
         # get subgrid
-        subgrid = self.subgrid(xc, yc, window)
+        subgrid = self.subgrid(window, xc, yc)
         subgrid = process_subgrid(subgrid)
 
         # compute radial spectrum
-        S, k, sigma2 = self.radial_spectrum(subgrid, taper=taper, **kwargs)
+        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
         # minimise function
-        res = minimize(self.min_func, x0, args=(S, k), bounds=self.bounds)
+        res = minimize(self.min_func, x0, args=(k, Phi, sigma_Phi), bounds=self.bounds)
         return res.x
 
 
@@ -260,6 +260,144 @@ class CurieOptimise(CurieGrid):
                                                                  **kwargs)
 
         return Bopt, ztopt, dzopt, Copt
+
+
+    def metropolis_hastings(self, nsim, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+        """
+        MCMC algorithm using a Metropolis-Hastings sampler.
+
+        Evaluates a Markov-Chain for starting values of beta, zt, dz, C
+        and returns the ensemble of model realisations.
+
+        WARNING: Use starting values relatively close to the solution
+        - C can easily found from the mean of the radial power spectrum
+        
+        Parameters
+        ----------
+         window  : float - size of window in metres
+         xc      : float - centroid x values
+         yc      : float - centroid y values
+         beta    : float - fractal parameter (starting value)
+         zt      : float - top of magnetic layer (starting value)
+         dz      : float - thickness of magnetic layer (starting value)
+         C       : float - field constant (starting value)
+
+        Returns
+        -------
+         beta    : ndarray shape(nsim,) - fractal parameters
+         zt      : ndarray shape(nsim,) - top of magnetic layer
+         dz      : ndarray shape(nsim,) - thickness of magnetic layer
+         C       : ndarray shape(nsim,) - field constant
+        """
+        if type(process_subgrid) == type(None):
+            # dummy function
+            def process_subgrid(subgrid):
+                return subgrid
+
+        # get subgrid
+        subgrid = self.subgrid(window, xc, yc)
+        subgrid = process_subgrid(subgrid)
+
+        # compute radial spectrum
+        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
+
+
+        samples = np.empty((nsim, 4))
+        x0 = np.array([beta, zt, dz, C])
+
+        for i in range(nsim):
+            # add random perturbation
+            x1 = x0 + np.random.normal(size=4)
+
+            # evaluate probability
+            P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
+            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
+
+            P = min(P1/P0, 1.0)
+
+            # randomly accept probability
+            if np.random.rand() <= P:
+                x0 = x1
+
+            samples[i] = x0
+
+        return samples
+
+
+    def metropolis_hastings2(self, nsim, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+        """
+        MCMC algorithm using a Metropolis-Hastings sampler.
+
+        Evaluates a Markov-Chain for starting values of beta, zt, dz, C
+        and returns the ensemble of model realisations.
+
+        WARNING: Use starting values relatively close to the solution
+        - C can easily found from the mean of the radial power spectrum
+        
+        Parameters
+        ----------
+         window  : float - size of window in metres
+         xc      : float - centroid x values
+         yc      : float - centroid y values
+         beta    : float - fractal parameter (starting value)
+         zt      : float - top of magnetic layer (starting value)
+         dz      : float - thickness of magnetic layer (starting value)
+         C       : float - field constant (starting value)
+
+        Returns
+        -------
+         beta    : ndarray shape(nsim,) - fractal parameters
+         zt      : ndarray shape(nsim,) - top of magnetic layer
+         dz      : ndarray shape(nsim,) - thickness of magnetic layer
+         C       : ndarray shape(nsim,) - field constant
+        """
+        if type(process_subgrid) == type(None):
+            # dummy function
+            def process_subgrid(subgrid):
+                return subgrid
+
+        n = len(xc_list)
+
+        if n != len(yc_list):
+            raise ValueError("xc_list and yc_list must be the same size")
+
+        rbeta = np.random.uniform(0, 10, size=nsim)
+        samples = np.empty((n, nsim, 4))
+        misfit  = np.empty(n)
+
+        for i in range(n):
+            xc = xc_list[i]
+            yc = yc_list[i]            
+
+            # get subgrid
+            subgrid = self.subgrid(xc, yc, window)
+            subgrid = process_subgrid(subgrid)
+
+            # compute radial spectrum
+            S, k, sigma2 = self.radial_spectrum(subgrid, taper=taper, **kwargs)
+
+            x0 = np.array([rbeta[0], 0.0, 20.0, S.mean()])
+
+
+            for j in range(nsim):
+                # add random perturbation
+                x1 = x0 + np.random.normal(size=4)
+                x1[0] = rbeta[j]
+
+                # evaluate probability
+                P0 = np.exp(-self.min_func(x0, S, k))
+                P1 = np.exp(-self.min_func(x1, S, k))
+
+                P = min(P1/P0, 1.0)
+
+                # randomly accept probability
+                if np.random.rand() <= P:
+                    x0 = x1
+
+                samples[i,j] = x0
+                # misfit[]
+
+        return samples
 
 
     def sensitivity_routine(self, nsim, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
