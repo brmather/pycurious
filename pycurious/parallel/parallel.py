@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import warnings
-from .optimise import CurieOptimise
+from ..optimise import CurieOptimise
 
 try: range=xrange
 except: pass

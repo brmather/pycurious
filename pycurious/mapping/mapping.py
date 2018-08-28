@@ -120,7 +120,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
 
     xtextent = [xtmin, xtmax, ytmin, ytmax]
 
-    # trim data - buffer = 1%
+    # trim data - buffer = 5%
     coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
 
 
