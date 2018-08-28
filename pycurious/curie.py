@@ -39,7 +39,7 @@ class CurieGrid(object):
             warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
 
 
-    def subgrid(self, xc, yc, window):
+    def subgrid(self, window, xc, yc):
         """
         Extract a subgrid from the data at a window around
         the point (xc,yc)
@@ -178,17 +178,13 @@ class CurieGrid(object):
 
 
         # control taper
-        if taper is None:
+        if type(taper) == type(None):
             vtaper = 1.0
         else:
-            vtaper = np.ones((nr, nc))
             rt = taper(nr, **kwargs)
             ct = taper(nc, **kwargs)
-
-            for col in range(0, nc):
-                vtaper[:,col] *= rt
-            for row in range(0, nr):
-                vtaper[row,:] *= ct
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
 
         dx_scale = self.dx*scale
         dk = 2.0*np.pi/(nw - 1)/dx_scale
@@ -200,9 +196,9 @@ class CurieGrid(object):
         kbins = np.arange(dk, dk*nw/2, dk)
         nbins = kbins.size - 1
 
-        S = np.zeros(nbins)
-        k = np.zeros(nbins)
-        sigma2 = np.zeros(nbins)
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma2 = np.empty(nbins)
 
         i0 = int((nw - 1)//2)
         nw_range = np.arange(0, nw)
@@ -216,9 +212,80 @@ class CurieGrid(object):
             k[i] = kk[mask].mean()
             sigma2[i] = np.std(rr)/np.sqrt(rr.size)
 
-        return S, k, sigma2
+
+        sigma_S = np.sqrt(sigma2)
+
+        return k, S, sigma_S
 
 
+    def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        """
+        Compute the radial spectrum for a square grid.
+
+        Parameters
+        ----------
+         subgrid : window of the original data
+                 : (see subgrid method)
+         taper   : taper function (np.hanning is default)
+                 : set to None for no taper function
+         scale   : scaling factor to get k into rad/km
+                 : (0.001 by default)
+         args    : keyword arguments to pass to taper
+
+        Returns
+        -------
+         S       : Radial spectrum
+         k       : wavenumber in rad/km
+         sigma2  : variance of S
+        """
+
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if type(taper) == type(None):
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+        nbins = kbins.size - 1
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma2 = np.empty(nbins)
+
+        i0 = int((nw - 1)//2)
+        ix, iy = np.mgrid[0:nw,0:nw]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(0, nbins):
+            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
+            rr = np.log(np.sqrt(FT[mask]))
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma2[i] = np.std(rr)/np.sqrt(rr.size)
+
+        sigma_S = np.sqrt(sigma2)
+
+        return k, S, sigma_S
+        
+        
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
         """
         Compute azimuthal spectrum for a square grid.
@@ -240,7 +307,7 @@ class CurieGrid(object):
          k       : wavenumber [rad/km]
          theta   : angles
         """
-        import radon
+        from pycurious import radon
         data = subgrid
         nr, nc = data.shape
         nw = nr
@@ -256,6 +323,7 @@ class CurieGrid(object):
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
+        sigma2 = np.zeros((dtheta.size, kbins.size))
 
         # control taper
         if taper is None:
@@ -266,9 +334,9 @@ class CurieGrid(object):
         nk = 1 + 2*kbins.size
         for i in range(0, dtheta.size):
             PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
-            S[i,:] = 2.0*np.log( PSD[1:kbins.size+1] )
-
-        return S, kbins, dtheta
+            S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
+        
+        return kbins, S, dtheta
 
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
@@ -412,7 +480,7 @@ class CurieGrid(object):
 
 # Helper functions to calculate Curie depth
 
-def bouligand2009(beta, zt, dz, kh, C=0.0):
+def bouligand2009(kh, beta, zt, dz, C):
     """
     Calculate the synthetic radial power spectrum of
     magnetic anomalies
@@ -421,6 +489,7 @@ def bouligand2009(beta, zt, dz, kh, C=0.0):
 
     Parameters
     ----------
+     kh    : norm of the wave number in the horizontal plane
      beta  : fractal parameter
      zt    : top of magnetic sources
      dz    : thickness of magnetic sources
@@ -451,6 +520,82 @@ def bouligand2009(beta, zt, dz, kh, C=0.0):
         kv((-0.5*(1.0+beta)), khdz) * np.power(0.5*khdz,(0.5*(1.0+beta)) ))
     Phi1d += np.log(A)
     return Phi1d
+
+
+def tanaka1999(k, Phi, sigma_Phi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
+    """
+ Compute weighted linear fit of S over spatial frequency window kmin:kmax
+
+    Parameters
+    ----------
+     S      : Power spectrum of signal (see radial spectrum), expected in ln(sqrt(S)) form
+     k      : Wavenumber
+     sigma2 : Errors of S
+     kmin,kmax  : Minimum and maximum spatial frequencies to fit. Ideally low frequency, straight-ish line
+
+    Returns
+    -----------
+     Zb     : Estimated Curie point depth, as per Tanaka et al, 1999
+     eZb    : Error of Zb
+            : No geothermal gradient, trivial to estimate.
+            : Possible to extend, return fitted components?
+    """
+    # for now...
+    S = Phi
+    sigma2 = sigma_Phi**2
+
+    def compute_coefficients(X, Y, E):
+        X2 = X**2
+        Y2 = Y**2
+        E2 = E**2
+
+        XY = np.multiply(X, Y)
+        XE2sum = np.sum(X/E2)
+        YE2sum = np.sum(Y/E2)
+        rE2sum = np.sum(1.0/E2)
+        X2E2sum = np.sum(X2/E2)
+        Y2E2sum = np.sum(Y2/E2)
+
+        #TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
+        # I think summation in second TL term needed to be split
+        TL = XE2sum*YE2sum - np.sum(XY/E2)*rE2sum
+        BL = XE2sum**2 - X2E2sum*rE2sum
+
+        Z  = TL/BL
+        b  = (np.sum(XY/E2) - Z*X2E2sum)/XE2sum
+        #dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
+        ## There was a missing **2 term at end of error term.
+        dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum**2) )
+        return Z, b, dZ
+
+
+    sf=k/(2.0*np.pi)
+    S2=np.log(np.exp(S)/sf)
+
+    # mask low wavenumbers
+    kmin, kmax = kmin_range
+    mask1 = np.logical_and(sf >=kmin, sf <=kmax)
+    X1 = sf[mask1]
+    Y1 = S[mask1]
+    E1 = sigma2[mask1]
+    
+    # mask high wavenumbers
+    kmin, kmax = kmax_range
+    mask2 = np.logical_and(sf >=kmin, sf <=kmax)
+    X2 = sf[mask2]
+    Y2 = np.log(np.exp(S[mask2])/(X2*2*np.pi))
+    E2 = np.log(np.exp(sigma2[mask2])/(X2*2*np.pi))
+
+    # compute top and bottom of magnetic layer
+    Ztr, btr, dZtr = compute_coefficients(X1, Y1, E1)
+    Zor, bor, dZor = compute_coefficients(X2, Y2, E2)
+    return (Ztr,btr,dZtr), (Zor, bor, dZor)
+    
+    
+def ComputeTanaka(Ztr, dZtr, Zor, dZor):
+    Zb = 2.0*Zor - Ztr
+    dZb  = 2.0*dZor - dZtr
+    return abs(Zb), dZb
 
 
 def maus1995(beta, zt, kh, C=0.0):
