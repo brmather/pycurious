@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from .curie import *
+from .. import CurieGrid, bouligand2009
 import numpy as np
 from scipy.optimize import minimize
 from scipy.special import polygamma

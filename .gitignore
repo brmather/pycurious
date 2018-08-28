@@ -1,1 +1,3 @@
-Examples/Notebooks/.ipynb_checkpoints/*
+pycurious/Examples/Notebooks/Bouligand/.ipynb_checkpoints/*
+pycurious/Examples/Notebooks/Tanaka/.ipynb_checkpoints/*
+*.pyc

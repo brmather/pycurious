@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from .curie import CurieGrid, bouligand2009, tanaka1999, maus1995, ComputeTanaka
+from .grid import CurieGrid, bouligand2009, tanaka1999, maus1995, ComputeTanaka
 from .optimise import CurieOptimise
 from .parallel import CurieParallel
-from .mapping import *
+from . import mapping
+from .documentation import install_documentation
