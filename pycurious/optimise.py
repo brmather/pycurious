@@ -244,25 +244,20 @@ class CurieOptimise(CurieGrid):
             raise ValueError("xc_list and yc_list must be the same size")
 
 
-        # storage vectors
-        Bopt  = np.empty(n)
-        ztopt = np.empty(n)
-        dzopt = np.empty(n)
-        Copt  = np.empty(n)
+        # storage vector
+        xOpt = np.empty((n, 4))
 
         for i in range(0, n):
             xc = xc_list[i]
             yc = yc_list[i]
 
-            Bopt[i], ztopt[i], dzopt[i], Copt[i] = self.optimise(window, xc, yc,\
-                                                                 beta, zt, dz, C,\
-                                                                 taper, process_subgrid,\
-                                                                 **kwargs)
+            xOpt[i] = self.optimise(window, xc, yc, beta, zt, dz, C,\
+                                    taper, process_subgrid, **kwargs)
 
-        return Bopt, ztopt, dzopt, Copt
+        return list(xOpt.T)
 
 
-    def metropolis_hastings(self, nsim, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def metropolis_hastings(self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         MCMC algorithm using a Metropolis-Hastings sampler.
 
@@ -293,6 +288,14 @@ class CurieOptimise(CurieGrid):
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
+
+
+        samples = np.empty((nsim, 4))
+        x0 = np.array([beta, zt, dz, C])
+
+        if type(x_scale) == type(None):
+            x_scale = np.ones(4)
+
 
         # get subgrid
         subgrid = self.subgrid(window, xc, yc)
@@ -302,16 +305,29 @@ class CurieOptimise(CurieGrid):
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
 
-        samples = np.empty((nsim, 4))
-        x0 = np.array([beta, zt, dz, C])
+        # Burn-in phase
+        for i in range(burnin):
+            # add random perturbation
+            x1 = x0 + np.random.normal(size=4)*x_scale
 
+            # evaluate probability + tempering
+            P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi)/1000)
+            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi)/1000)
+
+            # iterate towards MAP estimate
+            if P1 > P0:
+                x0 = x1
+
+
+        # Now sample posterior
         for i in range(nsim):
             # add random perturbation
-            x1 = x0 + np.random.normal(size=4)
+            x1 = x0 + np.random.normal(size=4)*x_scale
 
             # evaluate probability
             P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
             P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
+            P0 = max(P0, 1e-99)
 
             P = min(P1/P0, 1.0)
 
@@ -321,86 +337,11 @@ class CurieOptimise(CurieGrid):
 
             samples[i] = x0
 
-        return samples
+        return list(samples.T)
 
 
-    def metropolis_hastings2(self, nsim, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
-        """
-        MCMC algorithm using a Metropolis-Hastings sampler.
 
-        Evaluates a Markov-Chain for starting values of beta, zt, dz, C
-        and returns the ensemble of model realisations.
-
-        WARNING: Use starting values relatively close to the solution
-        - C can easily found from the mean of the radial power spectrum
-        
-        Parameters
-        ----------
-         window  : float - size of window in metres
-         xc      : float - centroid x values
-         yc      : float - centroid y values
-         beta    : float - fractal parameter (starting value)
-         zt      : float - top of magnetic layer (starting value)
-         dz      : float - thickness of magnetic layer (starting value)
-         C       : float - field constant (starting value)
-
-        Returns
-        -------
-         beta    : ndarray shape(nsim,) - fractal parameters
-         zt      : ndarray shape(nsim,) - top of magnetic layer
-         dz      : ndarray shape(nsim,) - thickness of magnetic layer
-         C       : ndarray shape(nsim,) - field constant
-        """
-        if type(process_subgrid) == type(None):
-            # dummy function
-            def process_subgrid(subgrid):
-                return subgrid
-
-        n = len(xc_list)
-
-        if n != len(yc_list):
-            raise ValueError("xc_list and yc_list must be the same size")
-
-        rbeta = np.random.uniform(0, 10, size=nsim)
-        samples = np.empty((n, nsim, 4))
-        misfit  = np.empty(n)
-
-        for i in range(n):
-            xc = xc_list[i]
-            yc = yc_list[i]            
-
-            # get subgrid
-            subgrid = self.subgrid(xc, yc, window)
-            subgrid = process_subgrid(subgrid)
-
-            # compute radial spectrum
-            S, k, sigma2 = self.radial_spectrum(subgrid, taper=taper, **kwargs)
-
-            x0 = np.array([rbeta[0], 0.0, 20.0, S.mean()])
-
-
-            for j in range(nsim):
-                # add random perturbation
-                x1 = x0 + np.random.normal(size=4)
-                x1[0] = rbeta[j]
-
-                # evaluate probability
-                P0 = np.exp(-self.min_func(x0, S, k))
-                P1 = np.exp(-self.min_func(x1, S, k))
-
-                P = min(P1/P0, 1.0)
-
-                # randomly accept probability
-                if np.random.rand() <= P:
-                    x0 = x1
-
-                samples[i,j] = x0
-                # misfit[]
-
-        return samples
-
-
-    def sensitivity_routine(self, nsim, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def sensitivity(self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the mean and
         standard deviation of beta, zt, dz, C by perturbing their
@@ -423,57 +364,39 @@ class CurieOptimise(CurieGrid):
          zt      : ndarray shape(l,2) - top of magnetic layer (mean, stdev)
          dz      : ndarray shape(l,2) - thickness of magnetic layer (mean, stdev)
          C       : ndarray shape(l,2) - field constant (mean, stdev)
-
         """
+        if type(process_subgrid) == type(None):
+            # dummy function
+            def process_subgrid(subgrid):
+                return subgrid
 
-        n = len(xc_list)
+
+        samples = np.empty((nsim, 4))
+        x0 = np.array([beta, zt, dz, C])
         
-        if n != len(yc_list):
-            raise ValueError("xc_list and yc_list must be the same size")
-
-
-        # storage vectors for centroids (mean, std)
-        Bopt  = np.empty((n,2))
-        ztopt = np.empty((n,2))
-        dzopt = np.empty((n,2))
-        Copt  = np.empty((n,2))
-
-        # storage vectors for nsim
-        Bsim  = np.empty(nsim)
-        ztsim = np.empty(nsim)
-        dzsim = np.empty(nsim)
-        Csim  = np.empty(nsim)
-
-
         use_keys = []
         for key in self.prior_pdf:
             prior_pdf = self.prior_pdf[key]
             if prior_pdf is not None:
                 use_keys.append(key)
+        
+        # get subgrid
+        subgrid = self.subgrid(window, xc, yc)
+        subgrid = process_subgrid(subgrid)
 
+        # compute radial spectrum
+        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
-        for i in range(0, n):
-            xc = xc_list[i]
-            yc = yc_list[i]
+        for sim in range(0, nsim):
+            # randomly generate new prior values within PDF
+            for key in use_keys:
+                prior_pdf = self.prior_pdf[key]
+                self.prior[key][0] = prior_pdf.rvs()
 
-            for sim in range(0, nsim):
-
-                # randomly generate new prior values within PDF
-                for key in use_keys:
-                    prior_pdf = self.prior_pdf[key]
-                    self.prior[key][0] = prior_pdf.rvs()
-
-
-                # run the optimisation routine
-                Bsim[sim], ztsim[sim], dzsim[sim], Csim[sim] = self.optimise(window, xc, yc,\
-                                                                             beta=beta, zt=zt, dz=dz, C=C,\
-                                                                             taper=np.hanning, process_subgrid=None, **kwargs)
-
-            # store mean, stdev pairs
-            Bopt[i] = np.mean(Bsim), np.std(Bsim)
-            ztopt[i] = np.mean(ztsim), np.std(ztsim)
-            dzopt[i] = np.mean(dzsim), np.std(dzsim)
-            Copt[i] = np.mean(Csim), np.std(Csim)
+            # minimise function
+            rPhi = np.random.normal(Phi, sigma_Phi)
+            res = minimize(self.min_func, x0, args=(k, rPhi, sigma_Phi), bounds=self.bounds)
+            samples[sim] = res.x
 
 
         # restore priors
@@ -481,4 +404,4 @@ class CurieOptimise(CurieGrid):
             prior_pdf = self.prior_pdf[key]
             self.prior[key] = list(prior_pdf.args)
 
-        return Bopt, ztopt, dzopt, Copt
+        return yc_list(samples.T)

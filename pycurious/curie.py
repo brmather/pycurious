@@ -522,7 +522,7 @@ def bouligand2009(kh, beta, zt, dz, C):
     return Phi1d
 
 
-def tanaka1999(S, k, sigma2, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
+def tanaka1999(k, Phi, sigma_Phi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
     """
  Compute weighted linear fit of S over spatial frequency window kmin:kmax
 
@@ -540,6 +540,10 @@ def tanaka1999(S, k, sigma2, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
             : No geothermal gradient, trivial to estimate.
             : Possible to extend, return fitted components?
     """
+    # for now...
+    S = Phi
+    sigma2 = sigma_Phi**2
+
     def compute_coefficients(X, Y, E):
         X2 = X**2
         Y2 = Y**2
