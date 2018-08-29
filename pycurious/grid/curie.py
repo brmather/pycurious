@@ -172,19 +172,19 @@ class CurieGrid(object):
 
         Parameters
         ----------
-         subgrid : window of the original data
-                 : (see subgrid method)
-         taper   : taper function (np.hanning is default)
-                 : set to None for no taper function
-         scale   : scaling factor to get k into rad/km
-                 : (0.001 by default)
-         args    : keyword arguments to pass to taper
+         subgrid   : window of the original data
+                   : (see subgrid method)
+         taper     : taper function (np.hanning is default)
+                   : set to None for no taper function
+         scale     : scaling factor to get k into rad/km
+                   : (0.001 by default)
+         kwargs    : keyword arguments to pass to taper
 
         Returns
         -------
-         S       : Radial spectrum
-         k       : wavenumber in rad/km
-         sigma2  : variance of S
+         k         : wavenumber in rad/km
+         Phi       : Radial power spectrum
+         sigma_Phi : Standard deviation of Phi
         """
 
         data = subgrid
@@ -238,23 +238,23 @@ class CurieGrid(object):
 
     def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """
-        Compute the radial spectrum for a square grid.
+        Compute the log of the radial spectrum for a square grid.
 
         Parameters
         ----------
-         subgrid : window of the original data
-                 : (see subgrid method)
-         taper   : taper function (np.hanning is default)
-                 : set to None for no taper function
-         scale   : scaling factor to get k into rad/km
-                 : (0.001 by default)
-         args    : keyword arguments to pass to taper
+         subgrid   : window of the original data
+                   : (see subgrid method)
+         taper     : taper function (np.hanning is default)
+                   : set to None for no taper function
+         scale     : scaling factor to get k into rad/km
+                   : (0.001 by default)
+         kwargs    : keyword arguments to pass to taper
 
         Returns
         -------
-         S       : Radial spectrum
-         k       : wavenumber in rad/km
-         sigma2  : variance of S
+         k           : wavenumber in rad/km
+         lnPhi       : log of the radial power spectrum in ln(sqrt(S))
+         lnsigma_Phi : standard deviation of lnPhi
         """
 
         data = subgrid
@@ -310,20 +310,20 @@ class CurieGrid(object):
 
         Parameters
         ----------
-         subgrid : window of the original data
-                 : (see subgrid method)
-         taper   : taper function (np.hanning is default)
-                 : set to None for no taper function
-         scale   : scaling factor to get k into rad/km
-                 : (0.001 by default)
-         theta   : angle increment in degrees
-         args    : arguments to pass to taper
+         subgrid   : window of the original data
+                   : (see subgrid method)
+         taper     : taper function (np.hanning is default)
+                   : set to None for no taper function
+         scale     : scaling factor to get k into rad/km
+                   : (0.001 by default)
+         theta     : angle increment in degrees
+         args      : arguments to pass to taper
 
         Returns
         -------
-         S       : Azimuthal spectrum
-         k       : wavenumber [rad/km]
-         theta   : angles
+         k         : wavenumber in rad/km
+         Phi       : Radial power spectrum
+         sigma_Phi : Standard deviation of Phi
         """
         from pycurious import radon
         data = subgrid
@@ -368,20 +368,18 @@ class CurieGrid(object):
 
         Parameters
         ----------
-         data : 1d-array
-            The total field anomaly data at each point.
-         inc, dec : floats
-            The inclination and declination of the inducing Geomagnetic field
-         sinc, sdec : floats (optional)
-            The inclination and declination of the total magnetization of the
-            anomaly source. The total magnetization is the vector sum of the
+         data : 1d-array the total field anomaly data at each point.
+         inc  : inclination of the inducing Geomagnetic field
+         dec  : declination of the inducing Geomagnetic field
+         sinc : (optional) inclination of the total magnetization of the anomaly source
+         sdec : (optional) declination of the total magnetization of the anomaly source
+            The total magnetization is the vector sum of the
             induced and remanent magnetization. If there is only induced
             magnetization, use the *inc* and *dec* of the Geomagnetic field.
 
         Returns
         -------
-         rtp : 2d-array
-            The data reduced to the pole.
+         rtp : 2d-array the data reduced to the pole.
         
         References
         ----------
@@ -454,27 +452,24 @@ class CurieGrid(object):
 
         Parameters
         ----------
-         data : 2D grid
-            The potential field at the grid points
-         height : float
-            The height increase (delta z) in meters.
+         data   : 2D grid -  potential field at the grid points
+         height : float - height increase (delta z) in meters.
         
         Returns
         -------
-         cont : array
-            The upward continued data
+         cont : array - upward continued data
 
         Notes
         -----
-        It is not possible to get the FFT of a masked grid. The default
-        :func:`fatiando.gridder.interp` call using minimum curvature will
-        not be suitable.  Use extrapolate=True or algorithm='nearest' to
-        get an unmasked grid.
+         It is not possible to get the FFT of a masked grid. The default
+         :func:`fatiando.gridder.interp` call using minimum curvature will
+         not be suitable.  Use extrapolate=True or algorithm='nearest' to
+         get an unmasked grid.
 
         References
         ----------
-        Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
-        Applications, Cambridge University Press.
+         Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+         Applications, Cambridge University Press.
         """
         nr, nc = data.shape
 
@@ -507,16 +502,15 @@ def bouligand2009(kh, beta, zt, dz, C):
 
     Parameters
     ----------
-     kh    : norm of the wave number in the horizontal plane
+     kh    : wavenumber in rad/km
      beta  : fractal parameter
      zt    : top of magnetic sources
      dz    : thickness of magnetic sources
-     kh    : norm of the wave number in the horizontal plane
      C     : field constant (Maus et al., 1997)
 
     Returns
     -------
-     Phi  : radial power spectrum of magnetic anomalies
+     Phi   : radial power spectrum of magnetic anomalies
 
     References
     ----------
@@ -540,27 +534,28 @@ def bouligand2009(kh, beta, zt, dz, C):
     return Phi1d
 
 
-def tanaka1999(k, Phi, sigma_Phi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
+def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
     """
- Compute weighted linear fit of S over spatial frequency window kmin:kmax
+    Compute weighted linear fit of Phi over spatial frequency window kmin:kmax
 
     Parameters
     ----------
-     S      : Power spectrum of signal (see radial spectrum), expected in ln(sqrt(S)) form
-     k      : Wavenumber
-     sigma2 : Errors of S
-     kmin,kmax  : Minimum and maximum spatial frequencies to fit. Ideally low frequency, straight-ish line
+     k           : wavenumber in rad/km
+     lnPhi       : log of the radial power spectrum (see power_spectrum_log)
+                   expected in ln(sqrt(S)) form
+     sigma_lnPhi : standard deviation of lnPhi
+     kmin,kmax   : minimum and maximum range of spatial frequencies to fit.
+                   Ideally low frequency, straight-ish line
 
     Returns
-    -----------
-     Zb     : Estimated Curie point depth, as per Tanaka et al, 1999
-     eZb    : Error of Zb
-            : No geothermal gradient, trivial to estimate.
-            : Possible to extend, return fitted components?
+    -------
+     (Ztr, btr, dZtr) : gradient, intercept, error for the top of magnetic sources
+     (Zor, bor, dZor) : gradient, intercept, error for the bottom of magnetic sources
+
     """
     # for now...
-    S = Phi
-    sigma2 = sigma_Phi**2
+    S = lnPhi
+    sigma2 = sigma_lnPhi**2
 
     def compute_coefficients(X, Y, E):
         X2 = X**2
@@ -611,6 +606,21 @@ def tanaka1999(k, Phi, sigma_Phi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)
     
     
 def ComputeTanaka(Ztr, dZtr, Zor, dZor):
+    """
+    Compute the Curie depth from the results of tanaka1999
+
+    Parameters
+    ----------
+     Ztr    : top of the magnetic source
+     dZtr   : error of Ztr
+     Zor    : bottom of the magnetic source
+     dZor   : error of Zor
+
+    Returns
+    -------
+     Zb     : estimated Curie point depth
+     eZb    : error of Zb
+    """
     Zb = 2.0*Zor - Ztr
     dZb  = 2.0*dZor - dZtr
     return abs(Zb), dZb
