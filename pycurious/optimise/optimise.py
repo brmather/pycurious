@@ -95,6 +95,9 @@ class CurieOptimise(CurieGrid):
 
 
     def reset_priors(self):
+        """
+        Reset priors to uniform distribution
+        """
         self.prior = {'beta':None, 'zt':None, 'dz':None, 'C':None}
         self.prior_pdf = {'beta':None, 'zt':None, 'dz':None, 'C':None}
 
@@ -145,20 +148,21 @@ class CurieOptimise(CurieGrid):
 
         Parameters
         ----------
-         x        : array of variables [beta, zt, dz, C]
-         Phi_exp  : radial spectrum
-         kh       : wavenumbers [rad/km]
+         x         : array of variables [beta, zt, dz, C]
+         kh        : wavenumbers [rad/km]
+         Phi       : radial power spectrum
+         sigma_Phi : standard deviation of Phi
 
         Returns
         -------
-         misfit   : sum of misfit (float)
+         misfit    : sum of misfit (float)
 
         Notes
         -----
          We purposely ignore all warnings raised by the bouligand2009
          function because some combinations of input parameters will
-         trigger an out-of-range warning that will crash the minimiser
-         when this occurs we set the misfit to a very large number
+         trigger an out-of-range warning that will crash the minimiser.
+         Instead, the misfit is set to a very large number when this occurs.
         """
         beta, zt, dz, C = x
         with warnings.catch_warnings() as w:
@@ -187,6 +191,10 @@ class CurieOptimise(CurieGrid):
          zt      : float - top of magnetic layer (starting value)
          dz      : float - thickness of magnetic layer (starting value)
          C       : float - field constant (starting value)
+         taper   : taper function (np.hanning is default)
+                 : set to None for no taper function
+         process_subgrids : func - a custom function to process the subgrid
+         kwargs  : keyword arguments to pass to radial_spectrum.
 
         Returns
         -------
@@ -222,9 +230,6 @@ class CurieOptimise(CurieGrid):
         """
         Iterate through a list of centroids to compute the optimal values
         of beta, zt, dz, C for a given window size.
-
-        Use this routine to iteratively improve the precision of various
-        parameters (see notes)
         
         Parameters
         ----------
@@ -235,6 +240,10 @@ class CurieOptimise(CurieGrid):
          zt      : float - top of magnetic layer
          dz      : float - thickness of magnetic layer
          C       : float - field constant
+         taper   : taper function (np.hanning is default)
+                 : set to None for no taper function
+         process_subgrids : func - a custom function to process the subgrid
+         kwargs  : keyword arguments to pass to radial_spectrum.
 
         Returns
         -------
@@ -243,18 +252,6 @@ class CurieOptimise(CurieGrid):
          dz      : ndarray shape(l,) - thickness of magnetic layer
          C       : ndarray shape(l,) - field constant
 
-        Notes
-        -----
-         Parameters such as beta and C vary over long wavelengths,
-         thus keeping these somewhat rigid can improve the precision
-         of zt and dz.
-         The mean and stdev of any vectors for beta, zt, dz, C can
-         be added as priors in the objective routine using add_prior
-
-         Recommended usage is two passes:
-         1. keep beta, zt, dz, C set to None with no prior
-         2. add the mean and stdev of beta, zt, dz, C as priors
-            and run through a second pass
         """
 
         n = len(xc_list)
@@ -282,15 +279,16 @@ class CurieOptimise(CurieGrid):
 
         Evaluates a Markov-Chain for starting values of beta, zt, dz, C
         and returns the ensemble of model realisations.
-
-        WARNING: Use starting values relatively close to the solution
-        - C can easily found from the mean of the radial power spectrum
         
         Parameters
         ----------
          window  : float - size of window in metres
          xc      : float - centroid x values
          yc      : float - centroid y values
+         nsim    : int   - number of simulations
+         burnin  : int   - number of burn-in simulations before to nsim
+         x_scale : float(4) (optional) - scaling factor for new proposals
+                   default is [1,1,1,1] for [beta, zt, dz, C] - see notes
          beta    : float - fractal parameter (starting value)
          zt      : float - top of magnetic layer (starting value)
          dz      : float - thickness of magnetic layer (starting value)
@@ -298,10 +296,22 @@ class CurieOptimise(CurieGrid):
 
         Returns
         -------
-         beta    : ndarray shape(nsim,) - fractal parameters
+         beta    : ndarray shape(nsim,) - fractal parameter
          zt      : ndarray shape(nsim,) - top of magnetic layer
          dz      : ndarray shape(nsim,) - thickness of magnetic layer
          C       : ndarray shape(nsim,) - field constant
+
+        Notes
+        -----
+         nsim, burnin, and x_scale should be tweaked for optimal performance
+         Use starting values of beta, zt, dz, C relatively close to the solution
+         - C can easily found from the mean of the radial power spectrum.
+
+         During the burn-in stage we apply tempering to the PDF to iterate closer
+         towards the solution. This has the effect of smoothing out the posterior
+         so that minima can be more easily found. This is necessary here because
+         large portions of the posterior probability are zero.
+         see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.
         """
         if type(process_subgrid) == type(None):
             # dummy function
@@ -370,19 +380,21 @@ class CurieOptimise(CurieGrid):
         ----------
          nsim    : int - number of Monte Carlo simulations
          window  : float - size of window in metres
-         xc_list : ndarray shape(l,) - centroid x values 
-         yc_list : ndarray shape(l,) - centroid y values 
+         xc      : float - centroid x values
+         yc      : float - centroid y values
+         nsim    : int   - number of simulations
          beta    : float - starting fractal parameter 
          zt      : float - starting top of magnetic layer
          dz      : float - starting thickness of magnetic layer
          C       : float - starting field constant
 
+
         Returns
         -------
-         beta    : ndarray shape(l,2) - fractal parameters (mean, stdev)
-         zt      : ndarray shape(l,2) - top of magnetic layer (mean, stdev)
-         dz      : ndarray shape(l,2) - thickness of magnetic layer (mean, stdev)
-         C       : ndarray shape(l,2) - field constant (mean, stdev)
+         beta    : ndarray shape(nsim,) - fractal parameters
+         zt      : ndarray shape(nsim,) - top of magnetic layer
+         dz      : ndarray shape(nsim,) - thickness of magnetic layer
+         C       : ndarray shape(nsim,) - field constant
         """
         if type(process_subgrid) == type(None):
             # dummy function
