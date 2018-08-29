@@ -1,13 +1,13 @@
 # PyCurious
 
-Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. This is most often interpreted as the 580C isotherm, which is the Curie point of magnetite - the most prevalent magnetic mineral.
+Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. This is most often interpreted as the 580C isotherm, which is the Curie point of magnetite and the most prevalent magnetic mineral.
 
 Current methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum. *PyCurious* implements two common approaches:
 
 - [Tanaka *et al.* 1999](http://linkinghub.elsevier.com/retrieve/pii/S0040195199000724)
 - [Bouligand *et al.* 2009](http://doi.wiley.com/10.1029/2009JB006494)
 
-Both of these methods to compute Curie depth are covered extensively in the form of Jupyter notebooks. Copy these into your working directory by running,
+Both of these methods to compute Curie depth are covered in the form of Jupyter notebooks. Copy these into your working directory by running,
 
 ```python
 import pycurious
@@ -28,8 +28,14 @@ Below is a simple workflow to calculate the radial power spectrum:
 
 ```python
 import pycurious
-grid = pycurious.CurieOptimise(data2d, xmin, xmax, ymin, ymax)
+
+# initialise CurieOptimise object with 2D magnetic anomaly
+grid = pycurious.CurieOptimise(mag_anomaly, xmin, xmax, ymin, ymax)
+
+# extract a square window of the magnetic anomaly
 subgrid = grid.subgrid(window_size, x, y)
+
+# compute the radial power spectrum
 k, Phi, sigma_Phi = grid.radial_power_spectrum(subgrid)
 ```
 
@@ -55,15 +61,15 @@ Optional dependencies for parallel module:
 
 To install:
 
-```shell
+```
 python setup.py install --user
 ```
 
 This will compile all C and Fortran sources and install them to the user directory (omit the `--user` flag to install to the system directory). Remember to delete the build folder if you are upgrading this package.
 
-Or install using pip:
+Alternatively, install using pip:
 
-```shell
+```
 pip install pycurious --user
 ```
 

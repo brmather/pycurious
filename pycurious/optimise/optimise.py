@@ -19,6 +19,7 @@ along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 # -*- coding: utf-8 -*-
 from .. import CurieGrid, bouligand2009
 import numpy as np
+import warnings
 from scipy.optimize import minimize
 from scipy.special import polygamma
 from scipy import stats
