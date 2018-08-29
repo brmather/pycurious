@@ -1,0 +1,12 @@
+include README.md
+include MANIFEST.in
+include COPYING
+include COPYING.LESSER
+include setup.cfg
+include src/*
+include __init__.py
+recursive-include pycurious/*.py
+include docs/*
+include tests/*.py
+
+
