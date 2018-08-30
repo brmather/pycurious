@@ -169,7 +169,7 @@ class CurieOptimise(CurieGrid):
             warnings.simplefilter("ignore")
             Phi_syn = bouligand2009(kh, beta, zt, dz, C)
 
-        misfit = self.objective_function(Phi_syn, Phi, sigma_Phi)
+        misfit = self.objective_function(Phi_syn, Phi, 1.0)
         if not np.isfinite(misfit):
             misfit = 1e99
         else:
@@ -435,4 +435,4 @@ class CurieOptimise(CurieGrid):
             prior_pdf = self.prior_pdf[key]
             self.prior[key] = list(prior_pdf.args)
 
-        return yc_list(samples.T)
+        return list(samples.T)
