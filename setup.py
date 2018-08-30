@@ -28,7 +28,7 @@ if __name__ == "__main__":
           author            = "Ben Mather",
           author_email      = "brmather1@gmail.com",
           url               = "https://github.com/brmather/pycurious",
-          version           = "0.1",
+          version           = "0.1.1",
           description       = "Python tool for computing the Curie depth from magnetic data",
           ext_modules       = cythonize([ext]),
           packages          = ['pycurious',
