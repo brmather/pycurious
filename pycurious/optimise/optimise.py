@@ -23,9 +23,11 @@ import warnings
 from scipy.optimize import minimize
 from scipy.special import polygamma
 from scipy import stats
+from multiprocessing import Pool, Process, Queue
 
 try: range=xrange
 except: pass
+
 
 class CurieOptimise(CurieGrid):
     """
@@ -226,6 +228,102 @@ class CurieOptimise(CurieGrid):
         return res.x
 
 
+    def _func_queue(self, func, queue, pos, *args, **kwargs):
+        print args
+        res = func(*args, **kwargs)
+        queue.put((pos, res))
+        return
+
+
+    def parallelise_routine(self, window, xc_list, yc_list, func, *args, **kwargs):
+        """
+        Implements shared memory multiprocessing to split multiple
+        evaluations of a function centroids across processors.
+
+        Supply the window size and lists of x,y coordinates to a function
+        along with any additional arguments or keyword arguments.
+
+        Parameters
+        ----------
+         window  : float - size of window in metres
+         xc_list : array shape(l,) - centroid x values
+         yc_list : array shape(l,) - centroid y values
+         func    : function to evaluate in parallel
+         args    : additional arguments to pass to func
+         kwargs  : additional keyword arguments to pass to func
+
+        Returns
+        -------
+         out     : list (depends on output of func - see notes)
+
+        Example usage
+        -------------
+         An obvious use case is to compute the Curie depth for many
+         centroids in parallel.
+
+          > self.parallelise_routine(window, xc_list, yc_list, self.optimise)
+        
+         Each centroid is assigned a new process and sent to a free processor
+         to compute. In this case, the output is separate lists of shape(l,)
+         for beta, zt, dz, and C.
+
+
+         Another example is to parallelise the sensitivity analysis:
+
+          > self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
+
+         This time the output will be a list of lists for beta, zt, dz, and C
+         i.e. if nc=2 is the number of centroids and nsim=4 is the number of
+         simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
+         will be returned for beta, zt, dz, and C.
+        """
+
+        n = len(xc_list)
+        if n != len(yc_list):
+            raise ValueError("xc_list and yc_list must be the same size")
+
+        xOpt = [[] for i in range(n)]
+        processes = []
+        q = Queue()
+
+        for i in range(n):
+            xc = xc_list[i]
+            yc = yc_list[i]
+
+            pass_args = [func, q, i, window, xc, yc]
+            pass_args.extend(args)
+
+            p = Process(target=self._func_queue,\
+                        args=tuple(pass_args),\
+                        kwargs=kwargs)
+            processes.append(p)
+
+        [x.start() for x in processes]
+        [p.join() for p in processes]
+
+        for i in range(n):
+            i, res = q.get()
+            xOpt[i] = res
+
+        # process dimensions of output
+        ndim = np.array(res).ndim
+
+        if ndim == 1:
+            # return separate lists of beta, zt, dz, C
+            xOpt = np.vstack(xOpt)
+            return list(xOpt.T)
+        elif ndim > 1:
+            # return lists of beta, zt, dz, C for each simulation
+            xOpt = np.hstack(xOpt)
+            out = list(xOpt)
+            for i in range(len(out)):
+                out[i] = np.split(out[i], n)
+            return out
+        else:
+            raise ValueError("Cannot determine shape of output")
+
+
+
     def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the optimal values
@@ -253,24 +351,7 @@ class CurieOptimise(CurieGrid):
          C       : ndarray shape(l,) - field constant
 
         """
-
-        n = len(xc_list)
-        
-        if n != len(yc_list):
-            raise ValueError("xc_list and yc_list must be the same size")
-
-
-        # storage vector
-        xOpt = np.empty((n, 4))
-
-        for i in range(0, n):
-            xc = xc_list[i]
-            yc = yc_list[i]
-
-            xOpt[i] = self.optimise(window, xc, yc, beta, zt, dz, C,\
-                                    taper, process_subgrid, **kwargs)
-
-        return list(xOpt.T)
+        return self.parallelise_routine(window, xc_list, yc_list, self.optimise, beta, zt, dz, C, taper, process_subgrid, **kwargs)
 
 
     def metropolis_hastings(self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
