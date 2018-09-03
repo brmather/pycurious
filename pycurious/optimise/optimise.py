@@ -23,7 +23,7 @@ import warnings
 from scipy.optimize import minimize
 from scipy.special import polygamma
 from scipy import stats
-from multiprocessing import Pool, Process, Queue
+from multiprocessing import Pool, Process, Queue, cpu_count
 
 try: range=xrange
 except: pass
@@ -228,10 +228,17 @@ class CurieOptimise(CurieGrid):
         return res.x
 
 
-    def _func_queue(self, func, queue, pos, *args, **kwargs):
-        print args
-        res = func(*args, **kwargs)
-        queue.put((pos, res))
+    def _func_queue(self, func, q_in, q_out, window, *args, **kwargs):
+        while True:
+            pos, xc, yc = q_in.get()
+            if pos is None:
+                break
+
+            pass_args = [window, xc, yc]
+            pass_args.extend(args)
+
+            res = func(*pass_args, **kwargs)
+            q_out.put((pos, res))
         return
 
 
@@ -284,26 +291,35 @@ class CurieOptimise(CurieGrid):
 
         xOpt = [[] for i in range(n)]
         processes = []
-        q = Queue()
+        q_in = Queue(1)
+        q_out = Queue()
 
-        for i in range(n):
-            xc = xc_list[i]
-            yc = yc_list[i]
+        nprocs = cpu_count()
 
-            pass_args = [func, q, i, window, xc, yc]
+        for i in range(nprocs):
+            pass_args = [func, q_in, q_out, window]
             pass_args.extend(args)
 
             p = Process(target=self._func_queue,\
                         args=tuple(pass_args),\
                         kwargs=kwargs)
+
             processes.append(p)
 
-        [x.start() for x in processes]
+        for p in processes:
+            p.daemon = True
+            p.start()
+
+        sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
+        [q_in.put((None, None, None)) for _ in range(nprocs)]
+
+        for i in range(len(sent)):
+            i, res = q_out.get()
+            xOpt[i] = res
+
+
         [p.join() for p in processes]
 
-        for i in range(n):
-            i, res = q.get()
-            xOpt[i] = res
 
         # process dimensions of output
         ndim = np.array(res).ndim
