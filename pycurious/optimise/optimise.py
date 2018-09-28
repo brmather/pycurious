@@ -47,7 +47,7 @@ class CurieOptimise(CurieGrid):
      bounds   : lower and upper bounds for beta, zt, dz, C
      prior    : dictionary of priors for beta, zt, dz, C
     """
-    def __init__(self, grid, xmin, xmax, ymin, ymax):
+    def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
         super(CurieOptimise, self).__init__(grid, xmin, xmax, ymin, ymax)
 
@@ -60,6 +60,8 @@ class CurieOptimise(CurieGrid):
         ub = [None]*len(lb)
         bounds = list(zip(lb,ub))
         self.bounds = bounds
+
+        self.max_processors = kwargs.pop("max_processors", cpu_count())
 
         return
 
@@ -229,6 +231,7 @@ class CurieOptimise(CurieGrid):
 
 
     def _func_queue(self, func, q_in, q_out, window, *args, **kwargs):
+        """ Retrive processes from the queue """
         while True:
             pos, xc, yc = q_in.get()
             if pos is None:
@@ -294,7 +297,7 @@ class CurieOptimise(CurieGrid):
         q_in = Queue(1)
         q_out = Queue()
 
-        nprocs = cpu_count()
+        nprocs = self.max_processors
 
         for i in range(nprocs):
             pass_args = [func, q_in, q_out, window]
@@ -310,16 +313,18 @@ class CurieOptimise(CurieGrid):
             p.daemon = True
             p.start()
 
+        # put items in the queue
         sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
         [q_in.put((None, None, None)) for _ in range(nprocs)]
 
+        # get the results
         for i in range(len(sent)):
             i, res = q_out.get()
             xOpt[i] = res
 
 
+        # wait until each processor has finished
         [p.join() for p in processes]
-
 
         # process dimensions of output
         ndim = np.array(res).ndim
@@ -329,7 +334,7 @@ class CurieOptimise(CurieGrid):
             xOpt = np.vstack(xOpt)
             return list(xOpt.T)
         elif ndim > 1:
-            # return lists of beta, zt, dz, C for each simulation
+            # return lists of beta, zt, dz, C for each centroid
             xOpt = np.hstack(xOpt)
             out = list(xOpt)
             for i in range(len(out)):
@@ -430,36 +435,39 @@ class CurieOptimise(CurieGrid):
         # compute radial spectrum
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
+        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi)/1000)
 
         # Burn-in phase
         for i in range(burnin):
             # add random perturbation
             x1 = x0 + np.random.normal(size=4)*x_scale
 
-            # evaluate probability + tempering
-            P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi)/1000)
+            # evaluate proposal probability + tempering
             P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi)/1000)
 
             # iterate towards MAP estimate
             if P1 > P0:
                 x0 = x1
+                P0 = P1
 
+
+        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
 
         # Now sample posterior
         for i in range(nsim):
             # add random perturbation
             x1 = x0 + np.random.normal(size=4)*x_scale
 
-            # evaluate probability
-            P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
-            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
+            # evaluate proposal probability
             P0 = max(P0, 1e-99)
+            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
 
             P = min(P1/P0, 1.0)
 
             # randomly accept probability
             if np.random.rand() <= P:
                 x0 = x1
+                P0 = P1
 
             samples[i] = x0
 
