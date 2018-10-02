@@ -19,12 +19,37 @@ along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 from scipy import sparse
 from sparse.linalg import spsolve
+from multiprocessing import Pool, Process, Queue, cpu_count
 
 try: range=xrange
 except: pass
 
 
 class CurieTherm(object):
+    """
+    Implicit 1d solver for the steady-state heat equation
+    over a structured grid using sparse matrices.
+
+    Parameters
+    ----------
+     minZ : float, minimum Cartesian coordinate
+     maxZ : float, maximum Cartesian coordinate
+     resZ : int, resolution in the z direction
+     kwargs : dict, keyword arguments to pass to control
+       optional functionality e.g.
+       - stencil_width=int : number of node neighbours to
+           include in each matrix row
+
+    Attributes
+    ----------
+     diffusivity  : float shape(n,) thermal conductivity field
+     heat_sources : float shape(n,) heat source field
+     temperature  : float shape(n,) temperature field
+
+     npoints      : int, number of nodes in the mesh
+     sizes        : (int,int) dimensions of the sparse matrix
+     
+    """
 
     def __init__(self, minZ, maxZ, resZ, **kwargs):
 
@@ -37,12 +62,15 @@ class CurieTherm(object):
         width = kwargs.pop('stencil_width', 1)
         self.stencil_width = 2*width + 1
 
-        closure = [(0,-2),(2,0),(1,-1)]
+        closure = [(0,-2), (2,0), (1,-1)]
         self.closure = self._create_closure_object(closure)
 
 
         self._initialise_COO_vectors()
         self._initialise_boundary_dictionary()
+        self.diffusivity  = np.zeros(resZ)
+        self.heat_sources = np.zeros(resZ)
+        self.temperature  = np.zeros(resZ)
 
 
     def _initialise_COO_vectors(self):
@@ -96,19 +124,30 @@ class CurieTherm(object):
         """
         Update diffusivity and heat sources
         """
-        self.diffusivity = diffusivity
-        self.heat_sources = heat_sources
+        self.diffusivity[:] = diffusivity
+        self.heat_sources[:] = heat_sources
         return
 
 
     def boundary_condition(self, wall, val, flux=False):
         """
         Set the boundary conditions on each wall of the domain.
-        By default each wall is a Neumann (flux) condition.
-        If flux=True, positive val indicates a flux vector towards the centre
-        of the domain.
+        By default each wall is a Dirichlet condition.
 
-        val can be a vector with the same number of elements as the wall
+        Parameters
+        ----------
+         wall : str, wall to assign bc - 'minZ' or 'maxZ'
+         val  : float or array(n,) value(s) to assign to wall
+         flux : bool, toggle type of boundary condition
+           True = Neumann flux boundary condition
+           False = Dirichlet boundary condition (default)
+
+        Notes
+        -----
+         If flux=True, positive val indicates a flux vector towards the centre
+         of the domain.
+
+         val can be a vector with the same number of elements as the wall
         """
         wall = str(wall)
 
@@ -131,14 +170,15 @@ class CurieTherm(object):
 
     def construct_matrix(self):
         """
-        Construct the coefficient matrix
-        i.e. matrix A in Ax = b
+        Construct a sparse coefficient matrix
+        i.e. matrix A in AT = b
 
-        We vectorise the 7-point stencil for fast matrix insertion.
-        An extra border of dummy values around the domain allows for automatic
-        Neumann (flux) boundary creation.
-        These are stomped on if there are any Dirichlet conditions.
-
+        Notes
+        -----
+         We vectorise the 7-point stencil for fast matrix insertion.
+         An extra border of dummy values around the domain allows for automatic
+         Neumann (flux) boundary creation.
+         These are stomped on if there are any Dirichlet conditions.
         """
 
         nodes = self.nodes
@@ -151,6 +191,7 @@ class CurieTherm(object):
         vals = self.vals
 
         dirichlet_mask = self.dirichlet_mask
+        coords = self.coords.reshape(-1,1)
 
         u = self.diffusivity
 
@@ -163,7 +204,7 @@ class CurieTherm(object):
             rows[i] = nodes
             cols[i] = index[obj].ravel()
 
-            distance = np.linalg.norm(self.coords[cols[i]] - self.coords, axis=1)
+            distance = np.linalg.norm(coords[cols[i]] - coords, axis=1)
             distance[distance==0] = 1e-12 # protect against dividing by zero
             delta = 1.0/(2.0*distance**2)
 
@@ -205,11 +246,13 @@ class CurieTherm(object):
     def construct_rhs(self):
         """
         Construct the right-hand-side vector
-        i.e. vector b in Ax = b
+        i.e. vector b in AT = b
 
-        Boundary conditions are grabbed from the dictionary and
-        summed to the rhs.
-        Be careful of duplicate entries on the corners!!
+        Notes
+        -----
+         Boundary conditions are grabbed from the dictionary and
+         summed to the rhs.
+         Be careful of duplicate entries on the corners!!
         """
         
         rhs = -1.0*self.heat_sources
@@ -228,8 +271,24 @@ class CurieTherm(object):
 
     def solve(self, matrix=None, rhs=None):
         """
-        Construct the matrix A and vector b in Ax = b
-        and solve for x
+        Construct the matrix A and vector b in AT = b and solve for T
+        (i.e. temperature field)
+
+        Arguments
+        ---------
+         matrix : (optional) scipy sparse matrix object
+                 build using construct_matrix()
+         rhs    : (optional) numpy right-hand-side vector
+                 build using construct_rhs()
+
+        Returns
+        -------
+         sol    : 1d array shape(n,) temperature solution
+
+        Notes
+        -----
+         The solution to the system of linear equations AT = b is solved
+         with spsolve in the scipy.sparse.linalg module
         """
         if matrix is None:
             matrix = self.construct_matrix()
@@ -238,19 +297,81 @@ class CurieTherm(object):
         # res = self.temperature
 
         T = spsolve(matrix, rhs)
-        self.temperature = T
+        self.temperature[:] = T
 
         return T
 
 
     def gradient(self, vector, **kwargs):
+        """
+        Calculate gradient of a vector
+        
+        Arguments
+        ---------
+         vector : 1d array of shape(n,)
 
+        Returns
+        -------
+         dvdz   : 1d array of shape(n,)
+                 derivative of vector in z direction
+        """
         return np.gradient(vector, self.coords, **kwargs)
 
 
     def heatflux(self):
+        """
+        Calculate the heat flux from the conductivity field
+        and temperature solution
+
+        Returns
+        -------
+         qz  : 1d array shape(n,) heat flux vector
+        """
 
         T = self.temperature
         k = self.diffusivity
         divT = self.gradient(T)
         return -k*divT
+
+
+    def isosurface(self, vector, isoval, interp='linear'):
+        """
+        Calculate an isosurface along the z axis
+
+        Parameters
+        ----------
+         vector : array, the same size as the mesh (n,)
+         isoval : float, isosurface value
+         interp : str, interpolation method can be either
+            'nearest' - nearest neighbour interpolation
+            'linear'  - linear interpolation
+        
+        Returns
+        -------
+         z_interp : isosurface
+        """
+        coords = self.coords
+        sort_idx = np.abs(vector - isoval).argsort()    
+        i0 = sort_idx[0]
+        z0 = coords[i0]
+
+        if interp == 'linear':
+            v0 = vector[i0]
+            
+            # identify next nearest node
+            i1 = sort_idx[1]
+            z1 = coords[i1]
+            v1 = vector[i1]
+
+            vmin = min(v0,v1)
+            vmax = max(v0,v1)
+
+            ratio = np.array([isoval, vmin, vmax])
+            ratio -= ratio.min()
+            ratio /= ratio.max()
+            z_interp = ratio[0]*z1 + (1.0 - ratio[0])*z0
+            return z_interp
+        elif interp == 'nearest':
+            return z0
+        else:
+            raise ValueError("enter a valid interp method: 'linear' or 'nearest'")
