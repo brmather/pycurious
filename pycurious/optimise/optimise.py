@@ -451,8 +451,6 @@ class CurieOptimise(CurieGrid):
                 P0 = P1
 
 
-        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
-
         # Now sample posterior
         for i in range(nsim):
             # add random perturbation
