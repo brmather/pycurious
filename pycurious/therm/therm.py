@@ -18,7 +18,7 @@ along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
 from scipy import sparse
-from sparse.linalg import spsolve
+from scipy.sparse.linalg import spsolve
 from multiprocessing import Pool, Process, Queue, cpu_count
 
 try: range=xrange

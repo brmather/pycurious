@@ -132,6 +132,7 @@ class CurieOptimise(CurieGrid):
     def objective_function(self, x, x0, sigma_x0, *args):
         """
         Objective function used in objective_routine
+        Evaluates the l2-norm misfit
 
         Parameters
         ---------
