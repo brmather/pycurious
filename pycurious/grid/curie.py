@@ -216,7 +216,7 @@ class CurieGrid(object):
 
         S = np.empty(nbins)
         k = np.empty(nbins)
-        sigma2 = np.empty(nbins)
+        sigma = np.empty(nbins)
 
         i0 = int((nw - 1)//2)
         nw_range = np.arange(0, nw)
@@ -228,12 +228,9 @@ class CurieGrid(object):
             rr = 2.0*np.log(FT[mask])
             S[i] = rr.mean()
             k[i] = kk[mask].mean()
-            sigma2[i] = np.std(rr)/np.sqrt(rr.size)
+            sigma[i] = np.std(rr)
 
-
-        sigma_S = np.sqrt(sigma2)
-
-        return k, S, sigma_S
+        return k, S, sigma
 
 
     def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -286,7 +283,7 @@ class CurieGrid(object):
 
         S = np.empty(nbins)
         k = np.empty(nbins)
-        sigma2 = np.empty(nbins)
+        sigma = np.empty(nbins)
 
         i0 = int((nw - 1)//2)
         ix, iy = np.mgrid[0:nw,0:nw]
@@ -297,11 +294,9 @@ class CurieGrid(object):
             rr = np.log(np.sqrt(FT[mask]))
             S[i] = rr.mean()
             k[i] = kk[mask].mean()
-            sigma2[i] = np.std(rr)/np.sqrt(rr.size)
+            sigma[i] = np.std(rr)
 
-        sigma_S = np.sqrt(sigma2)
-
-        return k, S, sigma_S
+        return k, S, sigma
         
         
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
