@@ -219,8 +219,7 @@ class CurieGrid(object):
         sigma = np.empty(nbins)
 
         i0 = int((nw - 1)//2)
-        nw_range = np.arange(0, nw)
-        iy, ix = np.meshgrid(nw_range, nw_range)
+        ix, iy = np.mgrid[0:nw,0:nw]
         kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
 
         for i in range(0, nbins):
