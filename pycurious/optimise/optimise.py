@@ -144,7 +144,7 @@ class CurieOptimise(CurieGrid):
         -------
          misfit   : float
         """
-        return 0.5*np.linalg.norm((x - x0)/sigma_x0)**2
+        return 0.5*np.sum((x - x0)**2/sigma_x0**2)
 
 
     def min_func(self, x, kh, Phi, sigma_Phi):
@@ -174,7 +174,7 @@ class CurieOptimise(CurieGrid):
             warnings.simplefilter("ignore")
             Phi_syn = bouligand2009(kh, beta, zt, dz, C)
 
-        misfit = self.objective_function(Phi_syn, Phi, 1.0)
+        misfit = self.objective_function(Phi_syn, Phi, sigma_Phi)
         if not np.isfinite(misfit):
             misfit = 1e99
         else:
