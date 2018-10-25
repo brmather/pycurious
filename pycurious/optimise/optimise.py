@@ -174,7 +174,7 @@ class CurieOptimise(CurieGrid):
             warnings.simplefilter("ignore")
             Phi_syn = bouligand2009(kh, beta, zt, dz, C)
 
-        misfit = self.objective_function(Phi_syn, Phi, sigma_Phi)
+        misfit = self.objective_function(Phi_syn, Phi, 1.0)
         if not np.isfinite(misfit):
             misfit = 1e99
         else:
