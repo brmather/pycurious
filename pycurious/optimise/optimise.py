@@ -23,9 +23,11 @@ import warnings
 from scipy.optimize import minimize
 from scipy.special import polygamma
 from scipy import stats
+from multiprocessing import Pool, Process, Queue, cpu_count
 
 try: range=xrange
 except: pass
+
 
 class CurieOptimise(CurieGrid):
     """
@@ -45,7 +47,7 @@ class CurieOptimise(CurieGrid):
      bounds   : lower and upper bounds for beta, zt, dz, C
      prior    : dictionary of priors for beta, zt, dz, C
     """
-    def __init__(self, grid, xmin, xmax, ymin, ymax):
+    def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
         super(CurieOptimise, self).__init__(grid, xmin, xmax, ymin, ymax)
 
@@ -58,6 +60,8 @@ class CurieOptimise(CurieGrid):
         ub = [None]*len(lb)
         bounds = list(zip(lb,ub))
         self.bounds = bounds
+
+        self.max_processors = kwargs.pop("max_processors", cpu_count())
 
         return
 
@@ -128,6 +132,7 @@ class CurieOptimise(CurieGrid):
     def objective_function(self, x, x0, sigma_x0, *args):
         """
         Objective function used in objective_routine
+        Evaluates the l2-norm misfit
 
         Parameters
         ---------
@@ -139,7 +144,7 @@ class CurieOptimise(CurieGrid):
         -------
          misfit   : float
         """
-        return 0.5*np.linalg.norm((x - x0)/sigma_x0)**2
+        return 0.5*np.sum((x - x0)**2/sigma_x0**2)
 
 
     def min_func(self, x, kh, Phi, sigma_Phi):
@@ -226,6 +231,121 @@ class CurieOptimise(CurieGrid):
         return res.x
 
 
+    def _func_queue(self, func, q_in, q_out, window, *args, **kwargs):
+        """ Retrive processes from the queue """
+        while True:
+            pos, xc, yc = q_in.get()
+            if pos is None:
+                break
+
+            pass_args = [window, xc, yc]
+            pass_args.extend(args)
+
+            res = func(*pass_args, **kwargs)
+            q_out.put((pos, res))
+        return
+
+
+    def parallelise_routine(self, window, xc_list, yc_list, func, *args, **kwargs):
+        """
+        Implements shared memory multiprocessing to split multiple
+        evaluations of a function centroids across processors.
+
+        Supply the window size and lists of x,y coordinates to a function
+        along with any additional arguments or keyword arguments.
+
+        Parameters
+        ----------
+         window  : float - size of window in metres
+         xc_list : array shape(l,) - centroid x values
+         yc_list : array shape(l,) - centroid y values
+         func    : function to evaluate in parallel
+         args    : additional arguments to pass to func
+         kwargs  : additional keyword arguments to pass to func
+
+        Returns
+        -------
+         out     : list (depends on output of func - see notes)
+
+        Example usage
+        -------------
+         An obvious use case is to compute the Curie depth for many
+         centroids in parallel.
+
+          > self.parallelise_routine(window, xc_list, yc_list, self.optimise)
+        
+         Each centroid is assigned a new process and sent to a free processor
+         to compute. In this case, the output is separate lists of shape(l,)
+         for beta, zt, dz, and C.
+
+
+         Another example is to parallelise the sensitivity analysis:
+
+          > self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
+
+         This time the output will be a list of lists for beta, zt, dz, and C
+         i.e. if nc=2 is the number of centroids and nsim=4 is the number of
+         simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
+         will be returned for beta, zt, dz, and C.
+        """
+
+        n = len(xc_list)
+        if n != len(yc_list):
+            raise ValueError("xc_list and yc_list must be the same size")
+
+        xOpt = [[] for i in range(n)]
+        processes = []
+        q_in = Queue(1)
+        q_out = Queue()
+
+        nprocs = self.max_processors
+
+        for i in range(nprocs):
+            pass_args = [func, q_in, q_out, window]
+            pass_args.extend(args)
+
+            p = Process(target=self._func_queue,\
+                        args=tuple(pass_args),\
+                        kwargs=kwargs)
+
+            processes.append(p)
+
+        for p in processes:
+            p.daemon = True
+            p.start()
+
+        # put items in the queue
+        sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
+        [q_in.put((None, None, None)) for _ in range(nprocs)]
+
+        # get the results
+        for i in range(len(sent)):
+            i, res = q_out.get()
+            xOpt[i] = res
+
+
+        # wait until each processor has finished
+        [p.join() for p in processes]
+
+        # process dimensions of output
+        ndim = np.array(res).ndim
+
+        if ndim == 1:
+            # return separate lists of beta, zt, dz, C
+            xOpt = np.vstack(xOpt)
+            return list(xOpt.T)
+        elif ndim > 1:
+            # return lists of beta, zt, dz, C for each centroid
+            xOpt = np.hstack(xOpt)
+            out = list(xOpt)
+            for i in range(len(out)):
+                out[i] = np.split(out[i], n)
+            return out
+        else:
+            raise ValueError("Cannot determine shape of output")
+
+
+
     def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the optimal values
@@ -253,24 +373,7 @@ class CurieOptimise(CurieGrid):
          C       : ndarray shape(l,) - field constant
 
         """
-
-        n = len(xc_list)
-        
-        if n != len(yc_list):
-            raise ValueError("xc_list and yc_list must be the same size")
-
-
-        # storage vector
-        xOpt = np.empty((n, 4))
-
-        for i in range(0, n):
-            xc = xc_list[i]
-            yc = yc_list[i]
-
-            xOpt[i] = self.optimise(window, xc, yc, beta, zt, dz, C,\
-                                    taper, process_subgrid, **kwargs)
-
-        return list(xOpt.T)
+        return self.parallelise_routine(window, xc_list, yc_list, self.optimise, beta, zt, dz, C, taper, process_subgrid, **kwargs)
 
 
     def metropolis_hastings(self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
@@ -333,36 +436,38 @@ class CurieOptimise(CurieGrid):
         # compute radial spectrum
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
+        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi)/1000)
 
         # Burn-in phase
         for i in range(burnin):
             # add random perturbation
             x1 = x0 + np.random.normal(size=4)*x_scale
 
-            # evaluate probability + tempering
-            P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi)/1000)
+            # evaluate proposal probability + tempering
             P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi)/1000)
 
             # iterate towards MAP estimate
             if P1 > P0:
                 x0 = x1
+                P0 = P1
 
+        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
 
         # Now sample posterior
         for i in range(nsim):
             # add random perturbation
             x1 = x0 + np.random.normal(size=4)*x_scale
 
-            # evaluate probability
-            P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi))
-            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
+            # evaluate proposal probability
             P0 = max(P0, 1e-99)
+            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
 
             P = min(P1/P0, 1.0)
 
             # randomly accept probability
             if np.random.rand() <= P:
                 x0 = x1
+                P0 = P1
 
             samples[i] = x0
 
