@@ -1,12 +1,15 @@
-FROM alpine:latest
+FROM alpine:edge
+
+LABEL maintainer="brmather1@gmail.com"
+LABEL repo="https://github.com/brmather/pycurious"
 
 # Install things
-RUN echo "http://mirror.leaseweb.com/alpine/edge/testing" >> /etc/apk/repositories
 RUN apk add --update --no-cache \
     gcc \
     g++ \
     gfortran \
     build-base \
+    linux-headers \
     python3-dev \
     py3-pip \
     py3-numpy \
@@ -15,13 +18,17 @@ RUN apk add --update --no-cache \
     cmake \
     curl \
     wget \
+    tini \
     libzmq \
     zlib-dev \
     musl-dev \
     freetype-dev \
     libpng-dev \
     libxml2-dev \
-    openblas-dev \
+    openblas-dev
+
+RUN echo "http://mirror.leaseweb.com/alpine/edge/testing" >> /etc/apk/repositories
+RUN apk add --update --no-cache \
     geos-dev \
     proj4-dev
 
@@ -32,23 +39,18 @@ RUN apk add --update --no-cache \
 
 
 RUN ln -s /usr/include/locale.h /usr/include/xlocale.h
-# RUN python3 -m pip install --no-cache-dir --upgrade numpy && \
-RUN python3 -m pip install --no-cache-dir --upgrade pip numpy && \
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir --upgrade --force-reinstall numpy scipy && \
     python3 -m pip install --no-cache-dir setuptools wheel Cython && \
     python3 -m pip install --no-cache-dir \
     packaging \
+    gdal \
     jupyter \
+    tornado \
     pyepsg \
     cartopy && \
-    python3 -m pip install --no-cache-dir matplotlib
-
-
-# Install Tini.. this is required because CMD (below) doesn't play nice with notebooks for some reason:
-# https://github.com/ipython/ipython/issues/7062, https://github.com/jupyter/notebook/issues/334
-RUN curl -L https://github.com/krallin/tini/releases/download/v0.10.0/tini > tini && \
-    echo "1361527f39190a7338a0b434bd8c88ff7233ce7b9a4876f3315c22fce7eca1b0 *tini" | sha256sum -c - && \
-    mv tini /usr/local/bin/tini && \
-    chmod +x /usr/local/bin/tini
+    python3 -m pip install --no-cache-dir matplotlib && \
+    python3 -m pip install --no-cache-dir --upgrade --ignore-installed pyzmq
 
 # expose notebook port
 EXPOSE 8888
@@ -56,7 +58,23 @@ EXPOSE 8888
 
 # add a notebook profile
 RUN mkdir -p -m 700 /root/.jupyter/ && \
-    echo "c.NotebookApp.ip = '0.0.0.0'" >> /root/.jupyter/jupyter_notebook_config.py
+    echo "c.NotebookApp.ip = '0.0.0.0'" >> /root/.jupyter/jupyter_notebook_config.py && \
+    echo "c.NotebookApp.token = ''" >> /root/.jupyter/jupyter_notebook_config.py
 
-# note we also use xvfb which is required for viz
-ENTRYPOINT ["/usr/local/bin/tini", "--"]
+
+RUN addgroup jovyan && \
+    adduser -D jovyan -G jovyan
+
+WORKDIR /home/jovyan
+RUN chown -R jovyan:jovyan /home/jovyan
+USER jovyan
+
+
+VOLUME /home/jovyan/$NB_DIR/user_data
+
+
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# launch notebook
+# CMD scripts/run-jupyter.sh
+CMD ["jupyter", "notebook", "--ip='0.0.0.0'", "--NotebookApp.token='' ", "--no-browser"]
