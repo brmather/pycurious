@@ -1,0 +1,2452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.6.2" />
+<title>pycurious.grid API documentation</title>
+<meta name="description" content="Copyright 2018 Ben Mather, Robert Delhaye …" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{font-weight:bold}#index h4 + ul{margin-bottom:.6em}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase;cursor:pointer}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>pycurious.grid</code></h1>
+</header>
+<section id="section-intro">
+<p>Copyright 2018 Ben Mather, Robert Delhaye</p>
+<p>This file is part of PyCurious.</p>
+<p>PyCurious is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or any later version.</p>
+<p>PyCurious is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the
+GNU Lesser General Public License for more details.</p>
+<p>You should have received a copy of the GNU Lesser General Public License
+along with PyCurious.
+If not, see <a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>.</p>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">&#34;&#34;&#34;
+Copyright 2018 Ben Mather, Robert Delhaye
+
+This file is part of PyCurious.
+
+PyCurious is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or any later version.
+
+PyCurious is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+&#34;&#34;&#34;
+
+# -*- coding: utf-8 -*-
+import numpy as np
+from scipy.special import gamma, kv, lambertw
+from scipy.optimize import minimize
+from scipy.signal import tukey
+import warnings
+
+try: range = xrange
+except: pass
+
+
+class CurieGrid(object):
+    &#34;&#34;&#34;
+    Accepts a 2D array and Cartesian coordinates specifying the
+    bounding box of the array
+
+    Grid must be projected in metres
+
+    Args:
+     grid : 2D array of magnetic data
+     xmin : minimum x bound in metres
+     xmax : maximum x bound in metres
+     ymin : minimum y bound in metres
+     ymax : maximum y bound in metres
+    &#34;&#34;&#34;
+    def __init__(self, grid, xmin, xmax, ymin, ymax):
+        
+        self.data = np.array(grid)
+        ny, nx = self.data.shape
+        self.xmin, self.xmax = xmin, xmax
+        self.ymin, self.ymax = ymin, ymax
+        self.xcoords, dx = np.linspace(xmin, xmax, nx, retstep=True)
+        self.ycoords, dy = np.linspace(ymin, ymax, ny, retstep=True)
+        self.nx, self.ny = nx, ny
+        self.dx, self.dy = dx, dy
+
+        if abs(dx - dy) &gt; 1.0:
+            warnings.warn(&#34;node spacing should be identical {}&#34;.format((dx,dy)), RuntimeWarning)
+
+
+    def subgrid(self, window, xc, yc):
+        &#34;&#34;&#34;
+        Extract a subgrid from the data at a window around
+        the point (xc,yc)
+        
+        Args:
+            xc : float
+                x coordinate
+            yc : float
+                y coordinate
+            window : float
+                size of window in metres
+
+        Returns:
+            data : 2D array
+                subgrid encompassing window size
+        &#34;&#34;&#34;
+
+        # check in coordinate in grid
+        if xc &lt; self.xmin or xc &gt; self.xmax or yc &lt; self.ymin or yc &gt; self.ymax:
+            raise ValueError(&#34;Point ({},{}) outside data range&#34;.format(xc,yc))
+
+        # find nearest index to xc,yc
+        ix = np.abs(self.xcoords - xc).argmin()
+        iy = np.abs(self.ycoords - yc).argmin()
+
+        nw = int(round(window/self.dx))
+        n2w = nw//2
+
+        # extract a square window from the data
+        imin = ix - n2w
+        imax = ix + n2w + 1
+        jmin = iy - n2w
+        jmax = iy + n2w + 1
+
+        # safeguard if window size is larger than grid
+        imin = max(imin, 0)
+        imax = min(imax, self.nx)
+        jmin = max(jmin, 0)
+        jmax = min(jmax, self.ny)
+        
+        data = self.data[jmin:jmax, imin:imax]
+
+        return data
+
+
+    def create_centroid_list(self, window, spacingX=None, spacingY=None):
+        &#34;&#34;&#34;
+        Create a list of xc,yc values to extract subgrids.
+
+        Args:
+            window : float
+                size of the windows in metres
+            spacingX : float (optional)
+                specify spacing in metres in the X direction
+                will default to maximum X resolution
+            spacingY : float (optional)
+                specify spacing in metres in the Y direction
+                will default to maximum Y resolution
+
+        Returns:
+            xc_list : 1D array
+                array of x coordinates
+            yc_list : 1D array
+                array of y coordinates
+        &#34;&#34;&#34;
+        
+        nx, ny = self.nx, self.ny
+        xcoords = self.xcoords
+        ycoords = self.ycoords
+        
+        nw = int(round(window/self.dx))
+        n2w = nw//2
+        
+        # this is the densest spacing possible given the data
+        xc = xcoords[n2w:-n2w]
+        yc = ycoords[n2w:-n2w]
+        
+        # but we can alter it if required
+        if type(spacingX) != type(None):
+            xc = np.arange(xc.min(), xc.max(), spacingX)
+        if type(spacingY) != type(None):
+            yc = np.arange(yc.min(), yc.max(), spacingY)
+
+        xq, yq = np.meshgrid(xc, yc)
+            
+        return xq.ravel(), yq.ravel()
+
+
+    def remove_trend_linear(self, data):
+        &#34;&#34;&#34;
+        Remove the best-fitting linear trend from the data
+
+        This may come in handy if the magnetic data has not been
+        reduced to the pole.
+
+        Args:
+            data : 2D numpy array
+
+        Returns:
+         data : 2D numpy array
+        &#34;&#34;&#34;
+        data = data.copy()
+        nr, nc = data.shape
+        xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+
+        A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
+        c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+
+        data.flat[:] -= np.dot(A, c)
+        return data
+
+    def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        &#34;&#34;&#34;
+        Compute the radial spectrum for a square grid.
+
+        Args:
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (default: 0.001)
+                scaling factor to get k into rad/km
+            kwargs : keyword arguments
+                keyword arguments to pass to `taper`
+
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            Phi : 1D array shape (n,)
+                Radial power spectrum
+            sigma_Phi : 1D array shape (n,)
+                Standard deviation of Phi
+        &#34;&#34;&#34;
+
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if type(taper) == type(None):
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+        nbins = kbins.size - 1
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nw - 1)//2)
+        ix, iy = np.mgrid[0:nw,0:nw]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(0, nbins):
+            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+            rr = 2.0*np.log(FT[mask])
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+
+
+    def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        &#34;&#34;&#34;
+        Compute the log of the radial spectrum for a square grid.
+
+        Args:
+         subgrid : 2D array
+            window of the original data (see subgrid method)
+         taper : function (default=np.hanning)
+            taper function, set to None for no taper function
+         scale : float (detault=0.001)
+            scaling factor to get k into rad/km
+         kwargs : keyword arguments
+            keyword arguments to pass to `taper`
+
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            lnPhi : 1D array
+                log of the radial power spectrum in ln(sqrt(S))
+            lnsigma_Phi : 1D array
+                standard deviation of lnPhi
+        &#34;&#34;&#34;
+
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if type(taper) == type(None):
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+        nbins = kbins.size - 1
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nw - 1)//2)
+        ix, iy = np.mgrid[0:nw,0:nw]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(0, nbins):
+            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+            rr = np.log(np.sqrt(FT[mask]))
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+        
+        
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
+        &#34;&#34;&#34;
+        Compute azimuthal spectrum for a square grid.
+
+        Args:
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (default=0.001)
+                scaling factor to get k into rad/km
+            theta : float
+                angle increment in degrees
+            args : arguments
+                arguments o pass to taper
+
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            Phi : 1D array shape (n,)
+                Radial power spectrum
+            sigma_Phi : 1D array shape (n,)
+                Standard deviation of Phi
+        &#34;&#34;&#34;
+        from pycurious import radon
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            raise RuntimeWarning(&#34;subgrid is not square {}&#34;.format((nr,nc)))
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+
+        dtheta = np.arange(0.0, 180.0, theta)
+        sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+        S = np.zeros((dtheta.size, kbins.size))
+        sigma2 = np.zeros((dtheta.size, kbins.size))
+
+        # control taper
+        if taper is None:
+            vtaper = 1.0
+        else:
+            vtaper = taper(sinogram.shape[0], **kwargs)
+
+        nk = 1 + 2*kbins.size
+        for i in range(0, dtheta.size):
+            PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
+            S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
+        
+        return kbins, S, dtheta
+
+
+    def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
+        r&#34;&#34;&#34;
+        Reduce total field magnetic anomaly data to the pole.
+
+        The reduction to the pole if a phase transformation that can be
+        applied to total field magnetic anomaly data. It simulates how
+        the data would be if both the Geomagnetic field and the
+        magnetization of the source were vertical (Blakely, 1996).
+
+        Args:
+            data : 1D array
+                the total field anomaly data at each point.
+            inc : float / 1D array
+                inclination of the inducing Geomagnetic field
+            dec : float / 1D array
+                declination of the inducing Geomagnetic field
+            sinc : float / 1D array (optional)
+                inclination of the total magnetization of the anomaly source
+            sdec : float / 1D array (optional)
+                declination of the total magnetization of the anomaly source
+                The total magnetization is the vector sum of the
+                induced and remanent magnetization. If there is only induced
+                magnetization, use the *inc* and *dec* of the Geomagnetic field.
+
+        Returns:
+            rtp : 2D array
+                the data reduced to the pole.
+        
+        References:
+            Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+            Applications, Cambridge University Press.
+
+        Notes:
+            This functions performs the reduction in the frequency domain
+            (using the FFT). The transform filter is (in the freq domain):
+                RTP(k_x, k_y) = \frac{|k|}{
+                    a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                    i|k|(b_1 k_x + b_2 k_y)}
+            in which k_x and k_y are the wave-numbers in the x and y
+            directions and
+                |k| = \sqrt{k_x^2 + k_y^2} \\
+                a_1 = m_z f_z - m_x f_x \\
+                a_2 = m_z f_z - m_y f_y \\
+                a_3 = -m_y f_x - m_x f_y \\
+                b_1 = m_x f_z + m_z f_x \\
+                b_2 = m_y f_z + m_z f_y
+            \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+            magnetization of the source and
+            \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+            Geomagnetic field.
+        &#34;&#34;&#34;
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+        fx, fy, fz = ang2vec(1.0, inc, dec)
+        if sinc is None or sdec is None:
+            mx, my, mz = fx, fy, fz
+        else:
+            mx, my, mz = ang2vec(1.0, sinc, sdec)
+
+        kx, ky = [k for k in _fftfreqs(self.dx, self.dy, data.shape)]
+        kz = np.hypot(kx, ky)
+
+        a1 = mz*fz - mx*fx
+        a2 = mz*fz - my*fy
+        a3 = -my*fx - mx*fy
+        b1 = mx*fz + mz*fx
+        b2 = my*fz + mz*fy
+
+        # The division gives a RuntimeWarning because of the zero frequency term.
+        # This suppresses the warning.
+        with np.errstate(divide=&#39;ignore&#39;, invalid=&#39;ignore&#39;):
+            rtp = (kz)/(a1*kx**2 + a2*ky**2 + a3*kx*ky + \
+                            1j*np.sqrt(kz)*(b1*kx + b2*ky))
+        
+        rtp[0, 0] = 0
+        ft_pole = rtp*np.fft.fft2(data)
+        return np.real(np.fft.ifft2(ft_pole))
+
+
+    def upward_continuation(self, data, height):
+        r&#34;&#34;&#34;
+        Upward continuation of potential field data.
+
+        Calculates the continuation through the Fast Fourier Transform in
+        the wavenumber domain (Blakely, 1996):
+
+            F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+
+        and then transformed back to the space domain. :math:`h_{up}` is the
+        upward continue data, \Delta z is the height increase, F denotes
+        the Fourier Transform, |k| is the wavenumber modulus.
+
+        Args:
+            data   : 2D array
+                potential field at the grid points
+            height : float
+                height increase (delta z) in meters.
+        
+        Returns:
+            cont : array
+                upward continued data
+
+        Notes:
+            It is not possible to get the FFT of a masked grid. The default
+            :func:`fatiando.gridder.interp` call using minimum curvature will
+            not be suitable.  Use extrapolate=True or algorithm=&#39;nearest&#39; to
+            get an unmasked grid.
+
+        References:
+            Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+            Applications, Cambridge University Press.
+        &#34;&#34;&#34;
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+        if height &lt;= 0:
+            warnings.warn(&#34;Using &#39;height&#39; &lt;= 0 means downward continuation, &#34; +
+                          &#34;which is known to be unstable.&#34;)
+
+        fx = 2.0*np.pi*np.fft.fftfreq(nr, self.dx)
+        fy = 2.0*np.pi*np.fft.fftfreq(nc, self.dy)
+
+        kx, ky = np.meshgrid(fy, fx)[::-1]
+        kz = np.hypot(kx, ky)
+
+        upcont_ft = np.fft.fft2(data)*np.exp(-height*kz)
+        cont = np.real(np.fft.ifft2(upcont_ft))
+        return cont
+
+
+# Helper functions to calculate Curie depth
+
+def bouligand2009(kh, beta, zt, dz, C):
+    &#34;&#34;&#34;
+    Calculate the synthetic radial power spectrum of
+    magnetic anomalies
+
+    Equation (4) of Bouligand et al. (2009)
+
+    Args:
+        kh : float / 1D array
+            wavenumber in rad/km
+        beta : float / 1D array
+            fractal parameter
+        zt : float / 1D array
+            top of magnetic sources
+        dz : float / 1D array
+            thickness of magnetic sources
+        C : float 1D array
+            field constant (Maus et al., 1997)
+
+    Returns:
+        Phi : float / 1D array
+            radial power spectrum of magnetic anomalies
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+        estimation using a self-similar magnetization model, Geophys. J. Int.,
+        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
+    &#34;&#34;&#34;
+    # from scipy.special import kv
+    khdz = kh*dz
+    coshkhdz = np.cosh(khdz)
+
+    Phi1d = C - 2.0*kh*zt - (beta-1.0)*np.log(kh) - khdz
+    A = np.sqrt(np.pi)/gamma(1.0+0.5*beta) * \
+        (0.5*coshkhdz*gamma(0.5*(1.0+beta)) - \
+        kv((-0.5*(1.0+beta)), khdz) * np.power(0.5*khdz,(0.5*(1.0+beta)) ))
+    Phi1d += np.log(A)
+    return Phi1d
+
+
+def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
+    &#34;&#34;&#34;
+    Compute weighted linear fit of Phi over spatial frequency window kmin:kmax
+
+    Args:
+        k : float / 1D-array
+            wavenumber in rad/km
+        lnPhi : float / 1D array
+            log of the radial power spectrum (see power_spectrum_log)
+            expected in ln(sqrt(S)) form
+        sigma_lnPhi : standard deviation of lnPhi
+        kmin_range : tuple (default:(0.05, 0.2))
+            minimum and maximum range of spatial frequencies to fit for the 
+            top of magnetic sources - ideally low frequency, straight line
+        kmax_range : tuple (default:(0.05, 0.2))
+            minimum and maximum range of spatial frequencies to fit for the
+            bottom of magnetic source - ideally low frequency, straight line
+
+    Returns:
+        upper_source : tuple
+            (Ztr,btr,dZtr) gradient, intercept, error for the top of magnetic sources
+        lower_source : tuple
+            (Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources
+
+    &#34;&#34;&#34;
+    # for now...
+    S = lnPhi
+    sigma2 = sigma_lnPhi**2
+
+    def compute_coefficients(X, Y, E):
+        X2 = X**2
+        Y2 = Y**2
+        E2 = E**2
+
+        XY = np.multiply(X, Y)
+        XE2sum = np.sum(X/E2)
+        YE2sum = np.sum(Y/E2)
+        rE2sum = np.sum(1.0/E2)
+        X2E2sum = np.sum(X2/E2)
+        Y2E2sum = np.sum(Y2/E2)
+
+        #TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
+        # I think summation in second TL term needed to be split
+        TL = XE2sum*YE2sum - np.sum(XY/E2)*rE2sum
+        BL = XE2sum**2 - X2E2sum*rE2sum
+
+        Z  = TL/BL
+        b  = (np.sum(XY/E2) - Z*X2E2sum)/XE2sum
+        #dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
+        ## There was a missing **2 term at end of error term.
+        dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum**2) )
+        return Z, b, dZ
+
+
+    sf=k/(2.0*np.pi)
+    S2=np.log(np.exp(S)/sf)
+
+    # mask low wavenumbers
+    kmin, kmax = kmin_range
+    mask1 = np.logical_and(sf &gt;=kmin, sf &lt;=kmax)
+    X1 = sf[mask1]
+    Y1 = S[mask1]
+    E1 = sigma2[mask1]
+    
+    # mask high wavenumbers
+    kmin, kmax = kmax_range
+    mask2 = np.logical_and(sf &gt;=kmin, sf &lt;=kmax)
+    X2 = sf[mask2]
+    Y2 = np.log(np.exp(S[mask2])/(X2*2*np.pi))
+    E2 = np.log(np.exp(sigma2[mask2])/(X2*2*np.pi))
+
+    # compute top and bottom of magnetic layer
+    Ztr, btr, dZtr = compute_coefficients(X1, Y1, E1)
+    Zor, bor, dZor = compute_coefficients(X2, Y2, E2)
+    return (Ztr,btr,dZtr), (Zor, bor, dZor)
+    
+    
+def ComputeTanaka(Ztr, dZtr, Zor, dZor):
+    &#34;&#34;&#34;
+    Compute the Curie depth from the results of tanaka1999
+
+    Args:
+        Ztr : float / 1D array
+            top of the magnetic source
+        dZtr : float / 1D array
+            error of Ztr
+        Zor : float / 1D array 
+            bottom of the magnetic source
+        dZor : float / 1D array
+            error of Zor
+
+    Returns:
+        Zb : float / 1D array
+            estimated Curie point depth
+        eZb : float / 1D array
+            error of `Zb`
+    &#34;&#34;&#34;
+    Zb = 2.0*Zor - Ztr
+    dZb  = 2.0*dZor - dZtr
+    return abs(Zb), dZb
+
+
+def maus1995(beta, zt, kh, C=0.0):
+    &#34;&#34;&#34;
+    Calculate the synthetic radial power spectrum of
+    magnetic anomalies (Maus and Dimri; 1995)
+
+    This is not all that useful except when testing
+    overflow errors which occur for the second term
+    in Bouligand et al. (2009).
+
+    Args:
+        beta : float / 1D array
+            fractal parameter
+        zt : float / 1D array
+            top of magnetic sources
+        kh : float / 1D array
+            norm of the wave number in the horizontal plane
+        C : float / 1D array
+            field constant (Maus et al., 1997)
+
+    Returns:
+        Phi : float / 1D array
+            radial power spectrum of magnetic anomalies
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+        estimation using a self-similar magnetization model, Geophys. J. Int.,
+        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
+    &#34;&#34;&#34;
+    return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)
+
+
+def _fftfreqs(dx, dy, shape):
+    &#34;&#34;&#34;
+    Get two 2D-arrays with the wave numbers in the x and y directions.
+    &#34;&#34;&#34;
+    fx = 2.0*np.pi*np.fft.fftfreq(shape[0], dx)
+    fy = 2.0*np.pi*np.fft.fftfreq(shape[1], dy)
+    return np.meshgrid(fy, fx)[::-1]
+
+def ang2vec(intensity, inc, dec):
+    &#34;&#34;&#34;
+    Convert intensity, inclination and  declination to a 3-component vector
+
+    Args:
+        intensity : float or 1D array
+            The intensity (norm) of the vector
+        inc : float
+            The inclination of the vector (in degrees)
+        dec : float
+            The declination of the vector (in degrees)
+
+    Returns:
+        vec : array = [x, y, z]
+            3-component vector
+
+    Notes:
+        Coordinate system is assumed to be x-&gt;North, y-&gt;East, z-&gt;Down.
+        Inclination is positive down and declination is measured with respect
+        to x (North).
+
+    Examples:
+        &gt;&gt;&gt; import numpy
+        &gt;&gt;&gt; print ang2vec(3, 45, 45)
+        [ 1.5         1.5         2.12132034]
+        &gt;&gt;&gt; print ang2vec(numpy.arange(4), 45, 45)
+        [[ 0.          0.          0.        ]
+         [ 0.5         0.5         0.70710678]
+         [ 1.          1.          1.41421356]
+         [ 1.5         1.5         2.12132034]]
+
+    &#34;&#34;&#34;
+    return np.transpose([intensity * i for i in dircos(inc, dec)])
+
+
+def dircos(inc, dec):
+    &#34;&#34;&#34;
+    Returns the 3 coordinates of a unit vector given its inclination and
+    declination.
+
+    Args:
+        inc : float
+            The inclination of the vector (in degrees)
+        dec : float
+            The declination of the vector (in degrees)
+
+    Returns:
+        vect : list
+            The unit vector = [x, y, z]
+
+    Notes:
+        Coordinate system is assumed to be x-&gt;North, y-&gt;East, z-&gt;Down.
+        Inclination is positive down and declination is measured with respect
+        to x (North).
+    &#34;&#34;&#34;
+    d2r = np.pi/180.0
+    vect = [np.cos(d2r * inc) * np.cos(d2r * dec), \
+            np.cos(d2r * inc) * np.sin(d2r * dec), \
+            np.sin(d2r * inc)]
+    return vect</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="pycurious.grid.ComputeTanaka"><code class="name flex">
+<span>def <span class="ident">ComputeTanaka</span></span>(<span>Ztr, dZtr, Zor, dZor)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Compute the Curie depth from the results of tanaka1999</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>Ztr</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>top of the magnetic source</dd>
+<dt><strong><code>dZtr</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>error of Ztr</dd>
+<dt><strong><code>Zor</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>bottom of the magnetic source</dd>
+<dt><strong><code>dZor</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>error of Zor</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>Zb</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>estimated Curie point depth</dd>
+<dt><strong><code>eZb</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>error of <code>Zb</code></dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def ComputeTanaka(Ztr, dZtr, Zor, dZor):
+    &#34;&#34;&#34;
+    Compute the Curie depth from the results of tanaka1999
+
+    Args:
+        Ztr : float / 1D array
+            top of the magnetic source
+        dZtr : float / 1D array
+            error of Ztr
+        Zor : float / 1D array 
+            bottom of the magnetic source
+        dZor : float / 1D array
+            error of Zor
+
+    Returns:
+        Zb : float / 1D array
+            estimated Curie point depth
+        eZb : float / 1D array
+            error of `Zb`
+    &#34;&#34;&#34;
+    Zb = 2.0*Zor - Ztr
+    dZb  = 2.0*dZor - dZtr
+    return abs(Zb), dZb</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.ang2vec"><code class="name flex">
+<span>def <span class="ident">ang2vec</span></span>(<span>intensity, inc, dec)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Convert intensity, inclination and
+declination to a 3-component vector</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>intensity</code></strong> :&ensp;<code>float</code> or <code>1D</code> <code>array</code></dt>
+<dd>The intensity (norm) of the vector</dd>
+<dt><strong><code>inc</code></strong> :&ensp;<code>float</code></dt>
+<dd>The inclination of the vector (in degrees)</dd>
+<dt><strong><code>dec</code></strong> :&ensp;<code>float</code></dt>
+<dd>The declination of the vector (in degrees)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>vec</code></strong> :&ensp;<code>array</code> = [<code>x</code>, <code>y</code>, <code>z</code>]</dt>
+<dd>3-component vector</dd>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>Coordinate system is assumed to be x-&gt;North, y-&gt;East, z-&gt;Down.
+Inclination is positive down and declination is measured with respect
+to x (North).</p>
+<h2 id="examples">Examples</h2>
+<pre><code>&gt;&gt;&gt; import numpy
+&gt;&gt;&gt; print ang2vec(3, 45, 45)
+[ 1.5         1.5         2.12132034]
+&gt;&gt;&gt; print ang2vec(numpy.arange(4), 45, 45)
+[[ 0.          0.          0.        ]
+</code></pre>
+<p>[ 0.5
+0.5
+0.70710678]
+[ 1.
+1.
+1.41421356]
+[ 1.5
+1.5
+2.12132034]]</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def ang2vec(intensity, inc, dec):
+    &#34;&#34;&#34;
+    Convert intensity, inclination and  declination to a 3-component vector
+
+    Args:
+        intensity : float or 1D array
+            The intensity (norm) of the vector
+        inc : float
+            The inclination of the vector (in degrees)
+        dec : float
+            The declination of the vector (in degrees)
+
+    Returns:
+        vec : array = [x, y, z]
+            3-component vector
+
+    Notes:
+        Coordinate system is assumed to be x-&gt;North, y-&gt;East, z-&gt;Down.
+        Inclination is positive down and declination is measured with respect
+        to x (North).
+
+    Examples:
+        &gt;&gt;&gt; import numpy
+        &gt;&gt;&gt; print ang2vec(3, 45, 45)
+        [ 1.5         1.5         2.12132034]
+        &gt;&gt;&gt; print ang2vec(numpy.arange(4), 45, 45)
+        [[ 0.          0.          0.        ]
+         [ 0.5         0.5         0.70710678]
+         [ 1.          1.          1.41421356]
+         [ 1.5         1.5         2.12132034]]
+
+    &#34;&#34;&#34;
+    return np.transpose([intensity * i for i in dircos(inc, dec)])</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.bouligand2009"><code class="name flex">
+<span>def <span class="ident">bouligand2009</span></span>(<span>kh, beta, zt, dz, C)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Calculate the synthetic radial power spectrum of
+magnetic anomalies</p>
+<p>Equation (4) of Bouligand et al. (2009)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>kh</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>wavenumber in rad/km</dd>
+<dt><strong><code>beta</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>fractal parameter</dd>
+<dt><strong><code>zt</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>top of magnetic sources</dd>
+<dt><strong><code>dz</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>thickness of magnetic sources</dd>
+<dt><strong><code>C</code></strong> :&ensp;<code>float</code> <code>1D</code> <code>array</code></dt>
+<dd>field constant (Maus et al., 1997)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>Phi</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>radial power spectrum of magnetic anomalies</dd>
+</dl>
+<h2 id="references">References</h2>
+<p>Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+temperature depth in the western United States with a fractal model for
+crustal magnetization, J. Geophys. Res., 114, B11104,
+doi:10.1029/2009JB006494</p>
+<p>Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+estimation using a self-similar magnetization model, Geophys. J. Int.,
+129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def bouligand2009(kh, beta, zt, dz, C):
+    &#34;&#34;&#34;
+    Calculate the synthetic radial power spectrum of
+    magnetic anomalies
+
+    Equation (4) of Bouligand et al. (2009)
+
+    Args:
+        kh : float / 1D array
+            wavenumber in rad/km
+        beta : float / 1D array
+            fractal parameter
+        zt : float / 1D array
+            top of magnetic sources
+        dz : float / 1D array
+            thickness of magnetic sources
+        C : float 1D array
+            field constant (Maus et al., 1997)
+
+    Returns:
+        Phi : float / 1D array
+            radial power spectrum of magnetic anomalies
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+        estimation using a self-similar magnetization model, Geophys. J. Int.,
+        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
+    &#34;&#34;&#34;
+    # from scipy.special import kv
+    khdz = kh*dz
+    coshkhdz = np.cosh(khdz)
+
+    Phi1d = C - 2.0*kh*zt - (beta-1.0)*np.log(kh) - khdz
+    A = np.sqrt(np.pi)/gamma(1.0+0.5*beta) * \
+        (0.5*coshkhdz*gamma(0.5*(1.0+beta)) - \
+        kv((-0.5*(1.0+beta)), khdz) * np.power(0.5*khdz,(0.5*(1.0+beta)) ))
+    Phi1d += np.log(A)
+    return Phi1d</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.dircos"><code class="name flex">
+<span>def <span class="ident">dircos</span></span>(<span>inc, dec)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Returns the 3 coordinates of a unit vector given its inclination and
+declination.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>inc</code></strong> :&ensp;<code>float</code></dt>
+<dd>The inclination of the vector (in degrees)</dd>
+<dt><strong><code>dec</code></strong> :&ensp;<code>float</code></dt>
+<dd>The declination of the vector (in degrees)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>vect</code></strong> :&ensp;<code>list</code></dt>
+<dd>The unit vector = [x, y, z]</dd>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>Coordinate system is assumed to be x-&gt;North, y-&gt;East, z-&gt;Down.
+Inclination is positive down and declination is measured with respect
+to x (North).</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def dircos(inc, dec):
+    &#34;&#34;&#34;
+    Returns the 3 coordinates of a unit vector given its inclination and
+    declination.
+
+    Args:
+        inc : float
+            The inclination of the vector (in degrees)
+        dec : float
+            The declination of the vector (in degrees)
+
+    Returns:
+        vect : list
+            The unit vector = [x, y, z]
+
+    Notes:
+        Coordinate system is assumed to be x-&gt;North, y-&gt;East, z-&gt;Down.
+        Inclination is positive down and declination is measured with respect
+        to x (North).
+    &#34;&#34;&#34;
+    d2r = np.pi/180.0
+    vect = [np.cos(d2r * inc) * np.cos(d2r * dec), \
+            np.cos(d2r * inc) * np.sin(d2r * dec), \
+            np.sin(d2r * inc)]
+    return vect</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.maus1995"><code class="name flex">
+<span>def <span class="ident">maus1995</span></span>(<span>beta, zt, kh, C=0.0)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Calculate the synthetic radial power spectrum of
+magnetic anomalies (Maus and Dimri; 1995)</p>
+<p>This is not all that useful except when testing
+overflow errors which occur for the second term
+in Bouligand et al. (2009).</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>beta</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>fractal parameter</dd>
+<dt><strong><code>zt</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>top of magnetic sources</dd>
+<dt><strong><code>kh</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>norm of the wave number in the horizontal plane</dd>
+<dt><strong><code>C</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>field constant (Maus et al., 1997)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>Phi</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>radial power spectrum of magnetic anomalies</dd>
+</dl>
+<h2 id="references">References</h2>
+<p>Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+temperature depth in the western United States with a fractal model for
+crustal magnetization, J. Geophys. Res., 114, B11104,
+doi:10.1029/2009JB006494</p>
+<p>Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+estimation using a self-similar magnetization model, Geophys. J. Int.,
+129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def maus1995(beta, zt, kh, C=0.0):
+    &#34;&#34;&#34;
+    Calculate the synthetic radial power spectrum of
+    magnetic anomalies (Maus and Dimri; 1995)
+
+    This is not all that useful except when testing
+    overflow errors which occur for the second term
+    in Bouligand et al. (2009).
+
+    Args:
+        beta : float / 1D array
+            fractal parameter
+        zt : float / 1D array
+            top of magnetic sources
+        kh : float / 1D array
+            norm of the wave number in the horizontal plane
+        C : float / 1D array
+            field constant (Maus et al., 1997)
+
+    Returns:
+        Phi : float / 1D array
+            radial power spectrum of magnetic anomalies
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+        estimation using a self-similar magnetization model, Geophys. J. Int.,
+        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
+    &#34;&#34;&#34;
+    return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.tanaka1999"><code class="name flex">
+<span>def <span class="ident">tanaka1999</span></span>(<span>k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2))</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Compute weighted linear fit of Phi over spatial frequency window kmin:kmax</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>k</code></strong> :&ensp;<code>float</code> / <code>1D</code>-<code>array</code></dt>
+<dd>wavenumber in rad/km</dd>
+<dt><strong><code>lnPhi</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>log of the radial power spectrum (see power_spectrum_log)
+expected in ln(sqrt(S)) form</dd>
+<dt><strong><code>sigma_lnPhi</code></strong> :&ensp;<code>standard</code> <code>deviation</code> of <code>lnPhi</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>kmin_range</code></strong> :&ensp;<code>tuple</code> (default:(<code>0.05</code>, <code>0.2</code>))</dt>
+<dd>minimum and maximum range of spatial frequencies to fit for the
+top of magnetic sources - ideally low frequency, straight line</dd>
+<dt><strong><code>kmax_range</code></strong> :&ensp;<code>tuple</code> (default:(<code>0.05</code>, <code>0.2</code>))</dt>
+<dd>minimum and maximum range of spatial frequencies to fit for the
+bottom of magnetic source - ideally low frequency, straight line</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>upper_source</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>(Ztr,btr,dZtr) gradient, intercept, error for the top of magnetic sources</dd>
+<dt><strong><code>lower_source</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>(Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 0.2)):
+    &#34;&#34;&#34;
+    Compute weighted linear fit of Phi over spatial frequency window kmin:kmax
+
+    Args:
+        k : float / 1D-array
+            wavenumber in rad/km
+        lnPhi : float / 1D array
+            log of the radial power spectrum (see power_spectrum_log)
+            expected in ln(sqrt(S)) form
+        sigma_lnPhi : standard deviation of lnPhi
+        kmin_range : tuple (default:(0.05, 0.2))
+            minimum and maximum range of spatial frequencies to fit for the 
+            top of magnetic sources - ideally low frequency, straight line
+        kmax_range : tuple (default:(0.05, 0.2))
+            minimum and maximum range of spatial frequencies to fit for the
+            bottom of magnetic source - ideally low frequency, straight line
+
+    Returns:
+        upper_source : tuple
+            (Ztr,btr,dZtr) gradient, intercept, error for the top of magnetic sources
+        lower_source : tuple
+            (Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources
+
+    &#34;&#34;&#34;
+    # for now...
+    S = lnPhi
+    sigma2 = sigma_lnPhi**2
+
+    def compute_coefficients(X, Y, E):
+        X2 = X**2
+        Y2 = Y**2
+        E2 = E**2
+
+        XY = np.multiply(X, Y)
+        XE2sum = np.sum(X/E2)
+        YE2sum = np.sum(Y/E2)
+        rE2sum = np.sum(1.0/E2)
+        X2E2sum = np.sum(X2/E2)
+        Y2E2sum = np.sum(Y2/E2)
+
+        #TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
+        # I think summation in second TL term needed to be split
+        TL = XE2sum*YE2sum - np.sum(XY/E2)*rE2sum
+        BL = XE2sum**2 - X2E2sum*rE2sum
+
+        Z  = TL/BL
+        b  = (np.sum(XY/E2) - Z*X2E2sum)/XE2sum
+        #dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
+        ## There was a missing **2 term at end of error term.
+        dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum**2) )
+        return Z, b, dZ
+
+
+    sf=k/(2.0*np.pi)
+    S2=np.log(np.exp(S)/sf)
+
+    # mask low wavenumbers
+    kmin, kmax = kmin_range
+    mask1 = np.logical_and(sf &gt;=kmin, sf &lt;=kmax)
+    X1 = sf[mask1]
+    Y1 = S[mask1]
+    E1 = sigma2[mask1]
+    
+    # mask high wavenumbers
+    kmin, kmax = kmax_range
+    mask2 = np.logical_and(sf &gt;=kmin, sf &lt;=kmax)
+    X2 = sf[mask2]
+    Y2 = np.log(np.exp(S[mask2])/(X2*2*np.pi))
+    E2 = np.log(np.exp(sigma2[mask2])/(X2*2*np.pi))
+
+    # compute top and bottom of magnetic layer
+    Ztr, btr, dZtr = compute_coefficients(X1, Y1, E1)
+    Zor, bor, dZor = compute_coefficients(X2, Y2, E2)
+    return (Ztr,btr,dZtr), (Zor, bor, dZor)</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="pycurious.grid.CurieGrid"><code class="flex name class">
+<span>class <span class="ident">CurieGrid</span></span>
+<span>(</span><span>grid, xmin, xmax, ymin, ymax)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Accepts a 2D array and Cartesian coordinates specifying the
+bounding box of the array</p>
+<p>Grid must be projected in metres</p>
+<p>Args:
+grid : 2D array of magnetic data
+xmin : minimum x bound in metres
+xmax : maximum x bound in metres
+ymin : minimum y bound in metres
+ymax : maximum y bound in metres</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">class CurieGrid(object):
+    &#34;&#34;&#34;
+    Accepts a 2D array and Cartesian coordinates specifying the
+    bounding box of the array
+
+    Grid must be projected in metres
+
+    Args:
+     grid : 2D array of magnetic data
+     xmin : minimum x bound in metres
+     xmax : maximum x bound in metres
+     ymin : minimum y bound in metres
+     ymax : maximum y bound in metres
+    &#34;&#34;&#34;
+    def __init__(self, grid, xmin, xmax, ymin, ymax):
+        
+        self.data = np.array(grid)
+        ny, nx = self.data.shape
+        self.xmin, self.xmax = xmin, xmax
+        self.ymin, self.ymax = ymin, ymax
+        self.xcoords, dx = np.linspace(xmin, xmax, nx, retstep=True)
+        self.ycoords, dy = np.linspace(ymin, ymax, ny, retstep=True)
+        self.nx, self.ny = nx, ny
+        self.dx, self.dy = dx, dy
+
+        if abs(dx - dy) &gt; 1.0:
+            warnings.warn(&#34;node spacing should be identical {}&#34;.format((dx,dy)), RuntimeWarning)
+
+
+    def subgrid(self, window, xc, yc):
+        &#34;&#34;&#34;
+        Extract a subgrid from the data at a window around
+        the point (xc,yc)
+        
+        Args:
+            xc : float
+                x coordinate
+            yc : float
+                y coordinate
+            window : float
+                size of window in metres
+
+        Returns:
+            data : 2D array
+                subgrid encompassing window size
+        &#34;&#34;&#34;
+
+        # check in coordinate in grid
+        if xc &lt; self.xmin or xc &gt; self.xmax or yc &lt; self.ymin or yc &gt; self.ymax:
+            raise ValueError(&#34;Point ({},{}) outside data range&#34;.format(xc,yc))
+
+        # find nearest index to xc,yc
+        ix = np.abs(self.xcoords - xc).argmin()
+        iy = np.abs(self.ycoords - yc).argmin()
+
+        nw = int(round(window/self.dx))
+        n2w = nw//2
+
+        # extract a square window from the data
+        imin = ix - n2w
+        imax = ix + n2w + 1
+        jmin = iy - n2w
+        jmax = iy + n2w + 1
+
+        # safeguard if window size is larger than grid
+        imin = max(imin, 0)
+        imax = min(imax, self.nx)
+        jmin = max(jmin, 0)
+        jmax = min(jmax, self.ny)
+        
+        data = self.data[jmin:jmax, imin:imax]
+
+        return data
+
+
+    def create_centroid_list(self, window, spacingX=None, spacingY=None):
+        &#34;&#34;&#34;
+        Create a list of xc,yc values to extract subgrids.
+
+        Args:
+            window : float
+                size of the windows in metres
+            spacingX : float (optional)
+                specify spacing in metres in the X direction
+                will default to maximum X resolution
+            spacingY : float (optional)
+                specify spacing in metres in the Y direction
+                will default to maximum Y resolution
+
+        Returns:
+            xc_list : 1D array
+                array of x coordinates
+            yc_list : 1D array
+                array of y coordinates
+        &#34;&#34;&#34;
+        
+        nx, ny = self.nx, self.ny
+        xcoords = self.xcoords
+        ycoords = self.ycoords
+        
+        nw = int(round(window/self.dx))
+        n2w = nw//2
+        
+        # this is the densest spacing possible given the data
+        xc = xcoords[n2w:-n2w]
+        yc = ycoords[n2w:-n2w]
+        
+        # but we can alter it if required
+        if type(spacingX) != type(None):
+            xc = np.arange(xc.min(), xc.max(), spacingX)
+        if type(spacingY) != type(None):
+            yc = np.arange(yc.min(), yc.max(), spacingY)
+
+        xq, yq = np.meshgrid(xc, yc)
+            
+        return xq.ravel(), yq.ravel()
+
+
+    def remove_trend_linear(self, data):
+        &#34;&#34;&#34;
+        Remove the best-fitting linear trend from the data
+
+        This may come in handy if the magnetic data has not been
+        reduced to the pole.
+
+        Args:
+            data : 2D numpy array
+
+        Returns:
+         data : 2D numpy array
+        &#34;&#34;&#34;
+        data = data.copy()
+        nr, nc = data.shape
+        xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+
+        A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
+        c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+
+        data.flat[:] -= np.dot(A, c)
+        return data
+
+    def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        &#34;&#34;&#34;
+        Compute the radial spectrum for a square grid.
+
+        Args:
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (default: 0.001)
+                scaling factor to get k into rad/km
+            kwargs : keyword arguments
+                keyword arguments to pass to `taper`
+
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            Phi : 1D array shape (n,)
+                Radial power spectrum
+            sigma_Phi : 1D array shape (n,)
+                Standard deviation of Phi
+        &#34;&#34;&#34;
+
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if type(taper) == type(None):
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+        nbins = kbins.size - 1
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nw - 1)//2)
+        ix, iy = np.mgrid[0:nw,0:nw]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(0, nbins):
+            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+            rr = 2.0*np.log(FT[mask])
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+
+
+    def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        &#34;&#34;&#34;
+        Compute the log of the radial spectrum for a square grid.
+
+        Args:
+         subgrid : 2D array
+            window of the original data (see subgrid method)
+         taper : function (default=np.hanning)
+            taper function, set to None for no taper function
+         scale : float (detault=0.001)
+            scaling factor to get k into rad/km
+         kwargs : keyword arguments
+            keyword arguments to pass to `taper`
+
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            lnPhi : 1D array
+                log of the radial power spectrum in ln(sqrt(S))
+            lnsigma_Phi : 1D array
+                standard deviation of lnPhi
+        &#34;&#34;&#34;
+
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if type(taper) == type(None):
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+        nbins = kbins.size - 1
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nw - 1)//2)
+        ix, iy = np.mgrid[0:nw,0:nw]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(0, nbins):
+            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+            rr = np.log(np.sqrt(FT[mask]))
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+        
+        
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
+        &#34;&#34;&#34;
+        Compute azimuthal spectrum for a square grid.
+
+        Args:
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (default=0.001)
+                scaling factor to get k into rad/km
+            theta : float
+                angle increment in degrees
+            args : arguments
+                arguments o pass to taper
+
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            Phi : 1D array shape (n,)
+                Radial power spectrum
+            sigma_Phi : 1D array shape (n,)
+                Standard deviation of Phi
+        &#34;&#34;&#34;
+        from pycurious import radon
+        data = subgrid
+        nr, nc = data.shape
+        nw = nr
+
+        if nr != nc:
+            raise RuntimeWarning(&#34;subgrid is not square {}&#34;.format((nr,nc)))
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+        kbins = np.arange(dk, dk*nw/2, dk)
+
+        dtheta = np.arange(0.0, 180.0, theta)
+        sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+        S = np.zeros((dtheta.size, kbins.size))
+        sigma2 = np.zeros((dtheta.size, kbins.size))
+
+        # control taper
+        if taper is None:
+            vtaper = 1.0
+        else:
+            vtaper = taper(sinogram.shape[0], **kwargs)
+
+        nk = 1 + 2*kbins.size
+        for i in range(0, dtheta.size):
+            PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
+            S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
+        
+        return kbins, S, dtheta
+
+
+    def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
+        r&#34;&#34;&#34;
+        Reduce total field magnetic anomaly data to the pole.
+
+        The reduction to the pole if a phase transformation that can be
+        applied to total field magnetic anomaly data. It simulates how
+        the data would be if both the Geomagnetic field and the
+        magnetization of the source were vertical (Blakely, 1996).
+
+        Args:
+            data : 1D array
+                the total field anomaly data at each point.
+            inc : float / 1D array
+                inclination of the inducing Geomagnetic field
+            dec : float / 1D array
+                declination of the inducing Geomagnetic field
+            sinc : float / 1D array (optional)
+                inclination of the total magnetization of the anomaly source
+            sdec : float / 1D array (optional)
+                declination of the total magnetization of the anomaly source
+                The total magnetization is the vector sum of the
+                induced and remanent magnetization. If there is only induced
+                magnetization, use the *inc* and *dec* of the Geomagnetic field.
+
+        Returns:
+            rtp : 2D array
+                the data reduced to the pole.
+        
+        References:
+            Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+            Applications, Cambridge University Press.
+
+        Notes:
+            This functions performs the reduction in the frequency domain
+            (using the FFT). The transform filter is (in the freq domain):
+                RTP(k_x, k_y) = \frac{|k|}{
+                    a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                    i|k|(b_1 k_x + b_2 k_y)}
+            in which k_x and k_y are the wave-numbers in the x and y
+            directions and
+                |k| = \sqrt{k_x^2 + k_y^2} \\
+                a_1 = m_z f_z - m_x f_x \\
+                a_2 = m_z f_z - m_y f_y \\
+                a_3 = -m_y f_x - m_x f_y \\
+                b_1 = m_x f_z + m_z f_x \\
+                b_2 = m_y f_z + m_z f_y
+            \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+            magnetization of the source and
+            \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+            Geomagnetic field.
+        &#34;&#34;&#34;
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+        fx, fy, fz = ang2vec(1.0, inc, dec)
+        if sinc is None or sdec is None:
+            mx, my, mz = fx, fy, fz
+        else:
+            mx, my, mz = ang2vec(1.0, sinc, sdec)
+
+        kx, ky = [k for k in _fftfreqs(self.dx, self.dy, data.shape)]
+        kz = np.hypot(kx, ky)
+
+        a1 = mz*fz - mx*fx
+        a2 = mz*fz - my*fy
+        a3 = -my*fx - mx*fy
+        b1 = mx*fz + mz*fx
+        b2 = my*fz + mz*fy
+
+        # The division gives a RuntimeWarning because of the zero frequency term.
+        # This suppresses the warning.
+        with np.errstate(divide=&#39;ignore&#39;, invalid=&#39;ignore&#39;):
+            rtp = (kz)/(a1*kx**2 + a2*ky**2 + a3*kx*ky + \
+                            1j*np.sqrt(kz)*(b1*kx + b2*ky))
+        
+        rtp[0, 0] = 0
+        ft_pole = rtp*np.fft.fft2(data)
+        return np.real(np.fft.ifft2(ft_pole))
+
+
+    def upward_continuation(self, data, height):
+        r&#34;&#34;&#34;
+        Upward continuation of potential field data.
+
+        Calculates the continuation through the Fast Fourier Transform in
+        the wavenumber domain (Blakely, 1996):
+
+            F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+
+        and then transformed back to the space domain. :math:`h_{up}` is the
+        upward continue data, \Delta z is the height increase, F denotes
+        the Fourier Transform, |k| is the wavenumber modulus.
+
+        Args:
+            data   : 2D array
+                potential field at the grid points
+            height : float
+                height increase (delta z) in meters.
+        
+        Returns:
+            cont : array
+                upward continued data
+
+        Notes:
+            It is not possible to get the FFT of a masked grid. The default
+            :func:`fatiando.gridder.interp` call using minimum curvature will
+            not be suitable.  Use extrapolate=True or algorithm=&#39;nearest&#39; to
+            get an unmasked grid.
+
+        References:
+            Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+            Applications, Cambridge University Press.
+        &#34;&#34;&#34;
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+        if height &lt;= 0:
+            warnings.warn(&#34;Using &#39;height&#39; &lt;= 0 means downward continuation, &#34; +
+                          &#34;which is known to be unstable.&#34;)
+
+        fx = 2.0*np.pi*np.fft.fftfreq(nr, self.dx)
+        fy = 2.0*np.pi*np.fft.fftfreq(nc, self.dy)
+
+        kx, ky = np.meshgrid(fy, fx)[::-1]
+        kz = np.hypot(kx, ky)
+
+        upcont_ft = np.fft.fft2(data)*np.exp(-height*kz)
+        cont = np.real(np.fft.ifft2(upcont_ft))
+        return cont</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="pycurious.optimise.CurieOptimise" href="optimise.html#pycurious.optimise.CurieOptimise">CurieOptimise</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f003342c950>, scale=0.001, theta=5.0, **kwargs)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>subgrid</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
+<dd>window of the original data (see subgrid method)</dd>
+<dt><strong><code>taper</code></strong> :&ensp;<code>function</code> (default=<code>np.hanning</code>)</dt>
+<dd>taper function, set to None for no taper function</dd>
+<dt><strong><code>scale</code></strong> :&ensp;<code>float</code> (default=<code>0.001</code>)</dt>
+<dd>scaling factor to get k into rad/km</dd>
+<dt><strong><code>theta</code></strong> :&ensp;<code>float</code></dt>
+<dd>angle increment in degrees</dd>
+<dt><strong><code>args</code></strong> :&ensp;<code>arguments</code></dt>
+<dd>arguments o pass to taper</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>k</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>wavenumber in rad/km</dd>
+<dt><strong><code>Phi</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>Radial power spectrum</dd>
+<dt><strong><code>sigma_Phi</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>Standard deviation of Phi</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
+    &#34;&#34;&#34;
+    Compute azimuthal spectrum for a square grid.
+
+    Args:
+        subgrid : 2D array
+            window of the original data (see subgrid method)
+        taper : function (default=np.hanning)
+            taper function, set to None for no taper function
+        scale : float (default=0.001)
+            scaling factor to get k into rad/km
+        theta : float
+            angle increment in degrees
+        args : arguments
+            arguments o pass to taper
+
+    Returns:
+        k : 1D array shape (n,)
+            wavenumber in rad/km
+        Phi : 1D array shape (n,)
+            Radial power spectrum
+        sigma_Phi : 1D array shape (n,)
+            Standard deviation of Phi
+    &#34;&#34;&#34;
+    from pycurious import radon
+    data = subgrid
+    nr, nc = data.shape
+    nw = nr
+
+    if nr != nc:
+        raise RuntimeWarning(&#34;subgrid is not square {}&#34;.format((nr,nc)))
+
+    dx_scale = self.dx*scale
+    dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+    kbins = np.arange(dk, dk*nw/2, dk)
+
+    dtheta = np.arange(0.0, 180.0, theta)
+    sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+    S = np.zeros((dtheta.size, kbins.size))
+    sigma2 = np.zeros((dtheta.size, kbins.size))
+
+    # control taper
+    if taper is None:
+        vtaper = 1.0
+    else:
+        vtaper = taper(sinogram.shape[0], **kwargs)
+
+    nk = 1 + 2*kbins.size
+    for i in range(0, dtheta.size):
+        PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
+        S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
+    
+    return kbins, S, dtheta</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.create_centroid_list"><code class="name flex">
+<span>def <span class="ident">create_centroid_list</span></span>(<span>self, window, spacingX=None, spacingY=None)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Create a list of xc,yc values to extract subgrids.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>window</code></strong> :&ensp;<code>float</code></dt>
+<dd>size of the windows in metres</dd>
+<dt><strong><code>spacingX</code></strong> :&ensp;<code>float</code> (optional)</dt>
+<dd>specify spacing in metres in the X direction
+will default to maximum X resolution</dd>
+<dt><strong><code>spacingY</code></strong> :&ensp;<code>float</code> (optional)</dt>
+<dd>specify spacing in metres in the Y direction
+will default to maximum Y resolution</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>xc_list</code></strong> :&ensp;<code>1D</code> <code>array</code></dt>
+<dd>array of x coordinates</dd>
+<dt><strong><code>yc_list</code></strong> :&ensp;<code>1D</code> <code>array</code></dt>
+<dd>array of y coordinates</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def create_centroid_list(self, window, spacingX=None, spacingY=None):
+    &#34;&#34;&#34;
+    Create a list of xc,yc values to extract subgrids.
+
+    Args:
+        window : float
+            size of the windows in metres
+        spacingX : float (optional)
+            specify spacing in metres in the X direction
+            will default to maximum X resolution
+        spacingY : float (optional)
+            specify spacing in metres in the Y direction
+            will default to maximum Y resolution
+
+    Returns:
+        xc_list : 1D array
+            array of x coordinates
+        yc_list : 1D array
+            array of y coordinates
+    &#34;&#34;&#34;
+    
+    nx, ny = self.nx, self.ny
+    xcoords = self.xcoords
+    ycoords = self.ycoords
+    
+    nw = int(round(window/self.dx))
+    n2w = nw//2
+    
+    # this is the densest spacing possible given the data
+    xc = xcoords[n2w:-n2w]
+    yc = ycoords[n2w:-n2w]
+    
+    # but we can alter it if required
+    if type(spacingX) != type(None):
+        xc = np.arange(xc.min(), xc.max(), spacingX)
+    if type(spacingY) != type(None):
+        yc = np.arange(yc.min(), yc.max(), spacingY)
+
+    xq, yq = np.meshgrid(xc, yc)
+        
+    return xq.ravel(), yq.ravel()</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f003342c950>, scale=0.001, **kwargs)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Compute the radial spectrum for a square grid.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>subgrid</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
+<dd>window of the original data (see subgrid method)</dd>
+<dt><strong><code>taper</code></strong> :&ensp;<code>function</code> (default=<code>np.hanning</code>)</dt>
+<dd>taper function, set to None for no taper function</dd>
+<dt><strong><code>scale</code></strong> :&ensp;<code>float</code> (default: <code>0.001</code>)</dt>
+<dd>scaling factor to get k into rad/km</dd>
+<dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
+<dd>keyword arguments to pass to <code>taper</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>k</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>wavenumber in rad/km</dd>
+<dt><strong><code>Phi</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>Radial power spectrum</dd>
+<dt><strong><code>sigma_Phi</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>Standard deviation of Phi</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+    &#34;&#34;&#34;
+    Compute the radial spectrum for a square grid.
+
+    Args:
+        subgrid : 2D array
+            window of the original data (see subgrid method)
+        taper : function (default=np.hanning)
+            taper function, set to None for no taper function
+        scale : float (default: 0.001)
+            scaling factor to get k into rad/km
+        kwargs : keyword arguments
+            keyword arguments to pass to `taper`
+
+    Returns:
+        k : 1D array shape (n,)
+            wavenumber in rad/km
+        Phi : 1D array shape (n,)
+            Radial power spectrum
+        sigma_Phi : 1D array shape (n,)
+            Standard deviation of Phi
+    &#34;&#34;&#34;
+
+    data = subgrid
+    nr, nc = data.shape
+    nw = nr
+
+    if nr != nc:
+        warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+    # control taper
+    if type(taper) == type(None):
+        vtaper = 1.0
+    else:
+        rt = taper(nr, **kwargs)
+        ct = taper(nc, **kwargs)
+        xq, yq = np.meshgrid(ct, rt)
+        vtaper = xq*yq
+
+    dx_scale = self.dx*scale
+    dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+    # fast Fourier transform and shift
+    FT = np.abs(np.fft.fft2(data*vtaper))
+    FT = np.fft.fftshift(FT)
+
+    kbins = np.arange(dk, dk*nw/2, dk)
+    nbins = kbins.size - 1
+
+    S = np.empty(nbins)
+    k = np.empty(nbins)
+    sigma = np.empty(nbins)
+
+    i0 = int((nw - 1)//2)
+    ix, iy = np.mgrid[0:nw,0:nw]
+    kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+    for i in range(0, nbins):
+        mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+        rr = 2.0*np.log(FT[mask])
+        S[i] = rr.mean()
+        k[i] = kk[mask].mean()
+        sigma[i] = np.std(rr)
+
+    return k, S, sigma</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f003342c950>, scale=0.001, **kwargs)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
+<p>Args:
+subgrid : 2D array
+window of the original data (see subgrid method)
+taper : function (default=np.hanning)
+taper function, set to None for no taper function
+scale : float (detault=0.001)
+scaling factor to get k into rad/km
+kwargs : keyword arguments
+keyword arguments to pass to <code>taper</code></p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>k</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>wavenumber in rad/km</dd>
+<dt><strong><code>lnPhi</code></strong> :&ensp;<code>1D</code> <code>array</code></dt>
+<dd>log of the radial power spectrum in ln(sqrt(S))</dd>
+<dt><strong><code>lnsigma_Phi</code></strong> :&ensp;<code>1D</code> <code>array</code></dt>
+<dd>standard deviation of lnPhi</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+    &#34;&#34;&#34;
+    Compute the log of the radial spectrum for a square grid.
+
+    Args:
+     subgrid : 2D array
+        window of the original data (see subgrid method)
+     taper : function (default=np.hanning)
+        taper function, set to None for no taper function
+     scale : float (detault=0.001)
+        scaling factor to get k into rad/km
+     kwargs : keyword arguments
+        keyword arguments to pass to `taper`
+
+    Returns:
+        k : 1D array shape (n,)
+            wavenumber in rad/km
+        lnPhi : 1D array
+            log of the radial power spectrum in ln(sqrt(S))
+        lnsigma_Phi : 1D array
+            standard deviation of lnPhi
+    &#34;&#34;&#34;
+
+    data = subgrid
+    nr, nc = data.shape
+    nw = nr
+
+    if nr != nc:
+        warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+    # control taper
+    if type(taper) == type(None):
+        vtaper = 1.0
+    else:
+        rt = taper(nr, **kwargs)
+        ct = taper(nc, **kwargs)
+        xq, yq = np.meshgrid(ct, rt)
+        vtaper = xq*yq
+
+    dx_scale = self.dx*scale
+    dk = 2.0*np.pi/(nw - 1)/dx_scale
+
+    # fast Fourier transform and shift
+    FT = np.abs(np.fft.fft2(data*vtaper))
+    FT = np.fft.fftshift(FT)
+
+    kbins = np.arange(dk, dk*nw/2, dk)
+    nbins = kbins.size - 1
+
+    S = np.empty(nbins)
+    k = np.empty(nbins)
+    sigma = np.empty(nbins)
+
+    i0 = int((nw - 1)//2)
+    ix, iy = np.mgrid[0:nw,0:nw]
+    kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+    for i in range(0, nbins):
+        mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+        rr = np.log(np.sqrt(FT[mask]))
+        S[i] = rr.mean()
+        k[i] = kk[mask].mean()
+        sigma[i] = np.std(rr)
+
+    return k, S, sigma</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.reduce_to_pole"><code class="name flex">
+<span>def <span class="ident">reduce_to_pole</span></span>(<span>self, data, inc, dec, sinc=None, sdec=None)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Reduce total field magnetic anomaly data to the pole.</p>
+<p>The reduction to the pole if a phase transformation that can be
+applied to total field magnetic anomaly data. It simulates how
+the data would be if both the Geomagnetic field and the
+magnetization of the source were vertical (Blakely, 1996).</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>1D</code> <code>array</code></dt>
+<dd>the total field anomaly data at each point.</dd>
+<dt><strong><code>inc</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>inclination of the inducing Geomagnetic field</dd>
+<dt><strong><code>dec</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>declination of the inducing Geomagnetic field</dd>
+<dt><strong><code>sinc</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code> (optional)</dt>
+<dd>inclination of the total magnetization of the anomaly source</dd>
+<dt><strong><code>sdec</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code> (optional)</dt>
+<dd>declination of the total magnetization of the anomaly source
+The total magnetization is the vector sum of the
+induced and remanent magnetization. If there is only induced
+magnetization, use the <em>inc</em> and <em>dec</em> of the Geomagnetic field.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>rtp</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
+<dd>the data reduced to the pole.</dd>
+</dl>
+<h2 id="references">References</h2>
+<p>Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+Applications, Cambridge University Press.</p>
+<h2 id="notes">Notes</h2>
+<p>This functions performs the reduction in the frequency domain
+(using the FFT). The transform filter is (in the freq domain):
+RTP(k_x, k_y) = \frac{|k|}{
+a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+i|k|(b_1 k_x + b_2 k_y)}
+in which k_x and k_y are the wave-numbers in the x and y
+directions and
+|k| = \sqrt{k_x^2 + k_y^2} \
+a_1 = m_z f_z - m_x f_x \
+a_2 = m_z f_z - m_y f_y \
+a_3 = -m_y f_x - m_x f_y \
+b_1 = m_x f_z + m_z f_x \
+b_2 = m_y f_z + m_z f_y
+\mathbf{m} = (m_x, m_y, m_z)<code>is the unit-vector of the total
+magnetization of the source and
+\mathbf{f} = (f_x, f_y, f_z)</code> is the unit-vector of the
+Geomagnetic field.</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
+    r&#34;&#34;&#34;
+    Reduce total field magnetic anomaly data to the pole.
+
+    The reduction to the pole if a phase transformation that can be
+    applied to total field magnetic anomaly data. It simulates how
+    the data would be if both the Geomagnetic field and the
+    magnetization of the source were vertical (Blakely, 1996).
+
+    Args:
+        data : 1D array
+            the total field anomaly data at each point.
+        inc : float / 1D array
+            inclination of the inducing Geomagnetic field
+        dec : float / 1D array
+            declination of the inducing Geomagnetic field
+        sinc : float / 1D array (optional)
+            inclination of the total magnetization of the anomaly source
+        sdec : float / 1D array (optional)
+            declination of the total magnetization of the anomaly source
+            The total magnetization is the vector sum of the
+            induced and remanent magnetization. If there is only induced
+            magnetization, use the *inc* and *dec* of the Geomagnetic field.
+
+    Returns:
+        rtp : 2D array
+            the data reduced to the pole.
+    
+    References:
+        Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+        Applications, Cambridge University Press.
+
+    Notes:
+        This functions performs the reduction in the frequency domain
+        (using the FFT). The transform filter is (in the freq domain):
+            RTP(k_x, k_y) = \frac{|k|}{
+                a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                i|k|(b_1 k_x + b_2 k_y)}
+        in which k_x and k_y are the wave-numbers in the x and y
+        directions and
+            |k| = \sqrt{k_x^2 + k_y^2} \\
+            a_1 = m_z f_z - m_x f_x \\
+            a_2 = m_z f_z - m_y f_y \\
+            a_3 = -m_y f_x - m_x f_y \\
+            b_1 = m_x f_z + m_z f_x \\
+            b_2 = m_y f_z + m_z f_y
+        \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+        magnetization of the source and
+        \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+        Geomagnetic field.
+    &#34;&#34;&#34;
+    nr, nc = data.shape
+
+    if nr != nc:
+        warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+    fx, fy, fz = ang2vec(1.0, inc, dec)
+    if sinc is None or sdec is None:
+        mx, my, mz = fx, fy, fz
+    else:
+        mx, my, mz = ang2vec(1.0, sinc, sdec)
+
+    kx, ky = [k for k in _fftfreqs(self.dx, self.dy, data.shape)]
+    kz = np.hypot(kx, ky)
+
+    a1 = mz*fz - mx*fx
+    a2 = mz*fz - my*fy
+    a3 = -my*fx - mx*fy
+    b1 = mx*fz + mz*fx
+    b2 = my*fz + mz*fy
+
+    # The division gives a RuntimeWarning because of the zero frequency term.
+    # This suppresses the warning.
+    with np.errstate(divide=&#39;ignore&#39;, invalid=&#39;ignore&#39;):
+        rtp = (kz)/(a1*kx**2 + a2*ky**2 + a3*kx*ky + \
+                        1j*np.sqrt(kz)*(b1*kx + b2*ky))
+    
+    rtp[0, 0] = 0
+    ft_pole = rtp*np.fft.fft2(data)
+    return np.real(np.fft.ifft2(ft_pole))</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.remove_trend_linear"><code class="name flex">
+<span>def <span class="ident">remove_trend_linear</span></span>(<span>self, data)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Remove the best-fitting linear trend from the data</p>
+<p>This may come in handy if the magnetic data has not been
+reduced to the pole.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<p>Returns:
+data : 2D numpy array</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def remove_trend_linear(self, data):
+    &#34;&#34;&#34;
+    Remove the best-fitting linear trend from the data
+
+    This may come in handy if the magnetic data has not been
+    reduced to the pole.
+
+    Args:
+        data : 2D numpy array
+
+    Returns:
+     data : 2D numpy array
+    &#34;&#34;&#34;
+    data = data.copy()
+    nr, nc = data.shape
+    xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+
+    A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
+    c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+
+    data.flat[:] -= np.dot(A, c)
+    return data</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.subgrid"><code class="name flex">
+<span>def <span class="ident">subgrid</span></span>(<span>self, window, xc, yc)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Extract a subgrid from the data at a window around
+the point (xc,yc)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>xc</code></strong> :&ensp;<code>float</code></dt>
+<dd>x coordinate</dd>
+<dt><strong><code>yc</code></strong> :&ensp;<code>float</code></dt>
+<dd>y coordinate</dd>
+<dt><strong><code>window</code></strong> :&ensp;<code>float</code></dt>
+<dd>size of window in metres</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
+<dd>subgrid encompassing window size</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def subgrid(self, window, xc, yc):
+    &#34;&#34;&#34;
+    Extract a subgrid from the data at a window around
+    the point (xc,yc)
+    
+    Args:
+        xc : float
+            x coordinate
+        yc : float
+            y coordinate
+        window : float
+            size of window in metres
+
+    Returns:
+        data : 2D array
+            subgrid encompassing window size
+    &#34;&#34;&#34;
+
+    # check in coordinate in grid
+    if xc &lt; self.xmin or xc &gt; self.xmax or yc &lt; self.ymin or yc &gt; self.ymax:
+        raise ValueError(&#34;Point ({},{}) outside data range&#34;.format(xc,yc))
+
+    # find nearest index to xc,yc
+    ix = np.abs(self.xcoords - xc).argmin()
+    iy = np.abs(self.ycoords - yc).argmin()
+
+    nw = int(round(window/self.dx))
+    n2w = nw//2
+
+    # extract a square window from the data
+    imin = ix - n2w
+    imax = ix + n2w + 1
+    jmin = iy - n2w
+    jmax = iy + n2w + 1
+
+    # safeguard if window size is larger than grid
+    imin = max(imin, 0)
+    imax = min(imax, self.nx)
+    jmin = max(jmin, 0)
+    jmax = min(jmax, self.ny)
+    
+    data = self.data[jmin:jmax, imin:imax]
+
+    return data</code></pre>
+</details>
+</dd>
+<dt id="pycurious.grid.CurieGrid.upward_continuation"><code class="name flex">
+<span>def <span class="ident">upward_continuation</span></span>(<span>self, data, height)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Upward continuation of potential field data.</p>
+<p>Calculates the continuation through the Fast Fourier Transform in
+the wavenumber domain (Blakely, 1996):</p>
+<pre><code>F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+</code></pre>
+<p>and then transformed back to the space domain. :math:<code>h_{up}</code> is the
+upward continue data, \Delta z is the height increase, F denotes
+the Fourier Transform, |k| is the wavenumber modulus.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt>data
+: 2D array</dt>
+<dt>potential field at the grid points</dt>
+<dt><strong><code>height</code></strong> :&ensp;<code>float</code></dt>
+<dd>height increase (delta z) in meters.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>cont</code></strong> :&ensp;<code>array</code></dt>
+<dd>upward continued data</dd>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>It is not possible to get the FFT of a masked grid. The default
+:func:<code>fatiando.gridder.interp</code> call using minimum curvature will
+not be suitable.
+Use extrapolate=True or algorithm='nearest' to
+get an unmasked grid.</p>
+<h2 id="references">References</h2>
+<p>Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+Applications, Cambridge University Press.</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def upward_continuation(self, data, height):
+    r&#34;&#34;&#34;
+    Upward continuation of potential field data.
+
+    Calculates the continuation through the Fast Fourier Transform in
+    the wavenumber domain (Blakely, 1996):
+
+        F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+
+    and then transformed back to the space domain. :math:`h_{up}` is the
+    upward continue data, \Delta z is the height increase, F denotes
+    the Fourier Transform, |k| is the wavenumber modulus.
+
+    Args:
+        data   : 2D array
+            potential field at the grid points
+        height : float
+            height increase (delta z) in meters.
+    
+    Returns:
+        cont : array
+            upward continued data
+
+    Notes:
+        It is not possible to get the FFT of a masked grid. The default
+        :func:`fatiando.gridder.interp` call using minimum curvature will
+        not be suitable.  Use extrapolate=True or algorithm=&#39;nearest&#39; to
+        get an unmasked grid.
+
+    References:
+        Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+        Applications, Cambridge University Press.
+    &#34;&#34;&#34;
+    nr, nc = data.shape
+
+    if nr != nc:
+        warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+    if height &lt;= 0:
+        warnings.warn(&#34;Using &#39;height&#39; &lt;= 0 means downward continuation, &#34; +
+                      &#34;which is known to be unstable.&#34;)
+
+    fx = 2.0*np.pi*np.fft.fftfreq(nr, self.dx)
+    fy = 2.0*np.pi*np.fft.fftfreq(nc, self.dy)
+
+    kx, ky = np.meshgrid(fy, fx)[::-1]
+    kz = np.hypot(kx, ky)
+
+    upcont_ft = np.fft.fft2(data)*np.exp(-height*kz)
+    cont = np.real(np.fft.ifft2(upcont_ft))
+    return cont</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="pycurious" href="index.html">pycurious</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="two-column">
+<li><code><a title="pycurious.grid.ComputeTanaka" href="#pycurious.grid.ComputeTanaka">ComputeTanaka</a></code></li>
+<li><code><a title="pycurious.grid.ang2vec" href="#pycurious.grid.ang2vec">ang2vec</a></code></li>
+<li><code><a title="pycurious.grid.bouligand2009" href="#pycurious.grid.bouligand2009">bouligand2009</a></code></li>
+<li><code><a title="pycurious.grid.dircos" href="#pycurious.grid.dircos">dircos</a></code></li>
+<li><code><a title="pycurious.grid.maus1995" href="#pycurious.grid.maus1995">maus1995</a></code></li>
+<li><code><a title="pycurious.grid.tanaka1999" href="#pycurious.grid.tanaka1999">tanaka1999</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="pycurious.grid.CurieGrid" href="#pycurious.grid.CurieGrid">CurieGrid</a></code></h4>
+<ul class="">
+<li><code><a title="pycurious.grid.CurieGrid.azimuthal_spectrum" href="#pycurious.grid.CurieGrid.azimuthal_spectrum">azimuthal_spectrum</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.create_centroid_list" href="#pycurious.grid.CurieGrid.create_centroid_list">create_centroid_list</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.radial_spectrum" href="#pycurious.grid.CurieGrid.radial_spectrum">radial_spectrum</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.radial_spectrum_log" href="#pycurious.grid.CurieGrid.radial_spectrum_log">radial_spectrum_log</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.reduce_to_pole" href="#pycurious.grid.CurieGrid.reduce_to_pole">reduce_to_pole</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.remove_trend_linear" href="#pycurious.grid.CurieGrid.remove_trend_linear">remove_trend_linear</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.subgrid" href="#pycurious.grid.CurieGrid.subgrid">subgrid</a></code></li>
+<li><code><a title="pycurious.grid.CurieGrid.upward_continuation" href="#pycurious.grid.CurieGrid.upward_continuation">upward_continuation</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.6.2</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>

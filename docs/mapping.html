@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.6.2" />
+<title>pycurious.mapping API documentation</title>
+<meta name="description" content="Copyright 2018 Ben Mather, Robert Delhaye …" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{font-weight:bold}#index h4 + ul{margin-bottom:.6em}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase;cursor:pointer}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>pycurious.mapping</code></h1>
+</header>
+<section id="section-intro">
+<p>Copyright 2018 Ben Mather, Robert Delhaye</p>
+<p>This file is part of PyCurious.</p>
+<p>PyCurious is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or any later version.</p>
+<p>PyCurious is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the
+GNU Lesser General Public License for more details.</p>
+<p>You should have received a copy of the GNU Lesser General Public License
+along with PyCurious.
+If not, see <a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>.</p>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">&#34;&#34;&#34;
+Copyright 2018 Ben Mather, Robert Delhaye
+
+This file is part of PyCurious.
+
+PyCurious is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or any later version.
+
+PyCurious is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+&#34;&#34;&#34;
+
+# -*- coding: utf-8 -*-
+import numpy as np
+
+try: range=xrange
+except: pass
+
+def transform_coordinates(x, y, epsg_in, epsg_out):
+    &#34;&#34;&#34;
+    Transform between any coordinate system.
+
+    Requires `pyproj`
+    &#34;&#34;&#34;
+    import pyproj
+    proj_in  = pyproj.Proj(&#34;+init=EPSG:&#34;+str(epsg_in))
+    proj_out = pyproj.Proj(&#34;+init=EPSG:&#34;+str(epsg_out))
+    return pyproj.transform(proj_in, proj_out, x, y)
+
+
+def convert_extent(extent_in, epsg_in, epsg_out):
+    &#34;&#34;&#34;
+    Transform extent from epsg_in to epsg_out
+
+    Args:
+        extent_in : tuple
+            bounding box [minX, maxX, minY, maxY]
+        epsg_in : int
+            CRS of extent
+        epsg_out : int
+            CRS of output
+
+    Returns:
+        extent_out : tuple
+            bounding box in new CRS
+    &#34;&#34;&#34;
+    xmin, xmax, ymin, ymax = extent_in
+    xi = [xmin, xmin, xmax, xmax]
+    yi = [ymin, ymax, ymin, ymax]
+    xo, yo = transform_coordinates(xi, yi, epsg_in, epsg_out)
+    extent_out = [min(xo), max(xo), min(yo), max(yo)]
+    return extent_out
+
+
+def trim(coords, data, extent, buffer_amount=0.0):
+    &#34;&#34;&#34;
+    Trim a smaller section of a large dataset taking into
+    consideration transformations into various coordinate
+    reference systems (CRS)
+    
+    Args:
+        coords : array shape (n,2)
+            geographical / projected coordinates
+        data : array shape (n,)
+            values corresponding to coordinates
+        extent : tuple
+            bounding box to trim data
+        buffer : float
+            amount of buffer to include (default=0.0)
+
+    Returns:
+        coords_trim : array shape (l,2)
+            trimmed coordinates
+        data_trim : array shape (l,2)
+            trimmed data array
+    &#34;&#34;&#34;
+    xmin, xmax, ymin, ymax = extent
+
+    # Extract only the data within the extent
+    data_mask = np.ones(data.shape[0], dtype=bool)
+
+    # Add a 1 percent buffer zone
+    x_buffer = buffer_amount*(xmax - xmin)
+    y_buffer = buffer_amount*(ymax - ymin)
+
+    mask_e = coords[:,0] &lt; xmin - x_buffer
+    mask_w = coords[:,0] &gt; xmax + x_buffer
+    mask_n = coords[:,1] &lt; ymin - y_buffer
+    mask_s = coords[:,1] &gt; ymax + y_buffer
+    data_mask[mask_n] = False
+    data_mask[mask_s] = False
+    data_mask[mask_e] = False
+    data_mask[mask_w] = False
+    
+    data_trim = data[data_mask]
+    coords_trim = coords[data_mask]
+
+    return coords_trim, data_trim
+
+
+def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs):
+    &#34;&#34;&#34;
+    Grid a smaller section of a large dataset taking into
+    consideration transformations into various coordinate
+    reference systems (CRS)
+    
+    Args:
+        coords : array shape (n,2)
+            geographical coordinates
+        data : array shape (n,) 
+            values corresponding to coordinates
+        extent : tuple
+           box contained within the data in espg_out coordinates
+        shape : tuple (nrows,ncols)
+           size of the box, if None, shape is estimated from coords spacing
+        epsg_in : int
+           CRS of data (if transformation is required)
+        epsg_out : int
+           CRS of grid (if transformation is required)
+        kwargs : keyword arguments
+           keyword arguments to pass to griddata from
+           `scipy.interpolate.griddata`
+    
+    Returns:
+        grid : array shape (nrows, ncols)
+            rectangular section of data bounded by extent
+    &#34;&#34;&#34;
+    from scipy.interpolate import griddata
+    xmin, xmax, ymin, ymax = extent
+    
+    if type(epsg_in) != type(None):
+        xt, yt = transform_coordinates(np.array([xmin, xmin, xmax, xmax]),\
+                                       np.array([ymin, ymax, ymin, ymax]),\
+                                       epsg_out, epsg_in)
+        # find the coordinates that will completely
+        # engulf the extent
+        xtmin, xtmax = min(xt), max(xt)
+        ytmin, ytmax = min(yt), max(yt)
+    else:
+        xtmin, xtmax = xmin, xmax
+        ytmin, ytmax = ymin, ymax
+
+    xtextent = [xtmin, xtmax, ytmin, ytmax]
+
+    # trim data - buffer = 5%
+    coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
+
+
+    if type(epsg_in) != type(None):
+        # convert back to output CRS
+        xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
+                                             coords_trim[:,1],\
+                                             epsg_in, epsg_out)
+        coords_trim = np.column_stack([xtrim, ytrim])
+
+
+    if shape == None:
+        # estimate based on the data spacing
+        xunique = np.unique(coords_trim[:,0])
+        yunique = np.unique(coords_trim[:,1])
+        dx = np.diff(xunique).mean()
+        dy = np.diff(yunique).mean()
+        nc = int((xtmax - xtmin)/dx)
+        nr = int((ytmax - ytmin)/dy)
+        print(&#34;using nrows={}, ncols={} with cell spacing of {}&#34;.format(nr,nc,(dy,dx)))
+    else:
+        nr, nc = shape
+
+    # interpolate
+
+    xcoords = np.linspace(xmin, xmax, nc)
+    ycoords = np.linspace(ymin, ymax, nr)
+    xq, yq = np.meshgrid(xcoords, ycoords)
+
+    vq = griddata(coords_trim, data_trim, (xq, yq), **kwargs)
+    return vq
+
+
+def import_geotiff(file_path):
+    &#34;&#34;&#34;
+    Import a GeoTIFF to a numpy array and prints
+    information of the Coordinate Reference System (CRS)
+
+    Args:
+        file_path : str
+            path to the GeoTIFF
+
+    Returns:
+        data : 2D array
+        extent : tuple
+            extent in the projection of the GeoTIFF
+            e.g. [xmin, xmax, ymin, ymax]
+    &#34;&#34;&#34;
+    from osgeo import gdal, osr
+    
+    gtiff = gdal.Open(file_path)
+    data = gtiff.ReadAsArray()
+    gt = gtiff.GetGeoTransform()
+    gtproj = gtiff.GetProjection()
+
+    inproj = osr.SpatialReference()
+    inproj.ImportFromWkt(gtproj)
+
+    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],\
+                gt[3], gt[3] + gtiff.RasterYSize*gt[5])
+
+    # print projection information
+    print(inproj)
+
+    # this closes the geotiff
+    gtiff = None
+
+    return data, gtextent
+
+
+def export_geotiff(file_path, array, extent, epsg):
+    &#34;&#34;&#34;
+    Export a GeoTIFF from a numpy array projected in a
+    predefined Coordinate Reference System (CRS)
+
+    Args:
+        file_path : str
+            path to write the GeoTIFF
+        array: 2D array
+            array to save to GeoTiff
+        extent : tuple
+            extent in the projection of the GeoTIFF
+            e.g. [xmin, xmax, ymin, ymax]
+        epsg : int
+            CRS of the GeoTIFF
+            e.g. 4326 for WGS84
+
+    &#34;&#34;&#34;
+    from osgeo import gdal, osr
+    # import ogr, gdal, osr, os
+
+    cols = array.shape[1]
+    rows = array.shape[0]
+
+    xmin, xmax, ymin, ymax = extent
+    spacingX = (xmax - xmin)/cols
+    spacingY = (ymax - ymin)/rows
+
+    driver = gdal.GetDriverByName(&#39;GTiff&#39;)
+    outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Float64)
+    outRaster.SetGeoTransform((xmin, spacingX, 0, ymin, 0, spacingY))
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(array)
+    outRasterSRS = osr.SpatialReference()
+    outRasterSRS.ImportFromEPSG(epsg)
+    outRaster.SetProjection(outRasterSRS.ExportToWkt())
+    outband.FlushCache()
+    return</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="pycurious.mapping.convert_extent"><code class="name flex">
+<span>def <span class="ident">convert_extent</span></span>(<span>extent_in, epsg_in, epsg_out)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Transform extent from epsg_in to epsg_out</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>extent_in</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>bounding box [minX, maxX, minY, maxY]</dd>
+<dt><strong><code>epsg_in</code></strong> :&ensp;<code>int</code></dt>
+<dd>CRS of extent</dd>
+<dt><strong><code>epsg_out</code></strong> :&ensp;<code>int</code></dt>
+<dd>CRS of output</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>extent_out</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>bounding box in new CRS</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def convert_extent(extent_in, epsg_in, epsg_out):
+    &#34;&#34;&#34;
+    Transform extent from epsg_in to epsg_out
+
+    Args:
+        extent_in : tuple
+            bounding box [minX, maxX, minY, maxY]
+        epsg_in : int
+            CRS of extent
+        epsg_out : int
+            CRS of output
+
+    Returns:
+        extent_out : tuple
+            bounding box in new CRS
+    &#34;&#34;&#34;
+    xmin, xmax, ymin, ymax = extent_in
+    xi = [xmin, xmin, xmax, xmax]
+    yi = [ymin, ymax, ymin, ymax]
+    xo, yo = transform_coordinates(xi, yi, epsg_in, epsg_out)
+    extent_out = [min(xo), max(xo), min(yo), max(yo)]
+    return extent_out</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.export_geotiff"><code class="name flex">
+<span>def <span class="ident">export_geotiff</span></span>(<span>file_path, array, extent, epsg)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Export a GeoTIFF from a numpy array projected in a
+predefined Coordinate Reference System (CRS)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>file_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>path to write the GeoTIFF</dd>
+<dt><strong><code>array</code></strong></dt>
+<dd>2D array
+array to save to GeoTiff</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>extent in the projection of the GeoTIFF
+e.g. [xmin, xmax, ymin, ymax]</dd>
+<dt><strong><code>epsg</code></strong> :&ensp;<code>int</code></dt>
+<dd>CRS of the GeoTIFF
+e.g. 4326 for WGS84</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def export_geotiff(file_path, array, extent, epsg):
+    &#34;&#34;&#34;
+    Export a GeoTIFF from a numpy array projected in a
+    predefined Coordinate Reference System (CRS)
+
+    Args:
+        file_path : str
+            path to write the GeoTIFF
+        array: 2D array
+            array to save to GeoTiff
+        extent : tuple
+            extent in the projection of the GeoTIFF
+            e.g. [xmin, xmax, ymin, ymax]
+        epsg : int
+            CRS of the GeoTIFF
+            e.g. 4326 for WGS84
+
+    &#34;&#34;&#34;
+    from osgeo import gdal, osr
+    # import ogr, gdal, osr, os
+
+    cols = array.shape[1]
+    rows = array.shape[0]
+
+    xmin, xmax, ymin, ymax = extent
+    spacingX = (xmax - xmin)/cols
+    spacingY = (ymax - ymin)/rows
+
+    driver = gdal.GetDriverByName(&#39;GTiff&#39;)
+    outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Float64)
+    outRaster.SetGeoTransform((xmin, spacingX, 0, ymin, 0, spacingY))
+    outband = outRaster.GetRasterBand(1)
+    outband.WriteArray(array)
+    outRasterSRS = osr.SpatialReference()
+    outRasterSRS.ImportFromEPSG(epsg)
+    outRaster.SetProjection(outRasterSRS.ExportToWkt())
+    outband.FlushCache()
+    return</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.grid"><code class="name flex">
+<span>def <span class="ident">grid</span></span>(<span>coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Grid a smaller section of a large dataset taking into
+consideration transformations into various coordinate
+reference systems (CRS)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>coords</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,<code>2</code>)</dt>
+<dd>geographical coordinates</dd>
+<dt><strong><code>data</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>values corresponding to coordinates</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>&nbsp;</dd>
+<dt>box contained within the data in espg_out coordinates</dt>
+<dt><strong><code>shape</code></strong> :&ensp;<code>tuple</code> (<code>nrows</code>,<code>ncols</code>)</dt>
+<dd>&nbsp;</dd>
+<dt>size of the box, if None, shape is estimated from coords spacing</dt>
+<dt><strong><code>epsg_in</code></strong> :&ensp;<code>int</code></dt>
+<dd>&nbsp;</dd>
+<dt>CRS of data (if transformation is required)</dt>
+<dt><strong><code>epsg_out</code></strong> :&ensp;<code>int</code></dt>
+<dd>&nbsp;</dd>
+<dt>CRS of grid (if transformation is required)</dt>
+<dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<p>keyword arguments to pass to griddata from
+<code>scipy.interpolate.griddata</code></p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><a title="pycurious.mapping.grid" href="#pycurious.mapping.grid"><code>grid()</code></a></strong> :&ensp;<code>array</code> <code>shape</code> (<code>nrows</code>, <code>ncols</code>)</dt>
+<dd>rectangular section of data bounded by extent</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs):
+    &#34;&#34;&#34;
+    Grid a smaller section of a large dataset taking into
+    consideration transformations into various coordinate
+    reference systems (CRS)
+    
+    Args:
+        coords : array shape (n,2)
+            geographical coordinates
+        data : array shape (n,) 
+            values corresponding to coordinates
+        extent : tuple
+           box contained within the data in espg_out coordinates
+        shape : tuple (nrows,ncols)
+           size of the box, if None, shape is estimated from coords spacing
+        epsg_in : int
+           CRS of data (if transformation is required)
+        epsg_out : int
+           CRS of grid (if transformation is required)
+        kwargs : keyword arguments
+           keyword arguments to pass to griddata from
+           `scipy.interpolate.griddata`
+    
+    Returns:
+        grid : array shape (nrows, ncols)
+            rectangular section of data bounded by extent
+    &#34;&#34;&#34;
+    from scipy.interpolate import griddata
+    xmin, xmax, ymin, ymax = extent
+    
+    if type(epsg_in) != type(None):
+        xt, yt = transform_coordinates(np.array([xmin, xmin, xmax, xmax]),\
+                                       np.array([ymin, ymax, ymin, ymax]),\
+                                       epsg_out, epsg_in)
+        # find the coordinates that will completely
+        # engulf the extent
+        xtmin, xtmax = min(xt), max(xt)
+        ytmin, ytmax = min(yt), max(yt)
+    else:
+        xtmin, xtmax = xmin, xmax
+        ytmin, ytmax = ymin, ymax
+
+    xtextent = [xtmin, xtmax, ytmin, ytmax]
+
+    # trim data - buffer = 5%
+    coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
+
+
+    if type(epsg_in) != type(None):
+        # convert back to output CRS
+        xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
+                                             coords_trim[:,1],\
+                                             epsg_in, epsg_out)
+        coords_trim = np.column_stack([xtrim, ytrim])
+
+
+    if shape == None:
+        # estimate based on the data spacing
+        xunique = np.unique(coords_trim[:,0])
+        yunique = np.unique(coords_trim[:,1])
+        dx = np.diff(xunique).mean()
+        dy = np.diff(yunique).mean()
+        nc = int((xtmax - xtmin)/dx)
+        nr = int((ytmax - ytmin)/dy)
+        print(&#34;using nrows={}, ncols={} with cell spacing of {}&#34;.format(nr,nc,(dy,dx)))
+    else:
+        nr, nc = shape
+
+    # interpolate
+
+    xcoords = np.linspace(xmin, xmax, nc)
+    ycoords = np.linspace(ymin, ymax, nr)
+    xq, yq = np.meshgrid(xcoords, ycoords)
+
+    vq = griddata(coords_trim, data_trim, (xq, yq), **kwargs)
+    return vq</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.import_geotiff"><code class="name flex">
+<span>def <span class="ident">import_geotiff</span></span>(<span>file_path)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Import a GeoTIFF to a numpy array and prints
+information of the Coordinate Reference System (CRS)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>file_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>path to the GeoTIFF</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>extent in the projection of the GeoTIFF
+e.g. [xmin, xmax, ymin, ymax]</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def import_geotiff(file_path):
+    &#34;&#34;&#34;
+    Import a GeoTIFF to a numpy array and prints
+    information of the Coordinate Reference System (CRS)
+
+    Args:
+        file_path : str
+            path to the GeoTIFF
+
+    Returns:
+        data : 2D array
+        extent : tuple
+            extent in the projection of the GeoTIFF
+            e.g. [xmin, xmax, ymin, ymax]
+    &#34;&#34;&#34;
+    from osgeo import gdal, osr
+    
+    gtiff = gdal.Open(file_path)
+    data = gtiff.ReadAsArray()
+    gt = gtiff.GetGeoTransform()
+    gtproj = gtiff.GetProjection()
+
+    inproj = osr.SpatialReference()
+    inproj.ImportFromWkt(gtproj)
+
+    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],\
+                gt[3], gt[3] + gtiff.RasterYSize*gt[5])
+
+    # print projection information
+    print(inproj)
+
+    # this closes the geotiff
+    gtiff = None
+
+    return data, gtextent</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.transform_coordinates"><code class="name flex">
+<span>def <span class="ident">transform_coordinates</span></span>(<span>x, y, epsg_in, epsg_out)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Transform between any coordinate system.</p>
+<p>Requires <code>pyproj</code></p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def transform_coordinates(x, y, epsg_in, epsg_out):
+    &#34;&#34;&#34;
+    Transform between any coordinate system.
+
+    Requires `pyproj`
+    &#34;&#34;&#34;
+    import pyproj
+    proj_in  = pyproj.Proj(&#34;+init=EPSG:&#34;+str(epsg_in))
+    proj_out = pyproj.Proj(&#34;+init=EPSG:&#34;+str(epsg_out))
+    return pyproj.transform(proj_in, proj_out, x, y)</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.trim"><code class="name flex">
+<span>def <span class="ident">trim</span></span>(<span>coords, data, extent, buffer_amount=0.0)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Trim a smaller section of a large dataset taking into
+consideration transformations into various coordinate
+reference systems (CRS)</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>coords</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,<code>2</code>)</dt>
+<dd>geographical / projected coordinates</dd>
+<dt><strong><code>data</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>values corresponding to coordinates</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>bounding box to trim data</dd>
+<dt><strong><code>buffer</code></strong> :&ensp;<code>float</code></dt>
+<dd>amount of buffer to include (default=0.0)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>coords_trim</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>l</code>,<code>2</code>)</dt>
+<dd>trimmed coordinates</dd>
+<dt><strong><code>data_trim</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>l</code>,<code>2</code>)</dt>
+<dd>trimmed data array</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def trim(coords, data, extent, buffer_amount=0.0):
+    &#34;&#34;&#34;
+    Trim a smaller section of a large dataset taking into
+    consideration transformations into various coordinate
+    reference systems (CRS)
+    
+    Args:
+        coords : array shape (n,2)
+            geographical / projected coordinates
+        data : array shape (n,)
+            values corresponding to coordinates
+        extent : tuple
+            bounding box to trim data
+        buffer : float
+            amount of buffer to include (default=0.0)
+
+    Returns:
+        coords_trim : array shape (l,2)
+            trimmed coordinates
+        data_trim : array shape (l,2)
+            trimmed data array
+    &#34;&#34;&#34;
+    xmin, xmax, ymin, ymax = extent
+
+    # Extract only the data within the extent
+    data_mask = np.ones(data.shape[0], dtype=bool)
+
+    # Add a 1 percent buffer zone
+    x_buffer = buffer_amount*(xmax - xmin)
+    y_buffer = buffer_amount*(ymax - ymin)
+
+    mask_e = coords[:,0] &lt; xmin - x_buffer
+    mask_w = coords[:,0] &gt; xmax + x_buffer
+    mask_n = coords[:,1] &lt; ymin - y_buffer
+    mask_s = coords[:,1] &gt; ymax + y_buffer
+    data_mask[mask_n] = False
+    data_mask[mask_s] = False
+    data_mask[mask_e] = False
+    data_mask[mask_w] = False
+    
+    data_trim = data[data_mask]
+    coords_trim = coords[data_mask]
+
+    return coords_trim, data_trim</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="pycurious" href="index.html">pycurious</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="pycurious.mapping.convert_extent" href="#pycurious.mapping.convert_extent">convert_extent</a></code></li>
+<li><code><a title="pycurious.mapping.export_geotiff" href="#pycurious.mapping.export_geotiff">export_geotiff</a></code></li>
+<li><code><a title="pycurious.mapping.grid" href="#pycurious.mapping.grid">grid</a></code></li>
+<li><code><a title="pycurious.mapping.import_geotiff" href="#pycurious.mapping.import_geotiff">import_geotiff</a></code></li>
+<li><code><a title="pycurious.mapping.transform_coordinates" href="#pycurious.mapping.transform_coordinates">transform_coordinates</a></code></li>
+<li><code><a title="pycurious.mapping.trim" href="#pycurious.mapping.trim">trim</a></code></li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.6.2</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>
