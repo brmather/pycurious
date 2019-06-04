@@ -7,7 +7,7 @@ python:
 
 
 install:
-  - pip3 install Cython numpy pytest git+https://github.com/lmoresi/pdoc.git
+  - pip3 install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
   - pip3 install -e .
 
 script:
