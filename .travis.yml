@@ -26,3 +26,4 @@ deploy:
   on:
     branch: master
   verbose: true
+  local_dir: docs/
