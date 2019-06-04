@@ -1,0 +1,23 @@
+dist: bionic
+language: python
+python:
+  - "3.5"
+  - "3.6"
+  - "3.7"
+
+
+install:
+  - pip3 install Cython numpy pytest git+https://github.com/lmoresi/pdoc.git
+  - pip3 install .
+
+script:
+  - pdoc --html -o docs --force stripy
+
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
+  keep_history: true
+  on:
+    branch: master
+  local_dir: docs/
