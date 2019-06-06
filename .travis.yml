@@ -1,12 +1,31 @@
 language: python
-os:
-  - linux
-  - osx
-python:
-  - "3.5"
-  - "3.6"
-  - "3.7"
 
+# define global environment variables
+env:
+  global:
+    -DEPLOY_DOCS=false
+    -DEPLOY_PYPI=false
+
+matrix:
+  include:
+    - os: linux
+      dist: trusty
+      python: 3.5
+      env:
+        - DEPLOY_DOCS=true
+        - DEPLOY_PYPI=true
+    - os: linux
+      dist: bionic
+      python:
+        - "3.5"
+        - "3.6"
+        - "3.7"
+    - os: osx
+      osx_image: xcode10.2
+      python:
+        - "3.5"
+        - "3.6"
+        - "3.7"
 
 install:
   - pip3 install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
@@ -18,8 +37,8 @@ script:
   - cd docs 
   - pdoc --html -o . --force pycurious
   - mv pycurious/*.html .
-  - rm -rf pycurious/
   - cd ../
+  - rm -rf docs/
 
 deploy:
   provider: pages
@@ -28,5 +47,6 @@ deploy:
   keep_history: true
   on:
     branch: master
+    condition: '$DEPLOY_DOCS == "true"'
   verbose: true
   local_dir: docs/
