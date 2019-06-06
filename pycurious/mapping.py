@@ -26,7 +26,7 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     """
     Transform between any coordinate system.
 
-    Requires pyproj
+    Requires `pyproj`
     """
     import pyproj
     proj_in  = pyproj.Proj("+init=EPSG:"+str(epsg_in))
@@ -38,15 +38,17 @@ def convert_extent(extent_in, epsg_in, epsg_out):
     """
     Transform extent from epsg_in to epsg_out
 
-    Parameters
-    ----------
-     extent_in  : bounding box [minX, maxX, minY, maxY]
-     epsg_in    : CRS of extent
-     epsg_out   : CRS of output
+    Args:
+        extent_in : tuple
+            bounding box [minX, maxX, minY, maxY]
+        epsg_in : int
+            CRS of extent
+        epsg_out : int
+            CRS of output
 
-    Returns
-    -------
-     extent_out : bounding box in new CRS
+    Returns:
+        extent_out : tuple
+            bounding box in new CRS
     """
     xmin, xmax, ymin, ymax = extent_in
     xi = [xmin, xmin, xmax, xmax]
@@ -58,21 +60,25 @@ def convert_extent(extent_in, epsg_in, epsg_out):
 
 def trim(coords, data, extent, buffer_amount=0.0):
     """
-    Grid a smaller section of a large dataset taking into
+    Trim a smaller section of a large dataset taking into
     consideration transformations into various coordinate
     reference systems (CRS)
     
-    Parameters
-    ----------
-     coords      : geographical / projected coordinates
-     data        : values corresponding to coordinates
-     extent      : box contained within the data
-     buffer      : amount of buffer to include (default=0.0)
+    Args:
+        coords : array shape (n,2)
+            geographical / projected coordinates
+        data : array shape (n,)
+            values corresponding to coordinates
+        extent : tuple
+            bounding box to trim data
+        buffer : float
+            amount of buffer to include (default=0.0)
 
-    Returns
-    -------
-     coords_trim : trimmed coordinates
-     data_trim   : trimmed data array
+    Returns:
+        coords_trim : array shape (l,2)
+            trimmed coordinates
+        data_trim : array shape (l,2)
+            trimmed data array
     """
     xmin, xmax, ymin, ymax = extent
 
@@ -104,22 +110,26 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     consideration transformations into various coordinate
     reference systems (CRS)
     
-    Parameters
-    ----------
-     coords   : geographical coordinates
-     data     : values corresponding to coordinates
-     extent   : box contained within the data in espg_out
-                coordinates
-     shape    : size of the box (nrows,ncols)
-              : if None, shape is estimated from coords spacing
-     epsg_in  : CRS of data (if transformation is required)
-     epsg_out : CRS of grid (if transformation is required)
-     kwargs   : keyword arguments to pass to griddata from
-              : scipy.interpolate.griddata
+    Args:
+        coords : array shape (n,2)
+            geographical coordinates
+        data : array shape (n,) 
+            values corresponding to coordinates
+        extent : tuple
+           box contained within the data in espg_out coordinates
+        shape : tuple (nrows,ncols)
+           size of the box, if None, shape is estimated from coords spacing
+        epsg_in : int
+           CRS of data (if transformation is required)
+        epsg_out : int
+           CRS of grid (if transformation is required)
+        kwargs : keyword arguments
+           keyword arguments to pass to griddata from
+           `scipy.interpolate.griddata`
     
-    Returns
-    -------
-     grid     : rectangular section of data bounded by extent
+    Returns:
+        grid : array shape (nrows, ncols)
+            rectangular section of data bounded by extent
     """
     from scipy.interpolate import griddata
     xmin, xmax, ymin, ymax = extent
@@ -177,15 +187,15 @@ def import_geotiff(file_path):
     Import a GeoTIFF to a numpy array and prints
     information of the Coordinate Reference System (CRS)
 
-    Parameters
-    ----------
-     file_path : path to the GeoTIFF
+    Args:
+        file_path : str
+            path to the GeoTIFF
 
-    Returns
-    -------
-     data   : 2D numpy array
-     extent : extent in the projection of the GeoTIFF
-        e.g. [xmin, xmax, ymin, ymax]
+    Returns:
+        data : 2D array
+        extent : tuple
+            extent in the projection of the GeoTIFF
+            e.g. [xmin, xmax, ymin, ymax]
     """
     from osgeo import gdal, osr
     
@@ -214,13 +224,17 @@ def export_geotiff(file_path, array, extent, epsg):
     Export a GeoTIFF from a numpy array projected in a
     predefined Coordinate Reference System (CRS)
 
-    Parameters
-    ----------
-     file_path : str, path to write the GeoTIFF
-     array     : 2D numpy array
-     extent    : extent in the projection of the GeoTIFF
-        e.g. [xmin, xmax, ymin, ymax]
-     epsg      : int, CRS of the GeoTIFF
+    Args:
+        file_path : str
+            path to write the GeoTIFF
+        array: 2D array
+            array to save to GeoTiff
+        extent : tuple
+            extent in the projection of the GeoTIFF
+            e.g. [xmin, xmax, ymin, ymax]
+        epsg : int
+            CRS of the GeoTIFF
+            e.g. 4326 for WGS84
 
     """
     from osgeo import gdal, osr
