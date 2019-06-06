@@ -21,6 +21,10 @@ matrix:
       osx_image: xcode10.2
       python: 3.7
 
+before_install:
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew update ; fi
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew install python --universal --framework ; fi
+
 install:
   - pip3 install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
   - pip3 install -e .
