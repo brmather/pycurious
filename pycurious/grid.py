@@ -34,13 +34,12 @@ class CurieGrid(object):
 
     Grid must be projected in metres
 
-    Parameters
-    ----------
-     grid     : 2D array of magnetic data
-     xmin     : minimum x bound in metres
-     xmax     : maximum x bound in metres
-     ymin     : minimum y bound in metres
-     ymax     : maximum y bound in metres
+    Args:
+     grid : 2D array of magnetic data
+     xmin : minimum x bound in metres
+     xmax : maximum x bound in metres
+     ymin : minimum y bound in metres
+     ymax : maximum y bound in metres
     """
     def __init__(self, grid, xmin, xmax, ymin, ymax):
         
@@ -62,15 +61,17 @@ class CurieGrid(object):
         Extract a subgrid from the data at a window around
         the point (xc,yc)
         
-        Parameters
-        ----------
-         xc      : x coordinate
-         yc      : y coordinate
-         window  : size of window in metres
+        Args:
+            xc : float
+                x coordinate
+            yc : float
+                y coordinate
+            window : float
+                size of window in metres
 
-        Returns
-        -------
-         data    : subgrid
+        Returns:
+            data : 2D array
+                subgrid encompassing window size
         """
 
         # check in coordinate in grid
@@ -105,18 +106,21 @@ class CurieGrid(object):
         """
         Create a list of xc,yc values to extract subgrids.
 
-        Parameters
-        ----------
-         window   : size of the windows in metres
-         spacingX : specify spacing in metres in the X direction
-                  : (optional) will default to maximum X resolution
-         spacingY : specify spacing in metres in the Y direction
-                    (optional) will default to maximum Y resolution
+        Args:
+            window : float
+                size of the windows in metres
+            spacingX : float (optional)
+                specify spacing in metres in the X direction
+                will default to maximum X resolution
+            spacingY : float (optional)
+                specify spacing in metres in the Y direction
+                will default to maximum Y resolution
 
-        Returns
-        -------
-         xc_list  : list of x coordinates
-         yc_list  : list of y coordinates
+        Returns:
+            xc_list : 1D array
+                array of x coordinates
+            yc_list : 1D array
+                array of y coordinates
         """
         
         nx, ny = self.nx, self.ny
@@ -148,13 +152,11 @@ class CurieGrid(object):
         This may come in handy if the magnetic data has not been
         reduced to the pole.
 
-        Parameters
-        ----------
-         data    : 2D numpy array
+        Args:
+            data : 2D numpy array
 
-        Returns
-        -------
-         data    : 2D numpy array
+        Returns:
+         data : 2D numpy array
         """
         data = data.copy()
         nr, nc = data.shape
@@ -170,21 +172,23 @@ class CurieGrid(object):
         """
         Compute the radial spectrum for a square grid.
 
-        Parameters
-        ----------
-         subgrid   : window of the original data
-                   : (see subgrid method)
-         taper     : taper function (np.hanning is default)
-                   : set to None for no taper function
-         scale     : scaling factor to get k into rad/km
-                   : (0.001 by default)
-         kwargs    : keyword arguments to pass to taper
+        Args:
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (default: 0.001)
+                scaling factor to get k into rad/km
+            kwargs : keyword arguments
+                keyword arguments to pass to `taper`
 
-        Returns
-        -------
-         k         : wavenumber in rad/km
-         Phi       : Radial power spectrum
-         sigma_Phi : Standard deviation of Phi
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            Phi : 1D array shape (n,)
+                Radial power spectrum
+            sigma_Phi : 1D array shape (n,)
+                Standard deviation of Phi
         """
 
         data = subgrid
@@ -236,21 +240,23 @@ class CurieGrid(object):
         """
         Compute the log of the radial spectrum for a square grid.
 
-        Parameters
-        ----------
-         subgrid   : window of the original data
-                   : (see subgrid method)
-         taper     : taper function (np.hanning is default)
-                   : set to None for no taper function
-         scale     : scaling factor to get k into rad/km
-                   : (0.001 by default)
-         kwargs    : keyword arguments to pass to taper
+        Args:
+         subgrid : 2D array
+            window of the original data (see subgrid method)
+         taper : function (default=np.hanning)
+            taper function, set to None for no taper function
+         scale : float (detault=0.001)
+            scaling factor to get k into rad/km
+         kwargs : keyword arguments
+            keyword arguments to pass to `taper`
 
-        Returns
-        -------
-         k           : wavenumber in rad/km
-         lnPhi       : log of the radial power spectrum in ln(sqrt(S))
-         lnsigma_Phi : standard deviation of lnPhi
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            lnPhi : 1D array
+                log of the radial power spectrum in ln(sqrt(S))
+            lnsigma_Phi : 1D array
+                standard deviation of lnPhi
         """
 
         data = subgrid
@@ -302,22 +308,25 @@ class CurieGrid(object):
         """
         Compute azimuthal spectrum for a square grid.
 
-        Parameters
-        ----------
-         subgrid   : window of the original data
-                   : (see subgrid method)
-         taper     : taper function (np.hanning is default)
-                   : set to None for no taper function
-         scale     : scaling factor to get k into rad/km
-                   : (0.001 by default)
-         theta     : angle increment in degrees
-         args      : arguments to pass to taper
+        Args:
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (default=0.001)
+                scaling factor to get k into rad/km
+            theta : float
+                angle increment in degrees
+            args : arguments
+                arguments o pass to taper
 
-        Returns
-        -------
-         k         : wavenumber in rad/km
-         Phi       : Radial power spectrum
-         sigma_Phi : Standard deviation of Phi
+        Returns:
+            k : 1D array shape (n,)
+                wavenumber in rad/km
+            Phi : 1D array shape (n,)
+                Radial power spectrum
+            sigma_Phi : 1D array shape (n,)
+                Standard deviation of Phi
         """
         from pycurious import radon
         data = subgrid
@@ -352,7 +361,7 @@ class CurieGrid(object):
 
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
-        """
+        r"""
         Reduce total field magnetic anomaly data to the pole.
 
         The reduction to the pole if a phase transformation that can be
@@ -360,45 +369,47 @@ class CurieGrid(object):
         the data would be if both the Geomagnetic field and the
         magnetization of the source were vertical (Blakely, 1996).
 
-        Parameters
-        ----------
-         data : 1d-array the total field anomaly data at each point.
-         inc  : inclination of the inducing Geomagnetic field
-         dec  : declination of the inducing Geomagnetic field
-         sinc : (optional) inclination of the total magnetization of the anomaly source
-         sdec : (optional) declination of the total magnetization of the anomaly source
-            The total magnetization is the vector sum of the
-            induced and remanent magnetization. If there is only induced
-            magnetization, use the *inc* and *dec* of the Geomagnetic field.
+        Args:
+            data : 1D array
+                the total field anomaly data at each point.
+            inc : float / 1D array
+                inclination of the inducing Geomagnetic field
+            dec : float / 1D array
+                declination of the inducing Geomagnetic field
+            sinc : float / 1D array (optional)
+                inclination of the total magnetization of the anomaly source
+            sdec : float / 1D array (optional)
+                declination of the total magnetization of the anomaly source
+                The total magnetization is the vector sum of the
+                induced and remanent magnetization. If there is only induced
+                magnetization, use the *inc* and *dec* of the Geomagnetic field.
 
-        Returns
-        -------
-         rtp : 2d-array the data reduced to the pole.
+        Returns:
+            rtp : 2D array
+                the data reduced to the pole.
         
-        References
-        ----------
-         Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
-         Applications, Cambridge University Press.
+        References:
+            Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+            Applications, Cambridge University Press.
 
-        Notes
-        -----
-         This functions performs the reduction in the frequency domain
-         (using the FFT). The transform filter is (in the freq domain):
-             RTP(k_x, k_y) = \frac{|k|}{
-                 a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
-                 i|k|(b_1 k_x + b_2 k_y)}
-         in which k_x and k_y are the wave-numbers in the x and y
-         directions and
-             |k| = \sqrt{k_x^2 + k_y^2} \\
-             a_1 = m_z f_z - m_x f_x \\
-             a_2 = m_z f_z - m_y f_y \\
-             a_3 = -m_y f_x - m_x f_y \\
-             b_1 = m_x f_z + m_z f_x \\
-             b_2 = m_y f_z + m_z f_y
-         \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
-         magnetization of the source and
-         \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
-         Geomagnetic field.
+        Notes:
+            This functions performs the reduction in the frequency domain
+            (using the FFT). The transform filter is (in the freq domain):
+                RTP(k_x, k_y) = \frac{|k|}{
+                    a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                    i|k|(b_1 k_x + b_2 k_y)}
+            in which k_x and k_y are the wave-numbers in the x and y
+            directions and
+                |k| = \sqrt{k_x^2 + k_y^2} \\
+                a_1 = m_z f_z - m_x f_x \\
+                a_2 = m_z f_z - m_y f_y \\
+                a_3 = -m_y f_x - m_x f_y \\
+                b_1 = m_x f_z + m_z f_x \\
+                b_2 = m_y f_z + m_z f_y
+            \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+            magnetization of the source and
+            \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+            Geomagnetic field.
         """
         nr, nc = data.shape
 
@@ -432,7 +443,7 @@ class CurieGrid(object):
 
 
     def upward_continuation(self, data, height):
-        """
+        r"""
         Upward continuation of potential field data.
 
         Calculates the continuation through the Fast Fourier Transform in
@@ -444,26 +455,25 @@ class CurieGrid(object):
         upward continue data, \Delta z is the height increase, F denotes
         the Fourier Transform, |k| is the wavenumber modulus.
 
-        Parameters
-        ----------
-         data   : 2D grid -  potential field at the grid points
-         height : float - height increase (delta z) in meters.
+        Args:
+            data   : 2D array
+                potential field at the grid points
+            height : float
+                height increase (delta z) in meters.
         
-        Returns
-        -------
-         cont : array - upward continued data
+        Returns:
+            cont : array
+                upward continued data
 
-        Notes
-        -----
-         It is not possible to get the FFT of a masked grid. The default
-         :func:`fatiando.gridder.interp` call using minimum curvature will
-         not be suitable.  Use extrapolate=True or algorithm='nearest' to
-         get an unmasked grid.
+        Notes:
+            It is not possible to get the FFT of a masked grid. The default
+            :func:`fatiando.gridder.interp` call using minimum curvature will
+            not be suitable.  Use extrapolate=True or algorithm='nearest' to
+            get an unmasked grid.
 
-        References
-        ----------
-         Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
-         Applications, Cambridge University Press.
+        References:
+            Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
+            Applications, Cambridge University Press.
         """
         nr, nc = data.shape
 
@@ -494,27 +504,31 @@ def bouligand2009(kh, beta, zt, dz, C):
 
     Equation (4) of Bouligand et al. (2009)
 
-    Parameters
-    ----------
-     kh    : wavenumber in rad/km
-     beta  : fractal parameter
-     zt    : top of magnetic sources
-     dz    : thickness of magnetic sources
-     C     : field constant (Maus et al., 1997)
+    Args:
+        kh : float / 1D array
+            wavenumber in rad/km
+        beta : float / 1D array
+            fractal parameter
+        zt : float / 1D array
+            top of magnetic sources
+        dz : float / 1D array
+            thickness of magnetic sources
+        C : float 1D array
+            field constant (Maus et al., 1997)
 
-    Returns
-    -------
-     Phi   : radial power spectrum of magnetic anomalies
+    Returns:
+        Phi : float / 1D array
+            radial power spectrum of magnetic anomalies
 
-    References
-    ----------
-     Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
-       temperature depth in the western United States with a fractal model for
-       crustal magnetization, J. Geophys. Res., 114, B11104,
-       doi:10.1029/2009JB006494
-     Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
-       estimation using a self-similar magnetization model, Geophys. J. Int.,
-       129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+        estimation using a self-similar magnetization model, Geophys. J. Int.,
+        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
     # from scipy.special import kv
     khdz = kh*dz
@@ -532,19 +546,25 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
     """
     Compute weighted linear fit of Phi over spatial frequency window kmin:kmax
 
-    Parameters
-    ----------
-     k           : wavenumber in rad/km
-     lnPhi       : log of the radial power spectrum (see power_spectrum_log)
-                   expected in ln(sqrt(S)) form
-     sigma_lnPhi : standard deviation of lnPhi
-     kmin,kmax   : minimum and maximum range of spatial frequencies to fit.
-                   Ideally low frequency, straight-ish line
+    Args:
+        k : float / 1D-array
+            wavenumber in rad/km
+        lnPhi : float / 1D array
+            log of the radial power spectrum (see power_spectrum_log)
+            expected in ln(sqrt(S)) form
+        sigma_lnPhi : standard deviation of lnPhi
+        kmin_range : tuple (default:(0.05, 0.2))
+            minimum and maximum range of spatial frequencies to fit for the 
+            top of magnetic sources - ideally low frequency, straight line
+        kmax_range : tuple (default:(0.05, 0.2))
+            minimum and maximum range of spatial frequencies to fit for the
+            bottom of magnetic source - ideally low frequency, straight line
 
-    Returns
-    -------
-     (Ztr, btr, dZtr) : gradient, intercept, error for the top of magnetic sources
-     (Zor, bor, dZor) : gradient, intercept, error for the bottom of magnetic sources
+    Returns:
+        upper_source : tuple
+            (Ztr,btr,dZtr) gradient, intercept, error for the top of magnetic sources
+        lower_source : tuple
+            (Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources
 
     """
     # for now...
@@ -603,17 +623,21 @@ def ComputeTanaka(Ztr, dZtr, Zor, dZor):
     """
     Compute the Curie depth from the results of tanaka1999
 
-    Parameters
-    ----------
-     Ztr    : top of the magnetic source
-     dZtr   : error of Ztr
-     Zor    : bottom of the magnetic source
-     dZor   : error of Zor
+    Args:
+        Ztr : float / 1D array
+            top of the magnetic source
+        dZtr : float / 1D array
+            error of Ztr
+        Zor : float / 1D array 
+            bottom of the magnetic source
+        dZor : float / 1D array
+            error of Zor
 
-    Returns
-    -------
-     Zb     : estimated Curie point depth
-     eZb    : error of Zb
+    Returns:
+        Zb : float / 1D array
+            estimated Curie point depth
+        eZb : float / 1D array
+            error of `Zb`
     """
     Zb = 2.0*Zor - Ztr
     dZb  = 2.0*dZor - dZtr
@@ -629,26 +653,29 @@ def maus1995(beta, zt, kh, C=0.0):
     overflow errors which occur for the second term
     in Bouligand et al. (2009).
 
-    Parameters
-    ----------
-     beta  : fractal parameter
-     zt    : top of magnetic sources
-     kh    : norm of the wave number in the horizontal plane
-     C     : field constant (Maus et al., 1997)
+    Args:
+        beta : float / 1D array
+            fractal parameter
+        zt : float / 1D array
+            top of magnetic sources
+        kh : float / 1D array
+            norm of the wave number in the horizontal plane
+        C : float / 1D array
+            field constant (Maus et al., 1997)
 
-    Returns
-    -------
-     Phi  : radial power spectrum of magnetic anomalies
+    Returns:
+        Phi : float / 1D array
+            radial power spectrum of magnetic anomalies
 
-    References
-    ----------
-     Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
-       temperature depth in the western United States with a fractal model for
-       crustal magnetization, J. Geophys. Res., 114, B11104,
-       doi:10.1029/2009JB006494
-     Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
-       estimation using a self-similar magnetization model, Geophys. J. Int.,
-       129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Maus, S., D. Gordon, and D. Fairhead (1997), Curie temperature depth
+        estimation using a self-similar magnetization model, Geophys. J. Int.,
+        129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
     return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)
 
@@ -665,28 +692,24 @@ def ang2vec(intensity, inc, dec):
     """
     Convert intensity, inclination and  declination to a 3-component vector
 
-    Parameter
-    ---------
-     intensity : float or array
-        The intensity (norm) of the vector
-     inc : float
-        The inclination of the vector (in degrees)
-     dec : float
-        The declination of the vector (in degrees)
+    Args:
+        intensity : float or 1D array
+            The intensity (norm) of the vector
+        inc : float
+            The inclination of the vector (in degrees)
+        dec : float
+            The declination of the vector (in degrees)
 
-    Returns
-    -------
-     vec : array = [x, y, z]
-        The vector
+    Returns:
+        vec : array = [x, y, z]
+            3-component vector
 
-    Notes
-    -----
-     Coordinate system is assumed to be x->North, y->East, z->Down.
-     Inclination is positive down and declination is measured with respect
-     to x (North).
+    Notes:
+        Coordinate system is assumed to be x->North, y->East, z->Down.
+        Inclination is positive down and declination is measured with respect
+        to x (North).
 
-    Examples
-    --------
+    Examples:
         >>> import numpy
         >>> print ang2vec(3, 45, 45)
         [ 1.5         1.5         2.12132034]
@@ -705,23 +728,20 @@ def dircos(inc, dec):
     Returns the 3 coordinates of a unit vector given its inclination and
     declination.
 
-    Parameters
-    ----------
-     inc : float
-        The inclination of the vector (in degrees)
-     dec : float
-        The declination of the vector (in degrees)
+    Args:
+        inc : float
+            The inclination of the vector (in degrees)
+        dec : float
+            The declination of the vector (in degrees)
 
-    Returns
-    -------
-     vect : list = [x, y, z]
-        The unit vector
+    Returns:
+        vect : list
+            The unit vector = [x, y, z]
 
-    Notes
-    -----
-     Coordinate system is assumed to be x->North, y->East, z->Down.
-     Inclination is positive down and declination is measured with respect
-     to x (North).
+    Notes:
+        Coordinate system is assumed to be x->North, y->East, z->Down.
+        Inclination is positive down and declination is measured with respect
+        to x (North).
     """
     d2r = np.pi/180.0
     vect = [np.cos(d2r * inc) * np.cos(d2r * dec), \
