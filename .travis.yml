@@ -19,7 +19,7 @@ matrix:
       python: 3.7
     - os: osx
       osx_image: xcode10.2
-      python: 3.5
+      python: 3.7
 
 install:
   - pip3 install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
