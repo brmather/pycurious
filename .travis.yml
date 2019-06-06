@@ -16,16 +16,10 @@ matrix:
         - DEPLOY_PYPI=true
     - os: linux
       dist: bionic
-      python:
-        - "3.5"
-        - "3.6"
-        - "3.7"
+      python: 3.7
     - os: osx
       osx_image: xcode10.2
-      python:
-        - "3.5"
-        - "3.6"
-        - "3.7"
+      python: 3.5
 
 install:
   - pip3 install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
@@ -37,8 +31,8 @@ script:
   - cd docs 
   - pdoc --html -o . --force pycurious
   - mv pycurious/*.html .
+  - rm -rf pycurious/
   - cd ../
-  - rm -rf docs/
 
 deploy:
   provider: pages
