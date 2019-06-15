@@ -13,7 +13,8 @@ WORKDIR /home/jovyan/
 
 RUN python3 -m pip install --no-cache-dir --upgrade \
 	jupyter \
-	pytest
+	pytest \
+	git+https://github.com/lmoresi/pdoc.git
 
 ### PyCurious - Notebooks
 

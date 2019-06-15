@@ -2,6 +2,8 @@
 
 [![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/brmather/pycurious.svg)](https://hub.docker.com/r/brmather/pycurious)
 [![PyPI](https://img.shields.io/pypi/v/pycurious.svg)](https://pypi.org/project/pycurious/)
+[![DOI](https://zenodo.org/badge/123281222.svg)](https://zenodo.org/badge/latestdoi/123281222)
+[![Build Status](https://travis-ci.org/brmather/pycurious.svg?branch=master)](https://travis-ci.org/brmather/pycurious)
 
 Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. The most prevalent magnetic mineral is magnetite, which has a Curie point of 580C, thus the Curie depth is often interpreted as the 580C isotherm.
 

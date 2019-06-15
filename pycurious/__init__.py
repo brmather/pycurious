@@ -20,8 +20,5 @@ along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 from .documentation import install_documentation
 from .grid import CurieGrid, bouligand2009, tanaka1999, maus1995, ComputeTanaka
 from .optimise import CurieOptimise
-from .mapping import transform_coordinates
-from .mapping import convert_extent
-from .mapping import trim
-from .mapping import grid
-from .mapping import import_geotiff
+from . import mapping
+from . import download
