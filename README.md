@@ -17,7 +17,14 @@ Launch the demonstration at [mybinder.org](https://mybinder.org/v2/gh/brmather/p
 
 ## Navigation / Notebooks
 
-There are two matching sets of `pycurious` notebooks - one set for the [Tanaka](#Tanaka) and one for [Bouligand](#Bouligand) implementations. The Bouligand set of noteboks are a natural choice for Bayesian inference applications.
+There are two matching sets of Jupyter notebooks - one set for the [Tanaka](#Tanaka) and one for [Bouligand](#Bouligand) implementations. The Bouligand set of noteboks are a natural choice for Bayesian inference applications.
+
+Note, these examples can be installed from the package itself by running:
+
+```python
+import pycurious
+pycurious.install_documentation(path="Notebooks")
+```
 
 ### Tanaka
 
@@ -33,13 +40,43 @@ There are two matching sets of `pycurious` notebooks - one set for the [Tanaka](
 - [Ex4-Spatial-variation-of-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
 - [Ex5-Mapping-Curie-depth-EMAG2.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
 
-## Examples
 
-Note, these examples can be installed from the package itself by running:
+## Installation
 
-```python
-import pycurious
-pycurious.install_documentation(path="Notebooks")
+### Dependencies
+
+You will need **Python 2.7 or 3.5+**.
+Also, the following packages are required:
+
+- [`numpy`](http://numpy.org)
+- [`scipy`](https://scipy.org)
+- [`cython`](https://cython.org/)
+
+__Optional dependencies__ for mapping module and running the Notebooks:
+
+- [`matplotlib`](https://matplotlib.org/)
+- [`pyproj`](https://github.com/jswhit/pyproj)
+- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
+
+### Installing using pip
+
+You can install `pycurious` using the
+[`pip package manager`](https://pypi.org/project/pip/) with either version of Python:
+
+```bash
+python2 -m pip install pycurious
+python3 -m pip install pycurious
+```
+All the dependencies will be automatically installed by `pip`.
+
+### Installing using Docker
+
+A more straightforward installation for `pycurious` and all of its dependencies may be deployed with [Docker](https://www.docker.com).
+To install the docker image and start the Jupyter notebook examples:
+
+```bash
+docker pull brmather/pycurious:latest
+docker run --name pycurious -p 8888:8888 brmather/pycurious:latest
 ```
 
 ## Usage
@@ -66,43 +103,19 @@ subgrid = grid.subgrid(window_size, x, y)
 k, Phi, sigma_Phi = grid.radial_spectrum(subgrid)
 ```
 
-## Installation
-
-To install with **setuptools**:
-
-```bash
-python setup.py install --user
-```
-
-This will compile all C source code and install them to the user directory (omit the `--user` flag to install to the system directory). Remember to delete the build folder if you are upgrading this package.
-
-Alternatively, install using **pip**:
+A series of tests are located in the *tests* subdirectory.
+In order to perform these tests, clone the repository and run [`pytest`](https://pypi.org/project/pytest/):
 
 ```bash
-pip install pycurious --user
+git checkout https://github.com/brmather/pycurious.git
+cd pycurious
+pytest -v
 ```
 
-### Dependencies
+### API Documentation
 
-- Python 2.7+ and 3.6+
-- Numpy 1.9+
-- Scipy 0.14+
-- Cython
+The API for all functions and classes in `pycurious` can be accessed from [https://brmather.github.io/pycurious/](https://brmather.github.io/pycurious/).
 
-Optional dependencies for mapping module:
-
-- Matplotlib
-- [pyproj](https://github.com/jswhit/pyproj)
-- [Cartopy](http://scitools.org.uk/cartopy/docs/latest/index.html)
-
-### Docker
-
-A more straightforward installation for `pycurious` and all of its dependencies may be deployed with [Docker](https://www.docker.com). To install the docker image and test it is working:
-
-```bash
-docker pull brmather/pycurious:latest
-docker run --rm brmather/pycurious:latest help
-```
 
 ## References
 

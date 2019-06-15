@@ -11,10 +11,13 @@ FROM ${FROMIMG_ARG}
 USER root
 WORKDIR /home/jovyan/
 
+RUN apk add \
+    libxml2-dev \
+    libxslt-dev 
+
 RUN python3 -m pip install --no-cache-dir --upgrade \
-	jupyter \
-	pytest \
-	git+https://github.com/lmoresi/pdoc.git
+    jupyter \
+    pytest
 
 ### PyCurious - Notebooks
 
