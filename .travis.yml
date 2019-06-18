@@ -30,6 +30,8 @@ install:
   - python3 -m pip install -e .
 
 script:
+  # generate the release
+  - python3 setup.py sdist
   # generate the docs
   - mkdir docs
   - cd docs 
@@ -39,12 +41,19 @@ script:
   - cd ../
 
 deploy:
-  provider: pages
-  skip_cleanup: true
-  github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
-  keep_history: true
-  on:
-    branch: master
-    condition: '$DEPLOY_DOCS == "true"'
-  verbose: true
-  local_dir: docs/
+  - provider: pages
+    skip_cleanup: true
+    github_token: $GITHUB_TOKEN  # Set in the settings page of your repository, as a secure variable
+    keep_history: true
+    on:
+      branch: master
+      condition: '$DEPLOY_DOCS == "true"'
+    verbose: true
+    local_dir: docs/
+  - provider: pypi
+    user: $PYPI_USERNAME
+    password: $PYPI_PASSWORD
+    on:
+      tags: true
+      condition: '$DEPLOY_PYPI == true'
+    skip_cleanup: true
