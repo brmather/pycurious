@@ -17,4 +17,8 @@ along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 # -*- coding: utf-8 -*-
-from .curie import *
+from .documentation import install_documentation
+from .grid import CurieGrid, bouligand2009, tanaka1999, maus1995, ComputeTanaka
+from .optimise import CurieOptimise
+from . import mapping
+from . import download
