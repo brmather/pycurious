@@ -1,4 +1,4 @@
-## Code to generate test magnetic data for testing of PyCurious methods
+## Code to generate test magnetic data for PyCurious examples
 ## Converted from MATLAB code by R Delhaye. 
 #Original code:
 #Claire Bouligand
@@ -7,7 +7,6 @@
 #Modified to use less memory
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pycurious
 import time
 
@@ -123,7 +122,7 @@ print("--- %s seconds ---" % (time.time() - start_time))
 
 x=np.arange(0.5,0.5+dlx*(nx),dlx)*1000
 y=np.arange(0.5,0.5+dly*(nx),dly)*1000
-fid=open("test_mag_data.txt","w+")
+fid=open("../data/test_mag_data.txt","w+")
 for i in range(0,nx):
     for j in range(0,ny):
         fid.write(' '.join([str(x[i]),str(y[j]),str(np.real(ANO[i,j])),"\n"]))
