@@ -1,5 +1,6 @@
 include README.md
 include MANIFEST.in
+include CONTRIBUTING.md
 include COPYING
 include COPYING.LESSER
 include setup.cfg
@@ -7,7 +8,4 @@ include src/*
 include __init__.py
 recursive-include pycurious/*.py
 recursive-include pycurious/*.ipynb
-include docs/*
 include tests/*.py
-
-

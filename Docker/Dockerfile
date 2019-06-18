@@ -34,6 +34,10 @@ RUN chown -R jovyan:jovyan /home/jovyan
 USER jovyan
 
 
+# Run the tests with PyTest
+RUN cd $MODULE_DIR && pytest tests/
+
+
 ## These are supplied by the build script
 ## build-dockerfile.sh
 
