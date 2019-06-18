@@ -2,11 +2,9 @@
 #  Short docker file to distribute some notebooks
 #################################################
 
-ARG FROMIMG_ARG=brmather/pycurious:latest
+ARG FROMIMG_ARG=brmather/pycurious:0.3
 FROM ${FROMIMG_ARG}
 
-ENV NB_USER jovyan
-RUN chown -R jovyan:jovyan /home/jovyan
 USER jovyan
 
 WORKDIR /home/jovyan
