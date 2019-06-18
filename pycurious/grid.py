@@ -162,8 +162,8 @@ class CurieGrid(object):
         nr, nc = data.shape
         xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
 
-        A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
-        c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+        A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
+        c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
         data.flat[:] -= np.dot(A, c)
         return data
