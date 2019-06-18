@@ -30,6 +30,8 @@ install:
   - python3 -m pip install -e .
 
 script:
+  # run the tests
+  - pytest tests/
   # generate the release
   - python3 setup.py sdist
   # generate the docs
