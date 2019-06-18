@@ -201,8 +201,8 @@ class CurieGrid(object):
         nr, nc = data.shape
         xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
 
-        A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
-        c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+        A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
+        c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
         data.flat[:] -= np.dot(A, c)
         return data
@@ -1388,8 +1388,8 @@ ymax : maximum y bound in metres</p></section>
         nr, nc = data.shape
         xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
 
-        A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
-        c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+        A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
+        c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
         data.flat[:] -= np.dot(A, c)
         return data
@@ -1727,7 +1727,7 @@ ymax : maximum y bound in metres</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f382f5366a8>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fb6ff4c76a8>, scale=0.001, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
@@ -1880,7 +1880,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f382f5366a8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fb6ff4c76a8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
@@ -1975,7 +1975,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f382f5366a8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fb6ff4c76a8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
@@ -2235,8 +2235,8 @@ data : 2D numpy array</p></section>
     nr, nc = data.shape
     xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
 
-    A = np.column_stack((x.flatten(), y.flatten(), np.ones(x.size)))
-    c, resid, rank, sigma = np.linalg.lstsq(A, data.flatten())
+    A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
+    c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
     data.flat[:] -= np.dot(A, c)
     return data</code></pre>
