@@ -19,7 +19,7 @@ from os import path
 import io
 
 ## in development set version to none and ...
-PYPI_VERSION = "0.3.1"
+PYPI_VERSION = "0.3.2"
 
 # Return the git revision as a string (from numpy)
 def git_version():
@@ -75,7 +75,7 @@ if __name__ == "__main__":
           setup_requires    = ['pytest-runner', 'webdav'],
           tests_require     = ['pytest', 'webdav'],
           packages          = ['pycurious'],
-          package_data      = {'pycurious': ['Examples/data/*',
+          package_data      = {'pycurious': ['Examples/data/test_mag_data.txt',
                                              'Examples/*.ipynb',
                                              'Examples/Notebooks/Tanaka/*.ipynb',
                                              'Examples/Notebooks/Bouligand/*.ipynb',
