@@ -1,4 +1,4 @@
-# PyCurious
+![PyCurious](https://github.com/brmather/pycurious/blob/master/pycurious/Examples/Images/pycurious-logo.png?raw=true)
 
 [![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/brmather/pycurious.svg)](https://hub.docker.com/r/brmather/pycurious)
 [![PyPI](https://img.shields.io/pypi/v/pycurious.svg)](https://pypi.org/project/pycurious/)
