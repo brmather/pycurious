@@ -1,19 +1,35 @@
+# Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+
 """
-Copyright 2018 Ben Mather, Robert Delhaye
+This PyCurious module contains the `pycurious.optimise.CurieOptimise` class,
+which inherits the `pycurious.grid.CurieGrid` class with added functionality for:
 
-This file is part of PyCurious.
+- Fitting the synthetic power spectrum \\( \\Phi \\) computed with `pycurious.grid.bouligand2009`
+- Defining an objective function with a flexible interface for adding *a priori* and likelihood functions
+- Parallel decomposition of routines to compute the optimal radial power spectrum, and thus Curie depth
+- Metropolis-Hastings algorithm and sensitivity analysis to estimate the uncertainty of the posterior
 
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
+The posterior is defined as
 
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+\\( P(\\mathbf{m}|\\mathbf{d}) = P(\\beta, z_t, \\Delta z, C|\\Phi_d) \\)
 
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+where \\( \\beta, z_t, \\Delta z, C \\) are input parameters to `pycurious.grid.bouligand2009` and
+\\( \\Phi_d \\) is the radial power spectrum computed from a FFT over square windows of the magnetic
+anomaly in `pycurious.grid.CurieGrid.radial_spectrum`.
 """
 
 # -*- coding: utf-8 -*-
@@ -31,8 +47,9 @@ except: pass
 
 class CurieOptimise(CurieGrid):
     """
-    Extends the CurieGrid class to include optimisation routines
-    see scipy.optimize.minimize for a description of the algorithm
+    Extends the `pycurious.grid.CurieGrid` class to include
+    optimisation routines see `scipy.optimize.minimize` for
+    a description of the algorithm.
 
     Args:
         grid : 2D numpy array
@@ -48,9 +65,9 @@ class CurieOptimise(CurieGrid):
     
     Attributes:
         bounds : list of tuples
-            lower and upper bounds for beta, zt, dz, C
-        prior  : dict
-            dictionary of priors for beta, zt, dz, C
+            lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
+        prior : dict
+            dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
     """
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
@@ -73,10 +90,10 @@ class CurieOptimise(CurieGrid):
     def add_prior(self, **kwargs):
         """
         Add a prior to the dictionary (tuple)
-        Available priors are beta, zt, dz, C
+        Available priors are \\( \\beta, z_t, \\Delta z, C \\)
 
         Assumes a normal distribution or
-        define another distribution from scipy.stats
+        define another distribution from `scipy.stats`
 
         Usage:
             >>> add_prior(beta=(p, sigma_p))
@@ -120,7 +137,7 @@ class CurieOptimise(CurieGrid):
             >>> objective_routine(beta=2.5)
 
         Returns:
-            misfit  : float
+            misfit : float
                 misfit integrated over all observations and priors
         """
         c = 0.0
@@ -144,7 +161,7 @@ class CurieOptimise(CurieGrid):
             sigma_x0 : float, ndarray
 
         Returns:
-            misfit   : float
+            misfit : float
         """
         return 0.5*np.sum((x - x0)**2/sigma_x0**2)
 
@@ -155,20 +172,20 @@ class CurieOptimise(CurieGrid):
 
         Args:
             x : array shape (n,)
-                array of variables [beta, zt, dz, C]
+                array of variables \\( \\beta, z_t, \\Delta z, C \\)
             kh : array shape (n,)
                 wavenumbers (rad/km)
             Phi : array shape (n,)
-                radial power spectrum
+                radial power spectrum \\( \\Phi \\)
             sigma_Phi : array shape (n,)
-                standard deviation of Phi
+                standard deviation of Phi, \\( \\sigma_{\\Phi} \\)
 
         Returns:
-            misfit    : float
-                sum of misfit (float)
+            misfit : float
+                sum of misfit (scalar)
 
         Notes:
-            We purposely ignore all warnings raised by the bouligand2009
+            We purposely ignore all warnings raised by the `pycurious.grid.bouligand2009`
             function because some combinations of input parameters will
             trigger an out-of-range warning that will crash the minimiser.
             Instead, the misfit is set to a very large number when this occurs.
@@ -188,11 +205,11 @@ class CurieOptimise(CurieGrid):
 
     def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
-        Find the optimal parameters of beta, zt, dz, C for a given
-        centroid (xc,yc) and window size.
+        Find the optimal parameters of \\( \\beta, z_t, \\Delta z, C \\)
+        for a given centroid (xc,yc) and window size.
 
         Args:
-            window  : float
+            window : float
                 size of window in metres
             xc : float
                 centroid x values
@@ -206,7 +223,7 @@ class CurieOptimise(CurieGrid):
                 thickness of magnetic layer (starting value)
             C : float
                 field constant (starting value)
-            taper : taper (default=np.hanning)
+            taper : taper (default=`numpy.hanning`)
                 taper function, set to None for no taper function
             process_subgrids : function
                 a custom function to process the subgrid
@@ -270,22 +287,22 @@ class CurieOptimise(CurieGrid):
         along with any additional arguments or keyword arguments.
 
         Args:
-         window : float
-            size of window in metres
-         xc_list : array shape (l,)
-            centroid x values
-         yc_list : array shape (l,)
-            centroid y values
-         func : function
-            Python function to evaluate in parallel
-         args : arguments
-            additional arguments to pass to func
-         kwargs : keyword arguments
-            additional keyword arguments to pass to func
+            window : float
+                size of window in metres
+            xc_list : array shape (l,)
+                centroid x values
+            yc_list : array shape (l,)
+                centroid y values
+            func : function
+                Python function to evaluate in parallel
+            args : arguments
+                additional arguments to pass to `func`
+            kwargs : keyword arguments
+                additional keyword arguments to pass to `func`
 
         Returns:
-            out : list
-                (depends on output of func - see notes)
+            out : list of lists
+                (depends on output of `func` - see notes)
 
         Usage:
             An obvious use case is to compute the Curie depth for many
@@ -295,16 +312,33 @@ class CurieOptimise(CurieGrid):
         
             Each centroid is assigned a new process and sent to a free processor
             to compute. In this case, the output is separate lists of shape(l,)
-            for beta, zt, dz, and C.
+            for \\( \\beta, z_t, \\Delta z, C \\). If `len(xc_list)=2` then,
+
+            >>> self.parallelise_routine(window, [x1,x2], [y1, y2], self.optimise)
+            [[beta1  beta2], [zt1  zt2], [dz1  dz2], [C1  C2]]
 
             Another example is to parallelise the sensitivity analysis:
 
             >>> self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
 
-            This time the output will be a list of lists for beta, zt, dz, and C
-            i.e. if nc=2 is the number of centroids and nsim=4 is the number of
-            simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
-            will be returned for beta, zt, dz, and C.
+            This time the output will be a list of lists for \\( \\beta, z_t, \\Delta z, C \\)
+            i.e. if `len(xc_list)=2` is the number of centroids and `nsim=4` is the number of
+            simulations then separatee lists will be returned for \\( \\beta, z_t, \\Delta z, C \\).
+
+            >>> self.parallelise_routine(window, [x1,x2], [y1,y2], self.sensitivity, 4)
+
+            which would return:
+
+            ```python
+            [[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
+              [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
+             [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
+              [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
+             [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
+              [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
+             [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
+              [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
+            ```
         """
 
         n = len(xc_list)
@@ -367,7 +401,7 @@ class CurieOptimise(CurieGrid):
     def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the optimal values
-        of beta, zt, dz, C for a given window size.
+        of \\( \\beta, z_t, \\Delta z, C \\) for a given window size.
         
         Args:
             window : float
@@ -385,12 +419,12 @@ class CurieOptimise(CurieGrid):
             C : float
                 field constant
             taper : function
-                taper function (default=np.hanning)
+                taper function (default=`numpy.hanning`)
                 set to None for no taper function
-         process_subgrids : func
-            a custom function to process the subgrid
-         kwargs : keyword arguments
-            to pass to radial_spectrum.
+            process_subgrids : func
+                a custom function to process the subgrid
+            kwargs : keyword arguments
+                to pass to radial_spectrum.
 
         Returns:
             beta : ndarray shape (l,)
@@ -410,8 +444,9 @@ class CurieOptimise(CurieGrid):
         """
         MCMC algorithm using a Metropolis-Hastings sampler.
 
-        Evaluates a Markov-Chain for starting values of beta, zt, dz, C
-        and returns the ensemble of model realisations.
+        Evaluates a Markov-Chain for starting values of
+        \\( \\beta, z_t, \\Delta z, C \\) and returns the
+        ensemble of model realisations.
         
         Args:
             window : float
@@ -426,7 +461,8 @@ class CurieOptimise(CurieGrid):
                 number of burn-in simulations before to nsim
             x_scale: float(4) (optional)
                 scaling factor for new proposals
-                default is [1,1,1,1] for [beta, zt, dz, C] - see notes
+                (default=`[1,1,1,1]` for `[beta, zt, dz, C]`)
+                - see notes
             beta : float
                 fractal parameter (starting value)
             zt : float
@@ -447,9 +483,10 @@ class CurieOptimise(CurieGrid):
                 field constant
 
         Notes:
-            nsim, burnin, and x_scale should be tweaked for optimal performance
-            Use starting values of beta, zt, dz, C relatively close to the solution
-            - C can easily found from the mean of the radial power spectrum.
+            `nsim`, `burnin`, and `x_scale` should be tweaked for optimal performance
+            Use starting values of \\( \\beta, z_t, \\Delta z, C \\) relatively
+            close to the solution - \\( C \\) can easily found from the mean of the
+            radial power spectrum.
 
             During the burn-in stage we apply tempering to the PDF to iterate closer
             towards the solution. This has the effect of smoothing out the posterior
@@ -519,8 +556,9 @@ class CurieOptimise(CurieGrid):
     def sensitivity(self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         """
         Iterate through a list of centroids to compute the mean and
-        standard deviation of beta, zt, dz, C by perturbing their
-        prior distributions (if provided by the user - see add_prior).
+        standard deviation of \\( \\beta, z_t, \\Delta z, C \\) by
+        perturbing their prior distributions
+        (if provided by the user - see add_prior).
         
         Args:
             nsim : int
@@ -532,7 +570,7 @@ class CurieOptimise(CurieGrid):
             yc : float
                 centroid y values
             nsim : int
-                - number of simulations
+                number of simulations
             beta : float
                 starting fractal parameter 
             zt : float

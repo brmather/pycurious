@@ -5,7 +5,7 @@
 [![DOI](https://zenodo.org/badge/123281222.svg)](https://zenodo.org/badge/latestdoi/123281222)
 [![Build Status](https://travis-ci.org/brmather/pycurious.svg?branch=master)](https://travis-ci.org/brmather/pycurious)
 
-Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. The most prevalent magnetic mineral is magnetite, which has a Curie point of 580C, thus the Curie depth is often interpreted as the 580C isotherm.
+Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. The most prevalent magnetic mineral is magnetite, which has a Curie point of 580°C, thus the Curie depth is often interpreted as the 580°C isotherm.
 
 Current methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum. `pycurious` implements the Tanaka *et al.* (1999) and Bouligand *et al.* (2009) methods for computing the thickness of a buried magnetic source, which are covered within Jupyter notebooks.
 
@@ -28,17 +28,17 @@ pycurious.install_documentation(path="Notebooks")
 
 ### Tanaka
 
-- [Ex1-Plot-power-spectrum.ipynb](pycurious-src/pycurious/Examples/Notebooks/Tanaka/Ex1-Plot-power-spectrum.ipynb)
-- [Ex2-Compute-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb)
-- [Ex3-Parameter-exploration.ipynb](pycurious-src/pycurious/Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb)
+- [Ex1-Plot-power-spectrum.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex1-Plot-power-spectrum.ipynb)
+- [Ex2-Compute-Curie-depth.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb)
+- [Ex3-Parameter-exploration.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb)
 
 ### Bouligand
 
-- [Ex1-Plot-power-spectrum.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb)
-- [Ex2-Compute-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb)
-- [Ex3-Posing-the-inverse-problem.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb)
-- [Ex4-Spatial-variation-of-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
-- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
+- [Ex1-Plot-power-spectrum.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb)
+- [Ex2-Compute-Curie-depth.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb)
+- [Ex3-Posing-the-inverse-problem.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb)
+- [Ex4-Spatial-variation-of-Curie-depth.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
+- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
 
 
 ## Installation
