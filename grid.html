@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.6.3.dev1+g3e64fe2" />
 <title>pycurious.grid API documentation</title>
-<meta name="description" content="Copyright 2018 Ben Mather, Robert Delhaye …" />
+<meta name="description" content="This PyCurious module contains the `pycurious.grid.CurieGrid` class,
+which can be initialised with a magnetic grid of equal spacing in the x and y …" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
@@ -22,37 +23,61 @@
 <h1 class="title">Module <code>pycurious.grid</code></h1>
 </header>
 <section id="section-intro">
-<p>Copyright 2018 Ben Mather, Robert Delhaye</p>
-<p>This file is part of PyCurious.</p>
-<p>PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.</p>
-<p>PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-See the
-GNU Lesser General Public License for more details.</p>
-<p>You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.
-If not, see <a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>.</p>
+<p>This PyCurious module contains the <a title="pycurious.grid.CurieGrid" href="#pycurious.grid.CurieGrid"><code>CurieGrid</code></a> class,
+which can be initialised with a magnetic grid of equal spacing in the x and y direction.
+It contains methods for the following functionality:</p>
+<ul>
+<li>Decomposition of subgrids for processing square windows of the magnetic anomaly</li>
+<li>Removing linear trends from the magnetic anomaly</li>
+<li>Upward continuation</li>
+<li>Reduction to the pole</li>
+</ul>
+<p>Other functions within this module are useful to compute analytical solutions
+of the radial power spectrum, <script type="math/tex"> \Phi </script> according to Bouligand <em>et al.</em> (2009),
+Maus and Dimri (1995), and the decomposition of <script type="math/tex"> \Phi </script> from the magnetic
+anomaly according to Tanaka <em>et al.</em> (1999):</p>
+<ul>
+<li><a title="pycurious.grid.bouligand2009" href="#pycurious.grid.bouligand2009"><code>bouligand2009()</code></a>: analytic solution used in <a title="pycurious.optimise.CurieOptimise" href="optimise.html#pycurious.optimise.CurieOptimise"><code>CurieOptimise</code></a></li>
+<li><a title="pycurious.grid.maus1995" href="#pycurious.grid.maus1995"><code>maus1995()</code></a>: simplified version of <code>pycurious.bouligand2009</code> without higher order integration.</li>
+<li><a title="pycurious.grid.tanaka1999" href="#pycurious.grid.tanaka1999"><code>tanaka1999()</code></a>: to be used in conjunction with <code>pycurious.ComputeTanaka</code></li>
+</ul>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">&#34;&#34;&#34;
-Copyright 2018 Ben Mather, Robert Delhaye
+<pre><code class="python"># Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
-This file is part of PyCurious.
+&#34;&#34;&#34;
+This PyCurious module contains the `pycurious.grid.CurieGrid` class,
+which can be initialised with a magnetic grid of equal spacing in the x and y direction.
+It contains methods for the following functionality:
 
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
+- Decomposition of subgrids for processing square windows of the magnetic anomaly
+- Removing linear trends from the magnetic anomaly
+- Upward continuation
+- Reduction to the pole
 
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+Other functions within this module are useful to compute analytical solutions
+of the radial power spectrum, \\( \\Phi \\) according to Bouligand *et al.* (2009),
+Maus and Dimri (1995), and the decomposition of \\( \\Phi \\) from the magnetic
+anomaly according to Tanaka *et al.* (1999):
 
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+- `bouligand2009`: analytic solution used in `pycurious.optimise.CurieOptimise`
+- `maus1995`: simplified version of `pycurious.bouligand2009` without higher order integration.
+- `tanaka1999`: to be used in conjunction with `pycurious.ComputeTanaka`
+
 &#34;&#34;&#34;
 
 # -*- coding: utf-8 -*-
@@ -400,7 +425,7 @@ class CurieGrid(object):
 
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
-        r&#34;&#34;&#34;
+        &#34;&#34;&#34;
         Reduce total field magnetic anomaly data to the pole.
 
         The reduction to the pole if a phase transformation that can be
@@ -434,20 +459,29 @@ class CurieGrid(object):
         Notes:
             This functions performs the reduction in the frequency domain
             (using the FFT). The transform filter is (in the freq domain):
-                RTP(k_x, k_y) = \frac{|k|}{
-                    a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
-                    i|k|(b_1 k_x + b_2 k_y)}
-            in which k_x and k_y are the wave-numbers in the x and y
+
+            \\( RTP(k_x, k_y) = \\frac{|k|}{
+                a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                i|k|(b_1 k_x + b_2 k_y)}    \\)
+
+            in which \\( k_x, k_y \\) are the wave-numbers in the x and y
             directions and
-                |k| = \sqrt{k_x^2 + k_y^2} \\
-                a_1 = m_z f_z - m_x f_x \\
-                a_2 = m_z f_z - m_y f_y \\
-                a_3 = -m_y f_x - m_x f_y \\
-                b_1 = m_x f_z + m_z f_x \\
-                b_2 = m_y f_z + m_z f_y
-            \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+
+            \\( |k| = \\sqrt{k_x^2 + k_y^2} \\)
+
+            \\( a_1 = m_z f_z - m_x f_x     \\)
+
+            \\( a_2 = m_z f_z - m_y f_y     \\)
+
+            \\( a_3 = -m_y f_x - m_x f_y    \\)
+
+            \\( b_1 = m_x f_z + m_z f_x     \\)
+
+            \\( b_2 = m_y f_z + m_z f_y     \\)
+
+            \\( \\mathbf{m} = (m_x, m_y, m_z) \\) is the unit-vector of the total
             magnetization of the source and
-            \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+            \\( \\mathbf{f} = (f_x, f_y, f_z) \\) is the unit-vector of the
             Geomagnetic field.
         &#34;&#34;&#34;
         nr, nc = data.shape
@@ -482,20 +516,21 @@ class CurieGrid(object):
 
 
     def upward_continuation(self, data, height):
-        r&#34;&#34;&#34;
+        &#34;&#34;&#34;
         Upward continuation of potential field data.
 
         Calculates the continuation through the Fast Fourier Transform in
         the wavenumber domain (Blakely, 1996):
 
-            F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+        \\( F\\{h_{up}\\} = F\\{h\\} e^{-\\Delta z |k|} \\)
 
-        and then transformed back to the space domain. :math:`h_{up}` is the
-        upward continue data, \Delta z is the height increase, F denotes
-        the Fourier Transform, |k| is the wavenumber modulus.
+        and then transformed back to the space domain. \\( h_{up} \\) is the
+        upward continue data, \\( \\Delta z \\) is the height increase,
+        \\( F \\) denotes the Fourier Transform,
+        \\( |k| \\) is the wavenumber modulus.
 
         Args:
-            data   : 2D array
+            data : 2D array
                 potential field at the grid points
             height : float
                 height increase (delta z) in meters.
@@ -503,12 +538,6 @@ class CurieGrid(object):
         Returns:
             cont : array
                 upward continued data
-
-        Notes:
-            It is not possible to get the FFT of a masked grid. The default
-            :func:`fatiando.gridder.interp` call using minimum curvature will
-            not be suitable.  Use extrapolate=True or algorithm=&#39;nearest&#39; to
-            get an unmasked grid.
 
         References:
             Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
@@ -1587,7 +1616,7 @@ ymax : maximum y bound in metres</p></section>
 
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
-        r&#34;&#34;&#34;
+        &#34;&#34;&#34;
         Reduce total field magnetic anomaly data to the pole.
 
         The reduction to the pole if a phase transformation that can be
@@ -1621,20 +1650,29 @@ ymax : maximum y bound in metres</p></section>
         Notes:
             This functions performs the reduction in the frequency domain
             (using the FFT). The transform filter is (in the freq domain):
-                RTP(k_x, k_y) = \frac{|k|}{
-                    a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
-                    i|k|(b_1 k_x + b_2 k_y)}
-            in which k_x and k_y are the wave-numbers in the x and y
+
+            \\( RTP(k_x, k_y) = \\frac{|k|}{
+                a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                i|k|(b_1 k_x + b_2 k_y)}    \\)
+
+            in which \\( k_x, k_y \\) are the wave-numbers in the x and y
             directions and
-                |k| = \sqrt{k_x^2 + k_y^2} \\
-                a_1 = m_z f_z - m_x f_x \\
-                a_2 = m_z f_z - m_y f_y \\
-                a_3 = -m_y f_x - m_x f_y \\
-                b_1 = m_x f_z + m_z f_x \\
-                b_2 = m_y f_z + m_z f_y
-            \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+
+            \\( |k| = \\sqrt{k_x^2 + k_y^2} \\)
+
+            \\( a_1 = m_z f_z - m_x f_x     \\)
+
+            \\( a_2 = m_z f_z - m_y f_y     \\)
+
+            \\( a_3 = -m_y f_x - m_x f_y    \\)
+
+            \\( b_1 = m_x f_z + m_z f_x     \\)
+
+            \\( b_2 = m_y f_z + m_z f_y     \\)
+
+            \\( \\mathbf{m} = (m_x, m_y, m_z) \\) is the unit-vector of the total
             magnetization of the source and
-            \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+            \\( \\mathbf{f} = (f_x, f_y, f_z) \\) is the unit-vector of the
             Geomagnetic field.
         &#34;&#34;&#34;
         nr, nc = data.shape
@@ -1669,20 +1707,21 @@ ymax : maximum y bound in metres</p></section>
 
 
     def upward_continuation(self, data, height):
-        r&#34;&#34;&#34;
+        &#34;&#34;&#34;
         Upward continuation of potential field data.
 
         Calculates the continuation through the Fast Fourier Transform in
         the wavenumber domain (Blakely, 1996):
 
-            F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+        \\( F\\{h_{up}\\} = F\\{h\\} e^{-\\Delta z |k|} \\)
 
-        and then transformed back to the space domain. :math:`h_{up}` is the
-        upward continue data, \Delta z is the height increase, F denotes
-        the Fourier Transform, |k| is the wavenumber modulus.
+        and then transformed back to the space domain. \\( h_{up} \\) is the
+        upward continue data, \\( \\Delta z \\) is the height increase,
+        \\( F \\) denotes the Fourier Transform,
+        \\( |k| \\) is the wavenumber modulus.
 
         Args:
-            data   : 2D array
+            data : 2D array
                 potential field at the grid points
             height : float
                 height increase (delta z) in meters.
@@ -1690,12 +1729,6 @@ ymax : maximum y bound in metres</p></section>
         Returns:
             cont : array
                 upward continued data
-
-        Notes:
-            It is not possible to get the FFT of a masked grid. The default
-            :func:`fatiando.gridder.interp` call using minimum curvature will
-            not be suitable.  Use extrapolate=True or algorithm=&#39;nearest&#39; to
-            get an unmasked grid.
 
         References:
             Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
@@ -1727,7 +1760,7 @@ ymax : maximum y bound in metres</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fb6ff4c76a8>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fa9dc41d6a8>, scale=0.001, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
@@ -1880,7 +1913,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fb6ff4c76a8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fa9dc41d6a8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
@@ -1975,7 +2008,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fb6ff4c76a8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fa9dc41d6a8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
@@ -2102,26 +2135,47 @@ magnetization, use the <em>inc</em> and <em>dec</em> of the Geomagnetic field.</
 Applications, Cambridge University Press.</p>
 <h2 id="notes">Notes</h2>
 <p>This functions performs the reduction in the frequency domain
-(using the FFT). The transform filter is (in the freq domain):
-RTP(k_x, k_y) = \frac{|k|}{
+(using the FFT). The transform filter is (in the freq domain):</p>
+<p>
+<script type="math/tex"> RTP(k_x, k_y) = \frac{|k|}{
 a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
 i|k|(b_1 k_x + b_2 k_y)}
-in which k_x and k_y are the wave-numbers in the x and y
-directions and
-|k| = \sqrt{k_x^2 + k_y^2} \
-a_1 = m_z f_z - m_x f_x \
-a_2 = m_z f_z - m_y f_y \
-a_3 = -m_y f_x - m_x f_y \
-b_1 = m_x f_z + m_z f_x \
-b_2 = m_y f_z + m_z f_y
-\mathbf{m} = (m_x, m_y, m_z)<code>is the unit-vector of the total
+</script>
+</p>
+<p>in which <script type="math/tex"> k_x, k_y </script> are the wave-numbers in the x and y
+directions and</p>
+<p>
+<script type="math/tex"> |k| = \sqrt{k_x^2 + k_y^2} </script>
+</p>
+<p>
+<script type="math/tex"> a_1 = m_z f_z - m_x f_x
+</script>
+</p>
+<p>
+<script type="math/tex"> a_2 = m_z f_z - m_y f_y
+</script>
+</p>
+<p>
+<script type="math/tex"> a_3 = -m_y f_x - m_x f_y
+</script>
+</p>
+<p>
+<script type="math/tex"> b_1 = m_x f_z + m_z f_x
+</script>
+</p>
+<p>
+<script type="math/tex"> b_2 = m_y f_z + m_z f_y
+</script>
+</p>
+<p>
+<script type="math/tex"> \mathbf{m} = (m_x, m_y, m_z) </script> is the unit-vector of the total
 magnetization of the source and
-\mathbf{f} = (f_x, f_y, f_z)</code> is the unit-vector of the
+<script type="math/tex"> \mathbf{f} = (f_x, f_y, f_z) </script> is the unit-vector of the
 Geomagnetic field.</p></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
-    r&#34;&#34;&#34;
+    &#34;&#34;&#34;
     Reduce total field magnetic anomaly data to the pole.
 
     The reduction to the pole if a phase transformation that can be
@@ -2155,20 +2209,29 @@ Geomagnetic field.</p></section>
     Notes:
         This functions performs the reduction in the frequency domain
         (using the FFT). The transform filter is (in the freq domain):
-            RTP(k_x, k_y) = \frac{|k|}{
-                a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
-                i|k|(b_1 k_x + b_2 k_y)}
-        in which k_x and k_y are the wave-numbers in the x and y
+
+        \\( RTP(k_x, k_y) = \\frac{|k|}{
+            a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+            i|k|(b_1 k_x + b_2 k_y)}    \\)
+
+        in which \\( k_x, k_y \\) are the wave-numbers in the x and y
         directions and
-            |k| = \sqrt{k_x^2 + k_y^2} \\
-            a_1 = m_z f_z - m_x f_x \\
-            a_2 = m_z f_z - m_y f_y \\
-            a_3 = -m_y f_x - m_x f_y \\
-            b_1 = m_x f_z + m_z f_x \\
-            b_2 = m_y f_z + m_z f_y
-        \mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
+
+        \\( |k| = \\sqrt{k_x^2 + k_y^2} \\)
+
+        \\( a_1 = m_z f_z - m_x f_x     \\)
+
+        \\( a_2 = m_z f_z - m_y f_y     \\)
+
+        \\( a_3 = -m_y f_x - m_x f_y    \\)
+
+        \\( b_1 = m_x f_z + m_z f_x     \\)
+
+        \\( b_2 = m_y f_z + m_z f_y     \\)
+
+        \\( \\mathbf{m} = (m_x, m_y, m_z) \\) is the unit-vector of the total
         magnetization of the source and
-        \mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
+        \\( \\mathbf{f} = (f_x, f_y, f_z) \\) is the unit-vector of the
         Geomagnetic field.
     &#34;&#34;&#34;
     nr, nc = data.shape
@@ -2317,16 +2380,17 @@ the point (xc,yc)</p>
 <section class="desc"><p>Upward continuation of potential field data.</p>
 <p>Calculates the continuation through the Fast Fourier Transform in
 the wavenumber domain (Blakely, 1996):</p>
-<pre><code>F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
-</code></pre>
-<p>and then transformed back to the space domain. :math:<code>h_{up}</code> is the
-upward continue data, \Delta z is the height increase, F denotes
-the Fourier Transform, |k| is the wavenumber modulus.</p>
+<p>
+<script type="math/tex"> F\{h_{up}\} = F\{h\} e^{-\Delta z |k|} </script>
+</p>
+<p>and then transformed back to the space domain. <script type="math/tex"> h_{up} </script> is the
+upward continue data, <script type="math/tex"> \Delta z </script> is the height increase,
+<script type="math/tex"> F </script> denotes the Fourier Transform,
+<script type="math/tex"> |k| </script> is the wavenumber modulus.</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt>data
-: 2D array</dt>
-<dt>potential field at the grid points</dt>
+<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
+<dd>potential field at the grid points</dd>
 <dt><strong><code>height</code></strong> :&ensp;<code>float</code></dt>
 <dd>height increase (delta z) in meters.</dd>
 </dl>
@@ -2335,32 +2399,27 @@ the Fourier Transform, |k| is the wavenumber modulus.</p>
 <dt><strong><code>cont</code></strong> :&ensp;<code>array</code></dt>
 <dd>upward continued data</dd>
 </dl>
-<h2 id="notes">Notes</h2>
-<p>It is not possible to get the FFT of a masked grid. The default
-:func:<code>fatiando.gridder.interp</code> call using minimum curvature will
-not be suitable.
-Use extrapolate=True or algorithm='nearest' to
-get an unmasked grid.</p>
 <h2 id="references">References</h2>
 <p>Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
 Applications, Cambridge University Press.</p></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">def upward_continuation(self, data, height):
-    r&#34;&#34;&#34;
+    &#34;&#34;&#34;
     Upward continuation of potential field data.
 
     Calculates the continuation through the Fast Fourier Transform in
     the wavenumber domain (Blakely, 1996):
 
-        F\{h_{up}\} = F\{h\} e^{-\Delta z |k|}
+    \\( F\\{h_{up}\\} = F\\{h\\} e^{-\\Delta z |k|} \\)
 
-    and then transformed back to the space domain. :math:`h_{up}` is the
-    upward continue data, \Delta z is the height increase, F denotes
-    the Fourier Transform, |k| is the wavenumber modulus.
+    and then transformed back to the space domain. \\( h_{up} \\) is the
+    upward continue data, \\( \\Delta z \\) is the height increase,
+    \\( F \\) denotes the Fourier Transform,
+    \\( |k| \\) is the wavenumber modulus.
 
     Args:
-        data   : 2D array
+        data : 2D array
             potential field at the grid points
         height : float
             height increase (delta z) in meters.
@@ -2368,12 +2427,6 @@ Applications, Cambridge University Press.</p></section>
     Returns:
         cont : array
             upward continued data
-
-    Notes:
-        It is not possible to get the FFT of a masked grid. The default
-        :func:`fatiando.gridder.interp` call using minimum curvature will
-        not be suitable.  Use extrapolate=True or algorithm=&#39;nearest&#39; to
-        get an unmasked grid.
 
     References:
         Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic

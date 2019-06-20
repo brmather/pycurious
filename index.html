@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.6.3.dev1+g3e64fe2" />
 <title>pycurious API documentation</title>
-<meta name="description" content="Copyright 2018 Ben Mather, Robert Delhaye …" />
+<meta name="description" content="&gt; PyCurious is a Python package for computing the Curie depth from the magnetic anomaly …" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
@@ -22,8 +22,11 @@
 <h1 class="title">Module <code>pycurious</code></h1>
 </header>
 <section id="section-intro">
-<p>Copyright 2018 Ben Mather, Robert Delhaye</p>
-<p>This file is part of PyCurious.</p>
+<blockquote>
+<p>PyCurious is a Python package for computing the Curie depth from the magnetic anomaly.</p>
+</blockquote>
+<h2 id="licence">Licence</h2>
+<p>Copyright 2018-2019 Ben Mather, Robert Delhaye</p>
 <p>PyCurious is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
 the Free Software Foundation, either version 3 of the License, or any later version.</p>
@@ -35,12 +38,112 @@ GNU Lesser General Public License for more details.</p>
 <p>You should have received a copy of the GNU Lesser General Public License
 along with PyCurious.
 If not, see <a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>.</p>
+<h2 id="installation">Installation</h2>
+<h3 id="dependencies">Dependencies</h3>
+<p>You will need <strong>Python 2.7 or 3.5+</strong>.
+Also, the following packages are required:</p>
+<ul>
+<li><a href="http://numpy.org"><code>numpy</code></a></li>
+<li><a href="https://scipy.org"><code>scipy</code></a></li>
+<li><a href="https://cython.org/"><code>cython</code></a></li>
+</ul>
+<p><strong>Optional dependencies</strong> for mapping module and running the Notebooks:</p>
+<ul>
+<li><a href="https://matplotlib.org/"><code>matplotlib</code></a></li>
+<li><a href="https://github.com/jswhit/pyproj"><code>pyproj</code></a></li>
+<li><a href="https://scitools.org.uk/cartopy/docs/latest/"><code>cartopy</code></a></li>
+</ul>
+<h3 id="installing-using-pip">Installing using pip</h3>
+<p>You can install <a title="pycurious" href="#pycurious"><code>pycurious</code></a> using the
+<a href="https://pypi.org/project/pip/"><code>pip package manager</code></a> with either
+version of Python:</p>
+<pre><code>&gt;&gt;&gt; python2 -m pip install pycurious
+&gt;&gt;&gt; python3 -m pip install pycurious
+</code></pre>
+<p>All the dependencies will be automatically installed by <code>pip</code>.</p>
+<h3 id="installing-using-docker">Installing using Docker</h3>
+<p>A more straightforward installation for <a title="pycurious" href="#pycurious"><code>pycurious</code></a> and all of its
+dependencies may be deployed with <a href="https://www.docker.com">Docker</a>.
+To install the docker image and start the Jupyter notebook examples:</p>
+<pre><code>&gt;&gt;&gt; docker pull brmather/pycurious:latest
+&gt;&gt;&gt; docker run --name pycurious -p 8888:8888 brmather/pycurious:latest
+</code></pre>
+<h2 id="documenation-notebooks">Documenation / Notebooks</h2>
+<p>Jupyter notebooks that demonstrate the functionality of PyCurious and
+some common workflows may be installed to a local directory with</p>
+<pre><code class="python">import pycurious
+pycurious.install_documentation(path=&quot;Notebooks&quot;)
+</code></pre>
+<h2 id="contributing-to-pycurious">Contributing to pycurious</h2>
+<p>We welcome contributions to <code>pycurious</code>, large or small <a href="#footnote1">*</a>.
+That can be in the form of new code, improvements to the documentation,
+helping with a missing test, or it may even just be pointing out a bug or
+potential improvement to the team. </p>
+<p>For bugs and suggestions, the most effective way to reach the team is by
+raising an issue on the github issue tracker. Github allows you to classify
+your issues so that we know if it is a bug report, feature request or
+feedback to the authors.</p>
+<p>If you wish to contribute some changes to the code then you should submit a
+<em>pull request</em>. On GitHub we can review the code that you are contributing
+and discuss it before the changes are merged into the development version of
+the code. Before embarking on changes to the code, please first take a look
+at the <a href="https://github.com/brmather/pycurious/tree/dev"><code>dev</code> branch</a> which
+is where unreleased changes are staged: we may have been working on something
+similar already. </p>
+<h3 id="how-to-create-a-pull-request-pr">How to create a Pull Request (PR)</h3>
+<p>Create your own fork of the project on github: log into your github account,
+navigate to the <a href="https://github.com/brmather/pycurious/tree/dev"><code>pycurious</code> repository</a>
+and click on the <em>fork</em> button at the top right corner of this repository.
+You can find detailed instructions and a discussion of how to fork a
+repository, clone it locally and work on the changes
+<a href="https://guides.github.com/activities/forking/">in the GitHub guides</a>. </p>
+<h3 id="when-to-make-your-pull-request">When to make your pull request</h3>
+<p>It is much easier to merge in small changes to the code than extensive ones
+that touch multiple files. If a small incremental change is possible, please
+issue a request for that change rather than saving everything up. </p>
+<p>It is a good idea to commit frequently and with commit messages that refer
+to the changes that have been make and why they have been made. The commit
+message is usually browsed without seeing the actual changes themselves and
+which sections of the code have been altered so a helpful message provides
+relevant details. </p>
+<h3 id="tests">Tests</h3>
+<p>We use <a href="https://pypi.org/project/pytest/"><code>pytest</code></a> for the unit testing
+framework in <a title="pycurious" href="#pycurious"><code>pycurious</code></a>. In the source directory this means running:</p>
+<pre><code>&gt;&gt;&gt; python setup.py test
+</code></pre>
+<p>The existing tests should be passing before you start coding (help us out with
+an issue if that is not the case !) and when you have finished. Any new
+functionality should also have tests that we can use to verify the code.
+It is important that you make it clear if the original tests have had to
+change to accomodate new code / functionality.</p>
+<p><a name="footnote1">*</a> <em>Small changes are our favorites as they are much
+easier to quickly merge into the existing code. Proofreading typos, bug fixes,
+&hellip; the little stuff is especially welcome.</em></p>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">&#34;&#34;&#34;
-Copyright 2018 Ben Mather, Robert Delhaye
+<pre><code class="python"># Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
-This file is part of PyCurious.
+&#34;&#34;&#34;
+
+&gt; PyCurious is a Python package for computing the Curie depth from the magnetic anomaly.
+
+## Licence
+
+Copyright 2018-2019 Ben Mather, Robert Delhaye
 
 PyCurious is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
@@ -53,6 +156,112 @@ GNU Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+## Installation
+
+### Dependencies
+
+You will need **Python 2.7 or 3.5+**.
+Also, the following packages are required:
+
+- [`numpy`](http://numpy.org)
+- [`scipy`](https://scipy.org)
+- [`cython`](https://cython.org/)
+
+__Optional dependencies__ for mapping module and running the Notebooks:
+
+- [`matplotlib`](https://matplotlib.org/)
+- [`pyproj`](https://github.com/jswhit/pyproj)
+- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
+
+### Installing using pip
+
+You can install `pycurious` using the
+[`pip package manager`](https://pypi.org/project/pip/) with either
+version of Python:
+
+&gt;&gt;&gt; python2 -m pip install pycurious
+&gt;&gt;&gt; python3 -m pip install pycurious
+
+All the dependencies will be automatically installed by `pip`.
+
+### Installing using Docker
+
+A more straightforward installation for `pycurious` and all of its
+dependencies may be deployed with [Docker](https://www.docker.com).
+To install the docker image and start the Jupyter notebook examples:
+
+&gt;&gt;&gt; docker pull brmather/pycurious:latest
+&gt;&gt;&gt; docker run --name pycurious -p 8888:8888 brmather/pycurious:latest
+
+## Documenation / Notebooks
+
+Jupyter notebooks that demonstrate the functionality of PyCurious and
+some common workflows may be installed to a local directory with
+
+```python
+import pycurious
+pycurious.install_documentation(path=&#34;Notebooks&#34;)
+```
+
+## Contributing to pycurious
+
+We welcome contributions to `pycurious`, large or small [\\*](#footnote1).
+That can be in the form of new code, improvements to the documentation, 
+helping with a missing test, or it may even just be pointing out a bug or
+potential improvement to the team. 
+
+For bugs and suggestions, the most effective way to reach the team is by
+raising an issue on the github issue tracker. Github allows you to classify
+your issues so that we know if it is a bug report, feature request or
+feedback to the authors.
+
+If you wish to contribute some changes to the code then you should submit a
+*pull request*. On GitHub we can review the code that you are contributing
+and discuss it before the changes are merged into the development version of
+the code. Before embarking on changes to the code, please first take a look
+at the [`dev` branch](https://github.com/brmather/pycurious/tree/dev) which
+is where unreleased changes are staged: we may have been working on something
+similar already. 
+
+### How to create a Pull Request (PR)
+
+Create your own fork of the project on github: log into your github account,
+navigate to the [`pycurious` repository](https://github.com/brmather/pycurious/tree/dev)
+and click on the *fork* button at the top right corner of this repository.
+You can find detailed instructions and a discussion of how to fork a
+repository, clone it locally and work on the changes
+[in the GitHub guides](https://guides.github.com/activities/forking/). 
+
+### When to make your pull request
+
+It is much easier to merge in small changes to the code than extensive ones
+that touch multiple files. If a small incremental change is possible, please
+issue a request for that change rather than saving everything up. 
+
+It is a good idea to commit frequently and with commit messages that refer
+to the changes that have been make and why they have been made. The commit
+message is usually browsed without seeing the actual changes themselves and
+which sections of the code have been altered so a helpful message provides
+relevant details. 
+
+### Tests
+
+We use [`pytest`](https://pypi.org/project/pytest/) for the unit testing
+framework in `pycurious`. In the source directory this means running:
+
+&gt;&gt;&gt; python setup.py test
+
+The existing tests should be passing before you start coding (help us out with
+an issue if that is not the case !) and when you have finished. Any new
+functionality should also have tests that we can use to verify the code.
+It is important that you make it clear if the original tests have had to
+change to accomodate new code / functionality.
+
+&lt;a name=&#34;footnote1&#34;&gt;*&lt;/a&gt; _Small changes are our favorites as they are much
+easier to quickly merge into the existing code. Proofreading typos, bug fixes,
+... the little stuff is especially welcome._
+
 &#34;&#34;&#34;
 
 # -*- coding: utf-8 -*-
@@ -68,31 +277,27 @@ from . import download</code></pre>
 <dl>
 <dt><code class="name"><a title="pycurious.documentation" href="documentation.html">pycurious.documentation</a></code></dt>
 <dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
+<section class="desc"><p>Use the <a title="pycurious.documentation.install_documentation" href="documentation.html#pycurious.documentation.install_documentation"><code>install_documentation()</code></a> function to copy all
+Jupyter Notebooks and example data to a local directory.</p></section>
 </dd>
 <dt><code class="name"><a title="pycurious.download" href="download.html">pycurious.download</a></code></dt>
 <dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
+<section class="desc"><p>This module provides some simple functions to download or install files …</p></section>
 </dd>
 <dt><code class="name"><a title="pycurious.grid" href="grid.html">pycurious.grid</a></code></dt>
 <dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
+<section class="desc"><p>This PyCurious module contains the <a title="pycurious.grid.CurieGrid" href="grid.html#pycurious.grid.CurieGrid"><code>CurieGrid</code></a> class,
+which can be initialised with a magnetic grid of equal spacing in the x and y …</p></section>
 </dd>
 <dt><code class="name"><a title="pycurious.mapping" href="mapping.html">pycurious.mapping</a></code></dt>
 <dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
+<section class="desc"><p>The <a title="pycurious.mapping" href="mapping.html"><code>pycurious.mapping</code></a> module of PyCurious contains various functions to help
+manipulate geospatial data into common formats. It handles commonly …</p></section>
 </dd>
 <dt><code class="name"><a title="pycurious.optimise" href="optimise.html">pycurious.optimise</a></code></dt>
 <dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
-</dd>
-<dt><code class="name"><a title="pycurious.parallel" href="parallel.html">pycurious.parallel</a></code></dt>
-<dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
-</dd>
-<dt><code class="name"><a title="pycurious.therm" href="therm.html">pycurious.therm</a></code></dt>
-<dd>
-<section class="desc"><p>Copyright 2018 Ben Mather, Robert Delhaye …</p></section>
+<section class="desc"><p>This PyCurious module contains the <a title="pycurious.optimise.CurieOptimise" href="optimise.html#pycurious.optimise.CurieOptimise"><code>CurieOptimise</code></a> class,
+which inherits the <a title="pycurious.grid.CurieGrid" href="grid.html#pycurious.grid.CurieGrid"><code>CurieGrid</code></a> class with added …</p></section>
 </dd>
 </dl>
 </section>
@@ -106,7 +311,22 @@ from . import download</code></pre>
 <nav id="sidebar">
 <h1>Index</h1>
 <div class="toc">
-<ul></ul>
+<ul>
+<li><a href="#licence">Licence</a></li>
+<li><a href="#installation">Installation</a><ul>
+<li><a href="#dependencies">Dependencies</a></li>
+<li><a href="#installing-using-pip">Installing using pip</a></li>
+<li><a href="#installing-using-docker">Installing using Docker</a></li>
+</ul>
+</li>
+<li><a href="#documenation-notebooks">Documenation / Notebooks</a></li>
+<li><a href="#contributing-to-pycurious">Contributing to pycurious</a><ul>
+<li><a href="#how-to-create-a-pull-request-pr">How to create a Pull Request (PR)</a></li>
+<li><a href="#when-to-make-your-pull-request">When to make your pull request</a></li>
+<li><a href="#tests">Tests</a></li>
+</ul>
+</li>
+</ul>
 </div>
 <ul id="index">
 <li><h3><a href="#header-submodules">Sub-modules</a></h3>
@@ -116,8 +336,6 @@ from . import download</code></pre>
 <li><code><a title="pycurious.grid" href="grid.html">pycurious.grid</a></code></li>
 <li><code><a title="pycurious.mapping" href="mapping.html">pycurious.mapping</a></code></li>
 <li><code><a title="pycurious.optimise" href="optimise.html">pycurious.optimise</a></code></li>
-<li><code><a title="pycurious.parallel" href="parallel.html">pycurious.parallel</a></code></li>
-<li><code><a title="pycurious.therm" href="therm.html">pycurious.therm</a></code></li>
 </ul>
 </li>
 </ul>

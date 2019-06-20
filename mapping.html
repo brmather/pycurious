@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.6.3.dev1+g3e64fe2" />
 <title>pycurious.mapping API documentation</title>
-<meta name="description" content="Copyright 2018 Ben Mather, Robert Delhaye …" />
+<meta name="description" content="The `pycurious.mapping` module of PyCurious contains various functions to help
+manipulate geospatial data into common formats. It handles commonly …" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
@@ -22,37 +23,75 @@
 <h1 class="title">Module <code>pycurious.mapping</code></h1>
 </header>
 <section id="section-intro">
-<p>Copyright 2018 Ben Mather, Robert Delhaye</p>
-<p>This file is part of PyCurious.</p>
-<p>PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.</p>
-<p>PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-See the
-GNU Lesser General Public License for more details.</p>
-<p>You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.
-If not, see <a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>.</p>
+<p>The <a title="pycurious.mapping" href="#pycurious.mapping"><code>pycurious.mapping</code></a> module of PyCurious contains various functions to help
+manipulate geospatial data into common formats. It handles commonly encounted
+operations, such as:</p>
+<ul>
+<li>Gridding scattered data points</li>
+<li>Converting between coordinate reference systems (CRS)</li>
+<li>Importing and exporting GeoTiff files</li>
+</ul>
+<p>It requires some <strong>additional dependencies</strong>:</p>
+<ul>
+<li><a href="https://matplotlib.org/"><code>matplotlib</code></a> - for plotting</li>
+<li><a href="https://github.com/jswhit/pyproj"><code>pyproj</code></a> - for transforming CRS</li>
+<li><a href="https://scitools.org.uk/cartopy/docs/latest/"><code>cartopy</code></a> - for mapping</li>
+</ul>
+<p>Beware that most global data are georeferenced in WGS84 (EPSG: 4326).
+The radial power spectrum must be in rad/km, which requires a transformation
+from longitude / latitude to a local projection in eastings / northings.</p>
+<p>For example, EMAG2 is a global compilation of the magnetic anomaly
+georeferenced in WGS84 longitude / latitude. This will need to be projected
+in a local CRS to use with PyCurious. If we are interested in a region
+across Ireland we could use the IRENET95 local CRS (EPSG: 2157),</p>
+<pre><code>&gt;&gt;&gt; transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
+</code></pre>
+<p>which would return a list of eastings and northings in IRENET95 projection.</p>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">&#34;&#34;&#34;
-Copyright 2018 Ben Mather, Robert Delhaye
+<pre><code class="python"># Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
-This file is part of PyCurious.
+&#34;&#34;&#34;
+The `pycurious.mapping` module of PyCurious contains various functions to help
+manipulate geospatial data into common formats. It handles commonly encounted
+operations, such as:
 
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
+- Gridding scattered data points
+- Converting between coordinate reference systems (CRS)
+- Importing and exporting GeoTiff files
 
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+It requires some **additional dependencies**:
 
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+- [`matplotlib`](https://matplotlib.org/) - for plotting
+- [`pyproj`](https://github.com/jswhit/pyproj) - for transforming CRS
+- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/) - for mapping
+
+Beware that most global data are georeferenced in WGS84 (EPSG: 4326).
+The radial power spectrum must be in rad/km, which requires a transformation
+from longitude / latitude to a local projection in eastings / northings.
+
+For example, EMAG2 is a global compilation of the magnetic anomaly
+georeferenced in WGS84 longitude / latitude. This will need to be projected
+in a local CRS to use with PyCurious. If we are interested in a region
+across Ireland we could use the IRENET95 local CRS (EPSG: 2157),
+
+&gt;&gt;&gt; transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
+
+which would return a list of eastings and northings in IRENET95 projection.
 &#34;&#34;&#34;
 
 # -*- coding: utf-8 -*-
@@ -65,7 +104,23 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     &#34;&#34;&#34;
     Transform between any coordinate system.
 
-    Requires `pyproj`
+    **Requires `pyproj`** - install using pip.
+
+    Args:
+        x : float / 1D array
+            x coordinates (may be in degrees or metres/eastings)
+        y : float / 1D array
+            y coordinates (may be in degrees or metres/northings)
+        epsg_in : int
+            CRS of x and y coordinates
+        epsg_out : int
+            CRS of output
+
+    Returns:
+        x_out : float / list of floats
+            x coordinates projected in `epsg_out`
+        y_out : float / list of floats
+            y coordinates projected in `epsg_out`
     &#34;&#34;&#34;
     import pyproj
     proj_in  = pyproj.Proj(&#34;+init=EPSG:&#34;+str(epsg_in))
@@ -101,7 +156,7 @@ def trim(coords, data, extent, buffer_amount=0.0):
     &#34;&#34;&#34;
     Trim a smaller section of a large dataset taking into
     consideration transformations into various coordinate
-    reference systems (CRS)
+    reference systems (CRS).
     
     Args:
         coords : array shape (n,2)
@@ -147,7 +202,9 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     &#34;&#34;&#34;
     Grid a smaller section of a large dataset taking into
     consideration transformations into various coordinate
-    reference systems (CRS)
+    reference systems (CRS).
+
+    **Requires `scipy.interpolate.griddata`**
     
     Args:
         coords : array shape (n,2)
@@ -155,7 +212,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
         data : array shape (n,) 
             values corresponding to coordinates
         extent : tuple
-           box contained within the data in espg_out coordinates
+           bounding box in espg_out coordinates
         shape : tuple (nrows,ncols)
            size of the box, if None, shape is estimated from coords spacing
         epsg_in : int
@@ -224,7 +281,9 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
 def import_geotiff(file_path):
     &#34;&#34;&#34;
     Import a GeoTIFF to a numpy array and prints
-    information of the Coordinate Reference System (CRS)
+    information of the Coordinate Reference System (CRS).
+
+    **Requires `osgeo`.**
 
     Args:
         file_path : str
@@ -233,7 +292,7 @@ def import_geotiff(file_path):
     Returns:
         data : 2D array
         extent : tuple
-            extent in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF
             e.g. [xmin, xmax, ymin, ymax]
     &#34;&#34;&#34;
     from osgeo import gdal, osr
@@ -261,7 +320,9 @@ def import_geotiff(file_path):
 def export_geotiff(file_path, array, extent, epsg):
     &#34;&#34;&#34;
     Export a GeoTIFF from a numpy array projected in a
-    predefined Coordinate Reference System (CRS)
+    predefined Coordinate Reference System (CRS).
+
+    **Requires `osgeo`.**
 
     Args:
         file_path : str
@@ -269,7 +330,7 @@ def export_geotiff(file_path, array, extent, epsg):
         array: 2D array
             array to save to GeoTiff
         extent : tuple
-            extent in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF
             e.g. [xmin, xmax, ymin, ymax]
         epsg : int
             CRS of the GeoTIFF
@@ -355,7 +416,8 @@ def export_geotiff(file_path, array, extent, epsg):
 </code></dt>
 <dd>
 <section class="desc"><p>Export a GeoTIFF from a numpy array projected in a
-predefined Coordinate Reference System (CRS)</p>
+predefined Coordinate Reference System (CRS).</p>
+<p><strong>Requires <code>osgeo</code>.</strong></p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>file_path</code></strong> :&ensp;<code>str</code></dt>
@@ -364,7 +426,7 @@ predefined Coordinate Reference System (CRS)</p>
 <dd>2D array
 array to save to GeoTiff</dd>
 <dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
-<dd>extent in the projection of the GeoTIFF
+<dd>bounding box in the projection of the GeoTIFF
 e.g. [xmin, xmax, ymin, ymax]</dd>
 <dt><strong><code>epsg</code></strong> :&ensp;<code>int</code></dt>
 <dd>CRS of the GeoTIFF
@@ -375,7 +437,9 @@ e.g. 4326 for WGS84</dd>
 <pre><code class="python">def export_geotiff(file_path, array, extent, epsg):
     &#34;&#34;&#34;
     Export a GeoTIFF from a numpy array projected in a
-    predefined Coordinate Reference System (CRS)
+    predefined Coordinate Reference System (CRS).
+
+    **Requires `osgeo`.**
 
     Args:
         file_path : str
@@ -383,7 +447,7 @@ e.g. 4326 for WGS84</dd>
         array: 2D array
             array to save to GeoTiff
         extent : tuple
-            extent in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF
             e.g. [xmin, xmax, ymin, ymax]
         epsg : int
             CRS of the GeoTIFF
@@ -418,7 +482,8 @@ e.g. 4326 for WGS84</dd>
 <dd>
 <section class="desc"><p>Grid a smaller section of a large dataset taking into
 consideration transformations into various coordinate
-reference systems (CRS)</p>
+reference systems (CRS).</p>
+<p><strong>Requires <code>scipy.interpolate.griddata</code></strong></p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>coords</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,<code>2</code>)</dt>
@@ -427,7 +492,7 @@ reference systems (CRS)</p>
 <dd>values corresponding to coordinates</dd>
 <dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
 <dd>&nbsp;</dd>
-<dt>box contained within the data in espg_out coordinates</dt>
+<dt>bounding box in espg_out coordinates</dt>
 <dt><strong><code>shape</code></strong> :&ensp;<code>tuple</code> (<code>nrows</code>,<code>ncols</code>)</dt>
 <dd>&nbsp;</dd>
 <dt>size of the box, if None, shape is estimated from coords spacing</dt>
@@ -453,7 +518,9 @@ reference systems (CRS)</p>
     &#34;&#34;&#34;
     Grid a smaller section of a large dataset taking into
     consideration transformations into various coordinate
-    reference systems (CRS)
+    reference systems (CRS).
+
+    **Requires `scipy.interpolate.griddata`**
     
     Args:
         coords : array shape (n,2)
@@ -461,7 +528,7 @@ reference systems (CRS)</p>
         data : array shape (n,) 
             values corresponding to coordinates
         extent : tuple
-           box contained within the data in espg_out coordinates
+           bounding box in espg_out coordinates
         shape : tuple (nrows,ncols)
            size of the box, if None, shape is estimated from coords spacing
         epsg_in : int
@@ -532,7 +599,8 @@ reference systems (CRS)</p>
 </code></dt>
 <dd>
 <section class="desc"><p>Import a GeoTIFF to a numpy array and prints
-information of the Coordinate Reference System (CRS)</p>
+information of the Coordinate Reference System (CRS).</p>
+<p><strong>Requires <code>osgeo</code>.</strong></p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>file_path</code></strong> :&ensp;<code>str</code></dt>
@@ -543,7 +611,7 @@ information of the Coordinate Reference System (CRS)</p>
 <dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
 <dd>&nbsp;</dd>
 <dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
-<dd>extent in the projection of the GeoTIFF
+<dd>bounding box in the projection of the GeoTIFF
 e.g. [xmin, xmax, ymin, ymax]</dd>
 </dl></section>
 <details class="source">
@@ -551,7 +619,9 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
 <pre><code class="python">def import_geotiff(file_path):
     &#34;&#34;&#34;
     Import a GeoTIFF to a numpy array and prints
-    information of the Coordinate Reference System (CRS)
+    information of the Coordinate Reference System (CRS).
+
+    **Requires `osgeo`.**
 
     Args:
         file_path : str
@@ -560,7 +630,7 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
     Returns:
         data : 2D array
         extent : tuple
-            extent in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF
             e.g. [xmin, xmax, ymin, ymax]
     &#34;&#34;&#34;
     from osgeo import gdal, osr
@@ -590,14 +660,48 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
 </code></dt>
 <dd>
 <section class="desc"><p>Transform between any coordinate system.</p>
-<p>Requires <code>pyproj</code></p></section>
+<p><strong>Requires <code>pyproj</code></strong> - install using pip.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>x</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>x coordinates (may be in degrees or metres/eastings)</dd>
+<dt><strong><code>y</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
+<dd>y coordinates (may be in degrees or metres/northings)</dd>
+<dt><strong><code>epsg_in</code></strong> :&ensp;<code>int</code></dt>
+<dd>CRS of x and y coordinates</dd>
+<dt><strong><code>epsg_out</code></strong> :&ensp;<code>int</code></dt>
+<dd>CRS of output</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>x_out</code></strong> :&ensp;<code>float</code> / <code>list</code> of <code>floats</code></dt>
+<dd>x coordinates projected in <code>epsg_out</code></dd>
+<dt><strong><code>y_out</code></strong> :&ensp;<code>float</code> / <code>list</code> of <code>floats</code></dt>
+<dd>y coordinates projected in <code>epsg_out</code></dd>
+</dl></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">def transform_coordinates(x, y, epsg_in, epsg_out):
     &#34;&#34;&#34;
     Transform between any coordinate system.
 
-    Requires `pyproj`
+    **Requires `pyproj`** - install using pip.
+
+    Args:
+        x : float / 1D array
+            x coordinates (may be in degrees or metres/eastings)
+        y : float / 1D array
+            y coordinates (may be in degrees or metres/northings)
+        epsg_in : int
+            CRS of x and y coordinates
+        epsg_out : int
+            CRS of output
+
+    Returns:
+        x_out : float / list of floats
+            x coordinates projected in `epsg_out`
+        y_out : float / list of floats
+            y coordinates projected in `epsg_out`
     &#34;&#34;&#34;
     import pyproj
     proj_in  = pyproj.Proj(&#34;+init=EPSG:&#34;+str(epsg_in))
@@ -611,7 +715,7 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
 <dd>
 <section class="desc"><p>Trim a smaller section of a large dataset taking into
 consideration transformations into various coordinate
-reference systems (CRS)</p>
+reference systems (CRS).</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>coords</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,<code>2</code>)</dt>
@@ -636,7 +740,7 @@ reference systems (CRS)</p>
     &#34;&#34;&#34;
     Trim a smaller section of a large dataset taking into
     consideration transformations into various coordinate
-    reference systems (CRS)
+    reference systems (CRS).
     
     Args:
         coords : array shape (n,2)

@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.6.3.dev1+g3e64fe2" />
 <title>pycurious.optimise API documentation</title>
-<meta name="description" content="Copyright 2018 Ben Mather, Robert Delhaye …" />
+<meta name="description" content="This PyCurious module contains the `pycurious.optimise.CurieOptimise` class,
+which inherits the `pycurious.grid.CurieGrid` class with added …" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
@@ -22,37 +23,55 @@
 <h1 class="title">Module <code>pycurious.optimise</code></h1>
 </header>
 <section id="section-intro">
-<p>Copyright 2018 Ben Mather, Robert Delhaye</p>
-<p>This file is part of PyCurious.</p>
-<p>PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.</p>
-<p>PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-See the
-GNU Lesser General Public License for more details.</p>
-<p>You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.
-If not, see <a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>.</p>
+<p>This PyCurious module contains the <a title="pycurious.optimise.CurieOptimise" href="#pycurious.optimise.CurieOptimise"><code>CurieOptimise</code></a> class,
+which inherits the <a title="pycurious.grid.CurieGrid" href="grid.html#pycurious.grid.CurieGrid"><code>CurieGrid</code></a> class with added functionality for:</p>
+<ul>
+<li>Fitting the synthetic power spectrum <script type="math/tex"> \Phi </script> computed with <a title="pycurious.grid.bouligand2009" href="grid.html#pycurious.grid.bouligand2009"><code>bouligand2009()</code></a></li>
+<li>Defining an objective function with a flexible interface for adding <em>a priori</em> and likelihood functions</li>
+<li>Parallel decomposition of routines to compute the optimal radial power spectrum, and thus Curie depth</li>
+<li>Metropolis-Hastings algorithm and sensitivity analysis to estimate the uncertainty of the posterior</li>
+</ul>
+<p>The posterior is defined as</p>
+<p>
+<script type="math/tex"> P(\mathbf{m}|\mathbf{d}) = P(\beta, z_t, \Delta z, C|\Phi_d) </script>
+</p>
+<p>where <script type="math/tex"> \beta, z_t, \Delta z, C </script> are input parameters to <a title="pycurious.grid.bouligand2009" href="grid.html#pycurious.grid.bouligand2009"><code>bouligand2009()</code></a> and
+<script type="math/tex"> \Phi_d </script> is the radial power spectrum computed from a FFT over square windows of the magnetic
+anomaly in <a title="pycurious.grid.CurieGrid.radial_spectrum" href="grid.html#pycurious.grid.CurieGrid.radial_spectrum"><code>CurieGrid.radial_spectrum()</code></a>.</p>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">&#34;&#34;&#34;
-Copyright 2018 Ben Mather, Robert Delhaye
+<pre><code class="python"># Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
-This file is part of PyCurious.
+&#34;&#34;&#34;
+This PyCurious module contains the `pycurious.optimise.CurieOptimise` class,
+which inherits the `pycurious.grid.CurieGrid` class with added functionality for:
 
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
+- Fitting the synthetic power spectrum \\( \\Phi \\) computed with `pycurious.grid.bouligand2009`
+- Defining an objective function with a flexible interface for adding *a priori* and likelihood functions
+- Parallel decomposition of routines to compute the optimal radial power spectrum, and thus Curie depth
+- Metropolis-Hastings algorithm and sensitivity analysis to estimate the uncertainty of the posterior
 
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+The posterior is defined as
 
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+\\( P(\\mathbf{m}|\\mathbf{d}) = P(\\beta, z_t, \\Delta z, C|\\Phi_d) \\)
+
+where \\( \\beta, z_t, \\Delta z, C \\) are input parameters to `pycurious.grid.bouligand2009` and
+\\( \\Phi_d \\) is the radial power spectrum computed from a FFT over square windows of the magnetic
+anomaly in `pycurious.grid.CurieGrid.radial_spectrum`.
 &#34;&#34;&#34;
 
 # -*- coding: utf-8 -*-
@@ -70,8 +89,9 @@ except: pass
 
 class CurieOptimise(CurieGrid):
     &#34;&#34;&#34;
-    Extends the CurieGrid class to include optimisation routines
-    see scipy.optimize.minimize for a description of the algorithm
+    Extends the `pycurious.grid.CurieGrid` class to include
+    optimisation routines see `scipy.optimize.minimize` for
+    a description of the algorithm.
 
     Args:
         grid : 2D numpy array
@@ -87,9 +107,9 @@ class CurieOptimise(CurieGrid):
     
     Attributes:
         bounds : list of tuples
-            lower and upper bounds for beta, zt, dz, C
-        prior  : dict
-            dictionary of priors for beta, zt, dz, C
+            lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
+        prior : dict
+            dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
     &#34;&#34;&#34;
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
@@ -112,10 +132,10 @@ class CurieOptimise(CurieGrid):
     def add_prior(self, **kwargs):
         &#34;&#34;&#34;
         Add a prior to the dictionary (tuple)
-        Available priors are beta, zt, dz, C
+        Available priors are \\( \\beta, z_t, \\Delta z, C \\)
 
         Assumes a normal distribution or
-        define another distribution from scipy.stats
+        define another distribution from `scipy.stats`
 
         Usage:
             &gt;&gt;&gt; add_prior(beta=(p, sigma_p))
@@ -159,7 +179,7 @@ class CurieOptimise(CurieGrid):
             &gt;&gt;&gt; objective_routine(beta=2.5)
 
         Returns:
-            misfit  : float
+            misfit : float
                 misfit integrated over all observations and priors
         &#34;&#34;&#34;
         c = 0.0
@@ -183,7 +203,7 @@ class CurieOptimise(CurieGrid):
             sigma_x0 : float, ndarray
 
         Returns:
-            misfit   : float
+            misfit : float
         &#34;&#34;&#34;
         return 0.5*np.sum((x - x0)**2/sigma_x0**2)
 
@@ -194,20 +214,20 @@ class CurieOptimise(CurieGrid):
 
         Args:
             x : array shape (n,)
-                array of variables [beta, zt, dz, C]
+                array of variables \\( \\beta, z_t, \\Delta z, C \\)
             kh : array shape (n,)
                 wavenumbers (rad/km)
             Phi : array shape (n,)
-                radial power spectrum
+                radial power spectrum \\( \\Phi \\)
             sigma_Phi : array shape (n,)
-                standard deviation of Phi
+                standard deviation of Phi, \\( \\sigma_{\\Phi} \\)
 
         Returns:
-            misfit    : float
-                sum of misfit (float)
+            misfit : float
+                sum of misfit (scalar)
 
         Notes:
-            We purposely ignore all warnings raised by the bouligand2009
+            We purposely ignore all warnings raised by the `pycurious.grid.bouligand2009`
             function because some combinations of input parameters will
             trigger an out-of-range warning that will crash the minimiser.
             Instead, the misfit is set to a very large number when this occurs.
@@ -227,11 +247,11 @@ class CurieOptimise(CurieGrid):
 
     def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         &#34;&#34;&#34;
-        Find the optimal parameters of beta, zt, dz, C for a given
-        centroid (xc,yc) and window size.
+        Find the optimal parameters of \\( \\beta, z_t, \\Delta z, C \\)
+        for a given centroid (xc,yc) and window size.
 
         Args:
-            window  : float
+            window : float
                 size of window in metres
             xc : float
                 centroid x values
@@ -245,7 +265,7 @@ class CurieOptimise(CurieGrid):
                 thickness of magnetic layer (starting value)
             C : float
                 field constant (starting value)
-            taper : taper (default=np.hanning)
+            taper : taper (default=`numpy.hanning`)
                 taper function, set to None for no taper function
             process_subgrids : function
                 a custom function to process the subgrid
@@ -309,22 +329,22 @@ class CurieOptimise(CurieGrid):
         along with any additional arguments or keyword arguments.
 
         Args:
-         window : float
-            size of window in metres
-         xc_list : array shape (l,)
-            centroid x values
-         yc_list : array shape (l,)
-            centroid y values
-         func : function
-            Python function to evaluate in parallel
-         args : arguments
-            additional arguments to pass to func
-         kwargs : keyword arguments
-            additional keyword arguments to pass to func
+            window : float
+                size of window in metres
+            xc_list : array shape (l,)
+                centroid x values
+            yc_list : array shape (l,)
+                centroid y values
+            func : function
+                Python function to evaluate in parallel
+            args : arguments
+                additional arguments to pass to `func`
+            kwargs : keyword arguments
+                additional keyword arguments to pass to `func`
 
         Returns:
-            out : list
-                (depends on output of func - see notes)
+            out : list of lists
+                (depends on output of `func` - see notes)
 
         Usage:
             An obvious use case is to compute the Curie depth for many
@@ -334,16 +354,33 @@ class CurieOptimise(CurieGrid):
         
             Each centroid is assigned a new process and sent to a free processor
             to compute. In this case, the output is separate lists of shape(l,)
-            for beta, zt, dz, and C.
+            for \\( \\beta, z_t, \\Delta z, C \\). If `len(xc_list)=2` then,
+
+            &gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1, y2], self.optimise)
+            [[beta1  beta2], [zt1  zt2], [dz1  dz2], [C1  C2]]
 
             Another example is to parallelise the sensitivity analysis:
 
             &gt;&gt;&gt; self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
 
-            This time the output will be a list of lists for beta, zt, dz, and C
-            i.e. if nc=2 is the number of centroids and nsim=4 is the number of
-            simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
-            will be returned for beta, zt, dz, and C.
+            This time the output will be a list of lists for \\( \\beta, z_t, \\Delta z, C \\)
+            i.e. if `len(xc_list)=2` is the number of centroids and `nsim=4` is the number of
+            simulations then separatee lists will be returned for \\( \\beta, z_t, \\Delta z, C \\).
+
+            &gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1,y2], self.sensitivity, 4)
+
+            which would return:
+
+            ```python
+            [[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
+              [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
+             [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
+              [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
+             [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
+              [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
+             [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
+              [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
+            ```
         &#34;&#34;&#34;
 
         n = len(xc_list)
@@ -406,7 +443,7 @@ class CurieOptimise(CurieGrid):
     def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         &#34;&#34;&#34;
         Iterate through a list of centroids to compute the optimal values
-        of beta, zt, dz, C for a given window size.
+        of \\( \\beta, z_t, \\Delta z, C \\) for a given window size.
         
         Args:
             window : float
@@ -424,12 +461,12 @@ class CurieOptimise(CurieGrid):
             C : float
                 field constant
             taper : function
-                taper function (default=np.hanning)
+                taper function (default=`numpy.hanning`)
                 set to None for no taper function
-         process_subgrids : func
-            a custom function to process the subgrid
-         kwargs : keyword arguments
-            to pass to radial_spectrum.
+            process_subgrids : func
+                a custom function to process the subgrid
+            kwargs : keyword arguments
+                to pass to radial_spectrum.
 
         Returns:
             beta : ndarray shape (l,)
@@ -449,8 +486,9 @@ class CurieOptimise(CurieGrid):
         &#34;&#34;&#34;
         MCMC algorithm using a Metropolis-Hastings sampler.
 
-        Evaluates a Markov-Chain for starting values of beta, zt, dz, C
-        and returns the ensemble of model realisations.
+        Evaluates a Markov-Chain for starting values of
+        \\( \\beta, z_t, \\Delta z, C \\) and returns the
+        ensemble of model realisations.
         
         Args:
             window : float
@@ -465,7 +503,8 @@ class CurieOptimise(CurieGrid):
                 number of burn-in simulations before to nsim
             x_scale: float(4) (optional)
                 scaling factor for new proposals
-                default is [1,1,1,1] for [beta, zt, dz, C] - see notes
+                (default=`[1,1,1,1]` for `[beta, zt, dz, C]`)
+                - see notes
             beta : float
                 fractal parameter (starting value)
             zt : float
@@ -486,9 +525,10 @@ class CurieOptimise(CurieGrid):
                 field constant
 
         Notes:
-            nsim, burnin, and x_scale should be tweaked for optimal performance
-            Use starting values of beta, zt, dz, C relatively close to the solution
-            - C can easily found from the mean of the radial power spectrum.
+            `nsim`, `burnin`, and `x_scale` should be tweaked for optimal performance
+            Use starting values of \\( \\beta, z_t, \\Delta z, C \\) relatively
+            close to the solution - \\( C \\) can easily found from the mean of the
+            radial power spectrum.
 
             During the burn-in stage we apply tempering to the PDF to iterate closer
             towards the solution. This has the effect of smoothing out the posterior
@@ -558,8 +598,9 @@ class CurieOptimise(CurieGrid):
     def sensitivity(self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         &#34;&#34;&#34;
         Iterate through a list of centroids to compute the mean and
-        standard deviation of beta, zt, dz, C by perturbing their
-        prior distributions (if provided by the user - see add_prior).
+        standard deviation of \\( \\beta, z_t, \\Delta z, C \\) by
+        perturbing their prior distributions
+        (if provided by the user - see add_prior).
         
         Args:
             nsim : int
@@ -571,7 +612,7 @@ class CurieOptimise(CurieGrid):
             yc : float
                 centroid y values
             nsim : int
-                - number of simulations
+                number of simulations
             beta : float
                 starting fractal parameter 
             zt : float
@@ -648,8 +689,9 @@ class CurieOptimise(CurieGrid):
 <span>(</span><span>grid, xmin, xmax, ymin, ymax, **kwargs)</span>
 </code></dt>
 <dd>
-<section class="desc"><p>Extends the CurieGrid class to include optimisation routines
-see scipy.optimize.minimize for a description of the algorithm</p>
+<section class="desc"><p>Extends the <a title="pycurious.grid.CurieGrid" href="grid.html#pycurious.grid.CurieGrid"><code>CurieGrid</code></a> class to include
+optimisation routines see <code>scipy.optimize.minimize</code> for
+a description of the algorithm.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>grid</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
@@ -666,17 +708,19 @@ see scipy.optimize.minimize for a description of the algorithm</p>
 <h2 id="attributes">Attributes</h2>
 <dl>
 <dt><strong><code>bounds</code></strong> :&ensp;<code>list</code> of <code>tuples</code></dt>
-<dd>lower and upper bounds for beta, zt, dz, C</dd>
-</dl>
-<p>prior
-: dict
-dictionary of priors for beta, zt, dz, C</p></section>
+<dd>lower and upper bounds for <script type="math/tex"> \beta, z_t, \Delta z, C </script>
+</dd>
+<dt><strong><code>prior</code></strong> :&ensp;<code>dict</code></dt>
+<dd>dictionary of priors for <script type="math/tex"> \beta, z_t, \Delta z, C </script>
+</dd>
+</dl></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">class CurieOptimise(CurieGrid):
     &#34;&#34;&#34;
-    Extends the CurieGrid class to include optimisation routines
-    see scipy.optimize.minimize for a description of the algorithm
+    Extends the `pycurious.grid.CurieGrid` class to include
+    optimisation routines see `scipy.optimize.minimize` for
+    a description of the algorithm.
 
     Args:
         grid : 2D numpy array
@@ -692,9 +736,9 @@ dictionary of priors for beta, zt, dz, C</p></section>
     
     Attributes:
         bounds : list of tuples
-            lower and upper bounds for beta, zt, dz, C
-        prior  : dict
-            dictionary of priors for beta, zt, dz, C
+            lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
+        prior : dict
+            dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
     &#34;&#34;&#34;
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
@@ -717,10 +761,10 @@ dictionary of priors for beta, zt, dz, C</p></section>
     def add_prior(self, **kwargs):
         &#34;&#34;&#34;
         Add a prior to the dictionary (tuple)
-        Available priors are beta, zt, dz, C
+        Available priors are \\( \\beta, z_t, \\Delta z, C \\)
 
         Assumes a normal distribution or
-        define another distribution from scipy.stats
+        define another distribution from `scipy.stats`
 
         Usage:
             &gt;&gt;&gt; add_prior(beta=(p, sigma_p))
@@ -764,7 +808,7 @@ dictionary of priors for beta, zt, dz, C</p></section>
             &gt;&gt;&gt; objective_routine(beta=2.5)
 
         Returns:
-            misfit  : float
+            misfit : float
                 misfit integrated over all observations and priors
         &#34;&#34;&#34;
         c = 0.0
@@ -788,7 +832,7 @@ dictionary of priors for beta, zt, dz, C</p></section>
             sigma_x0 : float, ndarray
 
         Returns:
-            misfit   : float
+            misfit : float
         &#34;&#34;&#34;
         return 0.5*np.sum((x - x0)**2/sigma_x0**2)
 
@@ -799,20 +843,20 @@ dictionary of priors for beta, zt, dz, C</p></section>
 
         Args:
             x : array shape (n,)
-                array of variables [beta, zt, dz, C]
+                array of variables \\( \\beta, z_t, \\Delta z, C \\)
             kh : array shape (n,)
                 wavenumbers (rad/km)
             Phi : array shape (n,)
-                radial power spectrum
+                radial power spectrum \\( \\Phi \\)
             sigma_Phi : array shape (n,)
-                standard deviation of Phi
+                standard deviation of Phi, \\( \\sigma_{\\Phi} \\)
 
         Returns:
-            misfit    : float
-                sum of misfit (float)
+            misfit : float
+                sum of misfit (scalar)
 
         Notes:
-            We purposely ignore all warnings raised by the bouligand2009
+            We purposely ignore all warnings raised by the `pycurious.grid.bouligand2009`
             function because some combinations of input parameters will
             trigger an out-of-range warning that will crash the minimiser.
             Instead, the misfit is set to a very large number when this occurs.
@@ -832,11 +876,11 @@ dictionary of priors for beta, zt, dz, C</p></section>
 
     def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         &#34;&#34;&#34;
-        Find the optimal parameters of beta, zt, dz, C for a given
-        centroid (xc,yc) and window size.
+        Find the optimal parameters of \\( \\beta, z_t, \\Delta z, C \\)
+        for a given centroid (xc,yc) and window size.
 
         Args:
-            window  : float
+            window : float
                 size of window in metres
             xc : float
                 centroid x values
@@ -850,7 +894,7 @@ dictionary of priors for beta, zt, dz, C</p></section>
                 thickness of magnetic layer (starting value)
             C : float
                 field constant (starting value)
-            taper : taper (default=np.hanning)
+            taper : taper (default=`numpy.hanning`)
                 taper function, set to None for no taper function
             process_subgrids : function
                 a custom function to process the subgrid
@@ -914,22 +958,22 @@ dictionary of priors for beta, zt, dz, C</p></section>
         along with any additional arguments or keyword arguments.
 
         Args:
-         window : float
-            size of window in metres
-         xc_list : array shape (l,)
-            centroid x values
-         yc_list : array shape (l,)
-            centroid y values
-         func : function
-            Python function to evaluate in parallel
-         args : arguments
-            additional arguments to pass to func
-         kwargs : keyword arguments
-            additional keyword arguments to pass to func
+            window : float
+                size of window in metres
+            xc_list : array shape (l,)
+                centroid x values
+            yc_list : array shape (l,)
+                centroid y values
+            func : function
+                Python function to evaluate in parallel
+            args : arguments
+                additional arguments to pass to `func`
+            kwargs : keyword arguments
+                additional keyword arguments to pass to `func`
 
         Returns:
-            out : list
-                (depends on output of func - see notes)
+            out : list of lists
+                (depends on output of `func` - see notes)
 
         Usage:
             An obvious use case is to compute the Curie depth for many
@@ -939,16 +983,33 @@ dictionary of priors for beta, zt, dz, C</p></section>
         
             Each centroid is assigned a new process and sent to a free processor
             to compute. In this case, the output is separate lists of shape(l,)
-            for beta, zt, dz, and C.
+            for \\( \\beta, z_t, \\Delta z, C \\). If `len(xc_list)=2` then,
+
+            &gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1, y2], self.optimise)
+            [[beta1  beta2], [zt1  zt2], [dz1  dz2], [C1  C2]]
 
             Another example is to parallelise the sensitivity analysis:
 
             &gt;&gt;&gt; self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
 
-            This time the output will be a list of lists for beta, zt, dz, and C
-            i.e. if nc=2 is the number of centroids and nsim=4 is the number of
-            simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
-            will be returned for beta, zt, dz, and C.
+            This time the output will be a list of lists for \\( \\beta, z_t, \\Delta z, C \\)
+            i.e. if `len(xc_list)=2` is the number of centroids and `nsim=4` is the number of
+            simulations then separatee lists will be returned for \\( \\beta, z_t, \\Delta z, C \\).
+
+            &gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1,y2], self.sensitivity, 4)
+
+            which would return:
+
+            ```python
+            [[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
+              [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
+             [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
+              [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
+             [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
+              [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
+             [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
+              [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
+            ```
         &#34;&#34;&#34;
 
         n = len(xc_list)
@@ -1011,7 +1072,7 @@ dictionary of priors for beta, zt, dz, C</p></section>
     def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         &#34;&#34;&#34;
         Iterate through a list of centroids to compute the optimal values
-        of beta, zt, dz, C for a given window size.
+        of \\( \\beta, z_t, \\Delta z, C \\) for a given window size.
         
         Args:
             window : float
@@ -1029,12 +1090,12 @@ dictionary of priors for beta, zt, dz, C</p></section>
             C : float
                 field constant
             taper : function
-                taper function (default=np.hanning)
+                taper function (default=`numpy.hanning`)
                 set to None for no taper function
-         process_subgrids : func
-            a custom function to process the subgrid
-         kwargs : keyword arguments
-            to pass to radial_spectrum.
+            process_subgrids : func
+                a custom function to process the subgrid
+            kwargs : keyword arguments
+                to pass to radial_spectrum.
 
         Returns:
             beta : ndarray shape (l,)
@@ -1054,8 +1115,9 @@ dictionary of priors for beta, zt, dz, C</p></section>
         &#34;&#34;&#34;
         MCMC algorithm using a Metropolis-Hastings sampler.
 
-        Evaluates a Markov-Chain for starting values of beta, zt, dz, C
-        and returns the ensemble of model realisations.
+        Evaluates a Markov-Chain for starting values of
+        \\( \\beta, z_t, \\Delta z, C \\) and returns the
+        ensemble of model realisations.
         
         Args:
             window : float
@@ -1070,7 +1132,8 @@ dictionary of priors for beta, zt, dz, C</p></section>
                 number of burn-in simulations before to nsim
             x_scale: float(4) (optional)
                 scaling factor for new proposals
-                default is [1,1,1,1] for [beta, zt, dz, C] - see notes
+                (default=`[1,1,1,1]` for `[beta, zt, dz, C]`)
+                - see notes
             beta : float
                 fractal parameter (starting value)
             zt : float
@@ -1091,9 +1154,10 @@ dictionary of priors for beta, zt, dz, C</p></section>
                 field constant
 
         Notes:
-            nsim, burnin, and x_scale should be tweaked for optimal performance
-            Use starting values of beta, zt, dz, C relatively close to the solution
-            - C can easily found from the mean of the radial power spectrum.
+            `nsim`, `burnin`, and `x_scale` should be tweaked for optimal performance
+            Use starting values of \\( \\beta, z_t, \\Delta z, C \\) relatively
+            close to the solution - \\( C \\) can easily found from the mean of the
+            radial power spectrum.
 
             During the burn-in stage we apply tempering to the PDF to iterate closer
             towards the solution. This has the effect of smoothing out the posterior
@@ -1163,8 +1227,9 @@ dictionary of priors for beta, zt, dz, C</p></section>
     def sensitivity(self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
         &#34;&#34;&#34;
         Iterate through a list of centroids to compute the mean and
-        standard deviation of beta, zt, dz, C by perturbing their
-        prior distributions (if provided by the user - see add_prior).
+        standard deviation of \\( \\beta, z_t, \\Delta z, C \\) by
+        perturbing their prior distributions
+        (if provided by the user - see add_prior).
         
         Args:
             nsim : int
@@ -1176,7 +1241,7 @@ dictionary of priors for beta, zt, dz, C</p></section>
             yc : float
                 centroid y values
             nsim : int
-                - number of simulations
+                number of simulations
             beta : float
                 starting fractal parameter 
             zt : float
@@ -1242,10 +1307,6 @@ dictionary of priors for beta, zt, dz, C</p></section>
 <ul class="hlist">
 <li><a title="pycurious.grid.CurieGrid" href="grid.html#pycurious.grid.CurieGrid">CurieGrid</a></li>
 </ul>
-<h3>Subclasses</h3>
-<ul class="hlist">
-<li><a title="pycurious.parallel.CurieParallel" href="parallel.html#pycurious.parallel.CurieParallel">CurieParallel</a></li>
-</ul>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.optimise.CurieOptimise.add_prior"><code class="name flex">
@@ -1253,9 +1314,10 @@ dictionary of priors for beta, zt, dz, C</p></section>
 </code></dt>
 <dd>
 <section class="desc"><p>Add a prior to the dictionary (tuple)
-Available priors are beta, zt, dz, C</p>
+Available priors are <script type="math/tex"> \beta, z_t, \Delta z, C </script>
+</p>
 <p>Assumes a normal distribution or
-define another distribution from scipy.stats</p>
+define another distribution from <code>scipy.stats</code></p>
 <h2 id="usage">Usage</h2>
 <pre><code>&gt;&gt;&gt; add_prior(beta=(p, sigma_p))
 </code></pre>
@@ -1271,10 +1333,10 @@ define another distribution from scipy.stats</p>
 <pre><code class="python">def add_prior(self, **kwargs):
     &#34;&#34;&#34;
     Add a prior to the dictionary (tuple)
-    Available priors are beta, zt, dz, C
+    Available priors are \\( \\beta, z_t, \\Delta z, C \\)
 
     Assumes a normal distribution or
-    define another distribution from scipy.stats
+    define another distribution from `scipy.stats`
 
     Usage:
         &gt;&gt;&gt; add_prior(beta=(p, sigma_p))
@@ -1302,12 +1364,13 @@ define another distribution from scipy.stats</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.metropolis_hastings"><code class="name flex">
-<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fb6ff4c76a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fa9dc41d6a8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>MCMC algorithm using a Metropolis-Hastings sampler.</p>
-<p>Evaluates a Markov-Chain for starting values of beta, zt, dz, C
-and returns the ensemble of model realisations.</p>
+<p>Evaluates a Markov-Chain for starting values of
+<script type="math/tex"> \beta, z_t, \Delta z, C </script> and returns the
+ensemble of model realisations.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>window</code></strong> :&ensp;<code>float</code></dt>
@@ -1323,7 +1386,8 @@ and returns the ensemble of model realisations.</p>
 <dt><strong><code>x_scale</code></strong></dt>
 <dd>float(4) (optional)
 scaling factor for new proposals
-default is [1,1,1,1] for [beta, zt, dz, C] - see notes</dd>
+(default=<code>[1,1,1,1]</code> for <code>[beta, zt, dz, C]</code>)
+- see notes</dd>
 <dt><strong><code>beta</code></strong> :&ensp;<code>float</code></dt>
 <dd>fractal parameter (starting value)</dd>
 <dt><strong><code>zt</code></strong> :&ensp;<code>float</code></dt>
@@ -1345,9 +1409,10 @@ default is [1,1,1,1] for [beta, zt, dz, C] - see notes</dd>
 <dd>field constant</dd>
 </dl>
 <h2 id="notes">Notes</h2>
-<p>nsim, burnin, and x_scale should be tweaked for optimal performance
-Use starting values of beta, zt, dz, C relatively close to the solution
-- C can easily found from the mean of the radial power spectrum.</p>
+<p><code>nsim</code>, <code>burnin</code>, and <code>x_scale</code> should be tweaked for optimal performance
+Use starting values of <script type="math/tex"> \beta, z_t, \Delta z, C </script> relatively
+close to the solution - <script type="math/tex"> C </script> can easily found from the mean of the
+radial power spectrum.</p>
 <p>During the burn-in stage we apply tempering to the PDF to iterate closer
 towards the solution. This has the effect of smoothing out the posterior
 so that minima can be more easily found. This is necessary here because
@@ -1359,8 +1424,9 @@ see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.</p></sectio
     &#34;&#34;&#34;
     MCMC algorithm using a Metropolis-Hastings sampler.
 
-    Evaluates a Markov-Chain for starting values of beta, zt, dz, C
-    and returns the ensemble of model realisations.
+    Evaluates a Markov-Chain for starting values of
+    \\( \\beta, z_t, \\Delta z, C \\) and returns the
+    ensemble of model realisations.
     
     Args:
         window : float
@@ -1375,7 +1441,8 @@ see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.</p></sectio
             number of burn-in simulations before to nsim
         x_scale: float(4) (optional)
             scaling factor for new proposals
-            default is [1,1,1,1] for [beta, zt, dz, C] - see notes
+            (default=`[1,1,1,1]` for `[beta, zt, dz, C]`)
+            - see notes
         beta : float
             fractal parameter (starting value)
         zt : float
@@ -1396,9 +1463,10 @@ see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.</p></sectio
             field constant
 
     Notes:
-        nsim, burnin, and x_scale should be tweaked for optimal performance
-        Use starting values of beta, zt, dz, C relatively close to the solution
-        - C can easily found from the mean of the radial power spectrum.
+        `nsim`, `burnin`, and `x_scale` should be tweaked for optimal performance
+        Use starting values of \\( \\beta, z_t, \\Delta z, C \\) relatively
+        close to the solution - \\( C \\) can easily found from the mean of the
+        radial power spectrum.
 
         During the burn-in stage we apply tempering to the PDF to iterate closer
         towards the solution. This has the effect of smoothing out the posterior
@@ -1472,22 +1540,24 @@ see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.</p></sectio
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>x</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
-<dd>array of variables [beta, zt, dz, C]</dd>
+<dd>array of variables <script type="math/tex"> \beta, z_t, \Delta z, C </script>
+</dd>
 <dt><strong><code>kh</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
 <dd>wavenumbers (rad/km)</dd>
 <dt><strong><code>Phi</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
-<dd>radial power spectrum</dd>
+<dd>radial power spectrum <script type="math/tex"> \Phi </script>
+</dd>
 <dt><strong><code>sigma_Phi</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
-<dd>standard deviation of Phi</dd>
+<dd>standard deviation of Phi, <script type="math/tex"> \sigma_{\Phi} </script>
+</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>misfit</code>
-: <code>float</code></dt>
-<dd>sum of misfit (float)</dd>
+<dt><strong><code>misfit</code></strong> :&ensp;<code>float</code></dt>
+<dd>sum of misfit (scalar)</dd>
 </dl>
 <h2 id="notes">Notes</h2>
-<p>We purposely ignore all warnings raised by the bouligand2009
+<p>We purposely ignore all warnings raised by the <a title="pycurious.grid.bouligand2009" href="grid.html#pycurious.grid.bouligand2009"><code>bouligand2009()</code></a>
 function because some combinations of input parameters will
 trigger an out-of-range warning that will crash the minimiser.
 Instead, the misfit is set to a very large number when this occurs.</p></section>
@@ -1499,20 +1569,20 @@ Instead, the misfit is set to a very large number when this occurs.</p></section
 
     Args:
         x : array shape (n,)
-            array of variables [beta, zt, dz, C]
+            array of variables \\( \\beta, z_t, \\Delta z, C \\)
         kh : array shape (n,)
             wavenumbers (rad/km)
         Phi : array shape (n,)
-            radial power spectrum
+            radial power spectrum \\( \\Phi \\)
         sigma_Phi : array shape (n,)
-            standard deviation of Phi
+            standard deviation of Phi, \\( \\sigma_{\\Phi} \\)
 
     Returns:
-        misfit    : float
-            sum of misfit (float)
+        misfit : float
+            sum of misfit (scalar)
 
     Notes:
-        We purposely ignore all warnings raised by the bouligand2009
+        We purposely ignore all warnings raised by the `pycurious.grid.bouligand2009`
         function because some combinations of input parameters will
         trigger an out-of-range warning that will crash the minimiser.
         Instead, the misfit is set to a very large number when this occurs.
@@ -1547,8 +1617,7 @@ Evaluates the l2-norm misfit</p>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>misfit</code>
-: <code>float</code></dt>
+<dt><strong><code>misfit</code></strong> :&ensp;<code>float</code></dt>
 <dd>&nbsp;</dd>
 </dl></section>
 <details class="source">
@@ -1564,7 +1633,7 @@ Evaluates the l2-norm misfit</p>
         sigma_x0 : float, ndarray
 
     Returns:
-        misfit   : float
+        misfit : float
     &#34;&#34;&#34;
     return 0.5*np.sum((x - x0)**2/sigma_x0**2)</code></pre>
 </details>
@@ -1580,8 +1649,7 @@ Only keys stored in self.prior will be added to the total misfit</p>
 </code></pre>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>misfit</code>
-: <code>float</code></dt>
+<dt><strong><code>misfit</code></strong> :&ensp;<code>float</code></dt>
 <dd>misfit integrated over all observations and priors</dd>
 </dl></section>
 <details class="source">
@@ -1595,7 +1663,7 @@ Only keys stored in self.prior will be added to the total misfit</p>
         &gt;&gt;&gt; objective_routine(beta=2.5)
 
     Returns:
-        misfit  : float
+        misfit : float
             misfit integrated over all observations and priors
     &#34;&#34;&#34;
     c = 0.0
@@ -1610,16 +1678,15 @@ Only keys stored in self.prior will be added to the total misfit</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise"><code class="name flex">
-<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fb6ff4c76a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fa9dc41d6a8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
-<section class="desc"><p>Find the optimal parameters of beta, zt, dz, C for a given
-centroid (xc,yc) and window size.</p>
+<section class="desc"><p>Find the optimal parameters of <script type="math/tex"> \beta, z_t, \Delta z, C </script>
+for a given centroid (xc,yc) and window size.</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt>window
-: float</dt>
-<dt>size of window in metres</dt>
+<dt><strong><code>window</code></strong> :&ensp;<code>float</code></dt>
+<dd>size of window in metres</dd>
 <dt><strong><code>xc</code></strong> :&ensp;<code>float</code></dt>
 <dd>centroid x values</dd>
 <dt><strong><code>yc</code></strong> :&ensp;<code>float</code></dt>
@@ -1632,7 +1699,7 @@ centroid (xc,yc) and window size.</p>
 <dd>thickness of magnetic layer (starting value)</dd>
 <dt><strong><code>C</code></strong> :&ensp;<code>float</code></dt>
 <dd>field constant (starting value)</dd>
-<dt><strong><code>taper</code></strong> :&ensp;<code>taper</code> (default=<code>np.hanning</code>)</dt>
+<dt><strong><code>taper</code></strong> :&ensp;<code>taper</code> (default=<code>numpy.hanning</code>)</dt>
 <dd>taper function, set to None for no taper function</dd>
 <dt><strong><code>process_subgrids</code></strong> :&ensp;<code>function</code></dt>
 <dd>a custom function to process the subgrid</dd>
@@ -1654,11 +1721,11 @@ centroid (xc,yc) and window size.</p>
 <summary>Source code</summary>
 <pre><code class="python">def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
     &#34;&#34;&#34;
-    Find the optimal parameters of beta, zt, dz, C for a given
-    centroid (xc,yc) and window size.
+    Find the optimal parameters of \\( \\beta, z_t, \\Delta z, C \\)
+    for a given centroid (xc,yc) and window size.
 
     Args:
-        window  : float
+        window : float
             size of window in metres
         xc : float
             centroid x values
@@ -1672,7 +1739,7 @@ centroid (xc,yc) and window size.</p>
             thickness of magnetic layer (starting value)
         C : float
             field constant (starting value)
-        taper : taper (default=np.hanning)
+        taper : taper (default=`numpy.hanning`)
             taper function, set to None for no taper function
         process_subgrids : function
             a custom function to process the subgrid
@@ -1713,11 +1780,11 @@ centroid (xc,yc) and window size.</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise_routine"><code class="name flex">
-<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fb6ff4c76a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fa9dc41d6a8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the optimal values
-of beta, zt, dz, C for a given window size.</p>
+of <script type="math/tex"> \beta, z_t, \Delta z, C </script> for a given window size.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>window</code></strong> :&ensp;<code>float</code></dt>
@@ -1735,13 +1802,13 @@ of beta, zt, dz, C for a given window size.</p>
 <dt><strong><code>C</code></strong> :&ensp;<code>float</code></dt>
 <dd>field constant</dd>
 <dt><strong><code>taper</code></strong> :&ensp;<code>function</code></dt>
-<dd>taper function (default=np.hanning)
+<dd>taper function (default=<code>numpy.hanning</code>)
 set to None for no taper function</dd>
+<dt><strong><code>process_subgrids</code></strong> :&ensp;<code>func</code></dt>
+<dd>a custom function to process the subgrid</dd>
+<dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
+<dd>to pass to radial_spectrum.</dd>
 </dl>
-<p>process_subgrids : func
-a custom function to process the subgrid
-kwargs : keyword arguments
-to pass to radial_spectrum.</p>
 <h2 id="returns">Returns</h2>
 <dl>
 <dt><strong><code>beta</code></strong> :&ensp;<code>ndarray</code> <code>shape</code> (<code>l</code>,)</dt>
@@ -1758,7 +1825,7 @@ to pass to radial_spectrum.</p>
 <pre><code class="python">def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
     &#34;&#34;&#34;
     Iterate through a list of centroids to compute the optimal values
-    of beta, zt, dz, C for a given window size.
+    of \\( \\beta, z_t, \\Delta z, C \\) for a given window size.
     
     Args:
         window : float
@@ -1776,12 +1843,12 @@ to pass to radial_spectrum.</p>
         C : float
             field constant
         taper : function
-            taper function (default=np.hanning)
+            taper function (default=`numpy.hanning`)
             set to None for no taper function
-     process_subgrids : func
-        a custom function to process the subgrid
-     kwargs : keyword arguments
-        to pass to radial_spectrum.
+        process_subgrids : func
+            a custom function to process the subgrid
+        kwargs : keyword arguments
+            to pass to radial_spectrum.
 
     Returns:
         beta : ndarray shape (l,)
@@ -1805,23 +1872,25 @@ to pass to radial_spectrum.</p>
 evaluations of a function centroids across processors.</p>
 <p>Supply the window size and lists of x,y coordinates to a function
 along with any additional arguments or keyword arguments.</p>
-<p>Args:
-window : float
-size of window in metres
-xc_list : array shape (l,)
-centroid x values
-yc_list : array shape (l,)
-centroid y values
-func : function
-Python function to evaluate in parallel
-args : arguments
-additional arguments to pass to func
-kwargs : keyword arguments
-additional keyword arguments to pass to func</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>window</code></strong> :&ensp;<code>float</code></dt>
+<dd>size of window in metres</dd>
+<dt><strong><code>xc_list</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>l</code>,)</dt>
+<dd>centroid x values</dd>
+<dt><strong><code>yc_list</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>l</code>,)</dt>
+<dd>centroid y values</dd>
+<dt><strong><code>func</code></strong> :&ensp;<code>function</code></dt>
+<dd>Python function to evaluate in parallel</dd>
+<dt><strong><code>args</code></strong> :&ensp;<code>arguments</code></dt>
+<dd>additional arguments to pass to <code>func</code></dd>
+<dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
+<dd>additional keyword arguments to pass to <code>func</code></dd>
+</dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><strong><code>out</code></strong> :&ensp;<code>list</code></dt>
-<dd>(depends on output of func - see notes)</dd>
+<dt><strong><code>out</code></strong> :&ensp;<code>list</code> of <code>lists</code></dt>
+<dd>(depends on output of <code>func</code> - see notes)</dd>
 </dl>
 <h2 id="usage">Usage</h2>
 <p>An obvious use case is to compute the Curie depth for many
@@ -1830,14 +1899,28 @@ centroids in parallel.</p>
 </code></pre>
 <p>Each centroid is assigned a new process and sent to a free processor
 to compute. In this case, the output is separate lists of shape(l,)
-for beta, zt, dz, and C.</p>
+for <script type="math/tex"> \beta, z_t, \Delta z, C </script>. If <code>len(xc_list)=2</code> then,</p>
+<pre><code>&gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1, y2], self.optimise)
+[[beta1  beta2], [zt1  zt2], [dz1  dz2], [C1  C2]]
+</code></pre>
 <p>Another example is to parallelise the sensitivity analysis:</p>
 <pre><code>&gt;&gt;&gt; self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
 </code></pre>
-<p>This time the output will be a list of lists for beta, zt, dz, and C
-i.e. if nc=2 is the number of centroids and nsim=4 is the number of
-simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
-will be returned for beta, zt, dz, and C.</p></section>
+<p>This time the output will be a list of lists for <script type="math/tex"> \beta, z_t, \Delta z, C </script>
+i.e. if <code>len(xc_list)=2</code> is the number of centroids and <code>nsim=4</code> is the number of
+simulations then separatee lists will be returned for <script type="math/tex"> \beta, z_t, \Delta z, C </script>.</p>
+<pre><code>&gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1,y2], self.sensitivity, 4)
+</code></pre>
+<p>which would return:</p>
+<pre><code class="python">[[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
+  [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
+ [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
+  [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
+ [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
+  [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
+ [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
+  [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
+</code></pre></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">def parallelise_routine(self, window, xc_list, yc_list, func, *args, **kwargs):
@@ -1849,22 +1932,22 @@ will be returned for beta, zt, dz, and C.</p></section>
     along with any additional arguments or keyword arguments.
 
     Args:
-     window : float
-        size of window in metres
-     xc_list : array shape (l,)
-        centroid x values
-     yc_list : array shape (l,)
-        centroid y values
-     func : function
-        Python function to evaluate in parallel
-     args : arguments
-        additional arguments to pass to func
-     kwargs : keyword arguments
-        additional keyword arguments to pass to func
+        window : float
+            size of window in metres
+        xc_list : array shape (l,)
+            centroid x values
+        yc_list : array shape (l,)
+            centroid y values
+        func : function
+            Python function to evaluate in parallel
+        args : arguments
+            additional arguments to pass to `func`
+        kwargs : keyword arguments
+            additional keyword arguments to pass to `func`
 
     Returns:
-        out : list
-            (depends on output of func - see notes)
+        out : list of lists
+            (depends on output of `func` - see notes)
 
     Usage:
         An obvious use case is to compute the Curie depth for many
@@ -1874,16 +1957,33 @@ will be returned for beta, zt, dz, and C.</p></section>
     
         Each centroid is assigned a new process and sent to a free processor
         to compute. In this case, the output is separate lists of shape(l,)
-        for beta, zt, dz, and C.
+        for \\( \\beta, z_t, \\Delta z, C \\). If `len(xc_list)=2` then,
+
+        &gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1, y2], self.optimise)
+        [[beta1  beta2], [zt1  zt2], [dz1  dz2], [C1  C2]]
 
         Another example is to parallelise the sensitivity analysis:
 
         &gt;&gt;&gt; self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
 
-        This time the output will be a list of lists for beta, zt, dz, and C
-        i.e. if nc=2 is the number of centroids and nsim=4 is the number of
-        simulations then separatee lists [[k1, k2, k3, k4], [k1, k2, k3, k4]]
-        will be returned for beta, zt, dz, and C.
+        This time the output will be a list of lists for \\( \\beta, z_t, \\Delta z, C \\)
+        i.e. if `len(xc_list)=2` is the number of centroids and `nsim=4` is the number of
+        simulations then separatee lists will be returned for \\( \\beta, z_t, \\Delta z, C \\).
+
+        &gt;&gt;&gt; self.parallelise_routine(window, [x1,x2], [y1,y2], self.sensitivity, 4)
+
+        which would return:
+
+        ```python
+        [[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
+          [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
+         [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
+          [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
+         [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
+          [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
+         [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
+          [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
+        ```
     &#34;&#34;&#34;
 
     n = len(xc_list)
@@ -1958,12 +2058,13 @@ will be returned for beta, zt, dz, and C.</p></section>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.sensitivity"><code class="name flex">
-<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fb6ff4c76a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fa9dc41d6a8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the mean and
-standard deviation of beta, zt, dz, C by perturbing their
-prior distributions (if provided by the user - see add_prior).</p>
+standard deviation of <script type="math/tex"> \beta, z_t, \Delta z, C </script> by
+perturbing their prior distributions
+(if provided by the user - see add_prior).</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>nsim</code></strong> :&ensp;<code>int</code></dt>
@@ -1975,11 +2076,7 @@ prior distributions (if provided by the user - see add_prior).</p>
 <dt><strong><code>yc</code></strong> :&ensp;<code>float</code></dt>
 <dd>centroid y values</dd>
 <dt><strong><code>nsim</code></strong> :&ensp;<code>int</code></dt>
-<dd>
-<ul>
-<li>number of simulations</li>
-</ul>
-</dd>
+<dd>number of simulations</dd>
 <dt><strong><code>beta</code></strong> :&ensp;<code>float</code></dt>
 <dd>starting fractal parameter</dd>
 <dt><strong><code>zt</code></strong> :&ensp;<code>float</code></dt>
@@ -2005,8 +2102,9 @@ prior distributions (if provided by the user - see add_prior).</p>
 <pre><code class="python">def sensitivity(self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
     &#34;&#34;&#34;
     Iterate through a list of centroids to compute the mean and
-    standard deviation of beta, zt, dz, C by perturbing their
-    prior distributions (if provided by the user - see add_prior).
+    standard deviation of \\( \\beta, z_t, \\Delta z, C \\) by
+    perturbing their prior distributions
+    (if provided by the user - see add_prior).
     
     Args:
         nsim : int
@@ -2018,7 +2116,7 @@ prior distributions (if provided by the user - see add_prior).</p>
         yc : float
             centroid y values
         nsim : int
-            - number of simulations
+            number of simulations
         beta : float
             starting fractal parameter 
         zt : float
