@@ -1,22 +1,45 @@
+# Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+
 """
-Copyright 2018 Ben Mather, Robert Delhaye
+This module provides some simple functions to download or install files.
 
-This file is part of PyCurious.
+It is good practise to store a checksum for each file. A checksum is a
+unique signature used to identify a file, and ensure that the data
+contained within the file is legitimate. Here is a sample workflow for
+downloading EMAG2 (v3) and evaluating its checksum:
 
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
+```python
+resource = {
+     "local_file":"../../data/EMAG2_V3_20170530.npz",
+     "md5":'c0898b6a91efb3f13783873a8b67380c',
+     "url":"https://zenodo.org/record/3245551/files/EMAG2_V3_20170530.npz?download=1",
+     "expected_size":"500Mb"
+    }
 
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+download_cached_file(resource["url"], resource["local_file"], resource["md5"], resource["expected_size"])
+```
 
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+The file will commence downloading if it does not already exist in the local directory
+or if the checksum (md5) does not match. If you do not know the checksum for a file, run
+
+>>> md5sum(filename)
+
+to return its unique identifier.
 """
-
-## Here are some functions to download or install files. 
 
 def download_file(url, local_filename, expected_size="Unknown"):
     """
