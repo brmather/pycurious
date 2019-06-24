@@ -1,11 +1,13 @@
-# PyCurious
+![PyCurious](https://github.com/brmather/pycurious/blob/master/pycurious/Examples/Images/pycurious-logo.png?raw=true)
 
 [![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/brmather/pycurious.svg)](https://hub.docker.com/r/brmather/pycurious)
 [![PyPI](https://img.shields.io/pypi/v/pycurious.svg)](https://pypi.org/project/pycurious/)
+[![DOI](https://zenodo.org/badge/123281222.svg)](https://zenodo.org/badge/latestdoi/123281222)
+[![Build Status](https://travis-ci.org/brmather/pycurious.svg?branch=master)](https://travis-ci.org/brmather/pycurious)
 
-Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. The most prevalent magnetic mineral is magnetite, which has a Curie point of 580C, thus the Curie depth is often interpreted as the 580C isotherm.
+Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. The most prevalent magnetic mineral is magnetite, which has a Curie point of 580°C, thus the Curie depth is often interpreted as the 580°C isotherm.
 
-Current methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum. `pycurious` implements the Tanaka *et al.* (1999) and Bouligand *et al.* (2009) methods for computing the thickness of a buried magnetic source, which are covered within Jupyter notebooks.
+Current methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum. `pycurious` implements the Tanaka *et al.* (1999) and Bouligand *et al.* (2009) methods for computing the thickness of a buried magnetic source. `pycurious` ingests maps of the magnetic anomaly and distributes the computation of Curie depth across multiple CPUs. Common computational workflows and geospatial manipulation of magnetic data are covered in the Jupyter notebooks bundled with this package.
 
 #### Binder
 
@@ -15,29 +17,66 @@ Launch the demonstration at [mybinder.org](https://mybinder.org/v2/gh/brmather/p
 
 ## Navigation / Notebooks
 
-There are two matching sets of `pycurious` notebooks - one set for the [Tanaka](#Tanaka) and one for [Bouligand](#Bouligand) implementations. The Bouligand set of noteboks are a natural choice for Bayesian inference applications.
-
-### Tanaka
-
-- [Ex1-Plot-power-spectrum.ipynb](pycurious-src/pycurious/Examples/Notebooks/Tanaka/Ex1-Plot-power-spectrum.ipynb)
-- [Ex2-Compute-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb)
-- [Ex3-Parameter-exploration.ipynb](pycurious-src/pycurious/Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb)
-
-### Bouligand
-
-- [Ex1-Plot-power-spectrum.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb)
-- [Ex2-Compute-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb)
-- [Ex3-Posing-the-inverse-problem.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb)
-- [Ex4-Spatial-variation-of-Curie-depth.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
-- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](pycurious-src/pycurious/Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
-
-## Examples
+There are two matching sets of Jupyter notebooks - one set for the [Tanaka](#Tanaka) and one for [Bouligand](#Bouligand) implementations. The Bouligand set of noteboks are a natural choice for Bayesian inference applications.
 
 Note, these examples can be installed from the package itself by running:
 
 ```python
 import pycurious
 pycurious.install_documentation(path="Notebooks")
+```
+
+### Tanaka
+
+- [Ex1-Plot-power-spectrum.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex1-Plot-power-spectrum.ipynb)
+- [Ex2-Compute-Curie-depth.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb)
+- [Ex3-Parameter-exploration.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb)
+
+### Bouligand
+
+- [Ex1-Plot-power-spectrum.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb)
+- [Ex2-Compute-Curie-depth.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb)
+- [Ex3-Posing-the-inverse-problem.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb)
+- [Ex4-Spatial-variation-of-Curie-depth.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
+- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
+
+
+## Installation
+
+### Dependencies
+
+You will need **Python 2.7 or 3.5+**.
+Also, the following packages are required:
+
+- [`numpy`](http://numpy.org)
+- [`scipy`](https://scipy.org)
+- [`cython`](https://cython.org/)
+
+__Optional dependencies__ for mapping module and running the Notebooks:
+
+- [`matplotlib`](https://matplotlib.org/)
+- [`pyproj`](https://github.com/jswhit/pyproj)
+- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
+
+### Installing using pip
+
+You can install `pycurious` using the
+[`pip package manager`](https://pypi.org/project/pip/) with either version of Python:
+
+```bash
+python2 -m pip install pycurious
+python3 -m pip install pycurious
+```
+All the dependencies will be automatically installed by `pip`.
+
+### Installing using Docker
+
+A more straightforward installation for `pycurious` and all of its dependencies may be deployed with [Docker](https://www.docker.com).
+To install the docker image and start the Jupyter notebook examples:
+
+```bash
+docker pull brmather/pycurious:latest
+docker run --name pycurious -p 8888:8888 brmather/pycurious:latest
 ```
 
 ## Usage
@@ -64,43 +103,19 @@ subgrid = grid.subgrid(window_size, x, y)
 k, Phi, sigma_Phi = grid.radial_spectrum(subgrid)
 ```
 
-## Installation
-
-To install with **setuptools**:
-
-```bash
-python setup.py install --user
-```
-
-This will compile all C source code and install them to the user directory (omit the `--user` flag to install to the system directory). Remember to delete the build folder if you are upgrading this package.
-
-Alternatively, install using **pip**:
+A series of tests are located in the *tests* subdirectory.
+In order to perform these tests, clone the repository and run [`pytest`](https://pypi.org/project/pytest/):
 
 ```bash
-pip install pycurious --user
+git checkout https://github.com/brmather/pycurious.git
+cd pycurious
+pytest -v
 ```
 
-### Dependencies
+### API Documentation
 
-- Python 2.7+ and 3.6+
-- Numpy 1.9+
-- Scipy 0.14+
-- Cython
+The API for all functions and classes in `pycurious` can be accessed from [https://brmather.github.io/pycurious/](https://brmather.github.io/pycurious/).
 
-Optional dependencies for mapping module:
-
-- Matplotlib
-- [pyproj](https://github.com/jswhit/pyproj)
-- [Cartopy](http://scitools.org.uk/cartopy/docs/latest/index.html)
-
-### Docker
-
-A more straightforward installation for `pycurious` and all of its dependencies may be deployed with [Docker](https://www.docker.com). To install the docker image and test it is working:
-
-```bash
-docker pull brmather/pycurious:latest
-docker run --rm brmather/pycurious:latest help
-```
 
 ## References
 

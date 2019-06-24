@@ -11,9 +11,13 @@ FROM ${FROMIMG_ARG}
 USER root
 WORKDIR /home/jovyan/
 
+RUN apk add \
+    libxml2-dev \
+    libxslt-dev 
+
 RUN python3 -m pip install --no-cache-dir --upgrade \
-	jupyter \
-	pytest
+    jupyter \
+    pytest
 
 ### PyCurious - Notebooks
 
@@ -28,6 +32,10 @@ RUN ipython3 -c 'import pycurious; pycurious.documentation.install_documentation
 ENV NB_USER jovyan
 RUN chown -R jovyan:jovyan /home/jovyan
 USER jovyan
+
+
+# Run the tests with PyTest
+RUN cd $MODULE_DIR && pytest tests/
 
 
 ## These are supplied by the build script

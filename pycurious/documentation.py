@@ -1,19 +1,23 @@
+# Copyright 2018-2019 Ben Mather, Robert Delhaye
+# 
+# This file is part of PyCurious.
+# 
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+# 
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+# 
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+
 """
-Copyright 2018 Ben Mather, Robert Delhaye
+Use the `pycurious.documentation.install_documentation` function to copy all
+Jupyter Notebooks and example data to a local directory.
 
-This file is part of PyCurious.
-
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
-
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import pkg_resources as _pkg_resources
@@ -33,14 +37,14 @@ def install_documentation(path="./PyCurious-Examples"):
 
     Some dependencies exist for the notebooks to be useful:
 
-       - matplotlib: for some diagrams
-       - cartopy: for mapping and visualisation
-       - pyepsg: for converting between map projections
+       - `matplotlib`: for some diagrams
+       - `cartopy`: for mapping and visualisation
+       - `pyepsg`: for converting between map projections
 
     PyCurious dependencies may be explicitly imported in the notebooks including:
 
-       - numpy
-       - scipy
+       - `numpy`
+       - `scipy`
 
     """
 
