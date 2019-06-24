@@ -1,4 +1,4 @@
-# PyCurious
+![PyCurious](https://github.com/brmather/pycurious/blob/master/pycurious/Examples/Images/pycurious-logo.png?raw=true)
 
 [![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/brmather/pycurious.svg)](https://hub.docker.com/r/brmather/pycurious)
 [![PyPI](https://img.shields.io/pypi/v/pycurious.svg)](https://pypi.org/project/pycurious/)
@@ -7,7 +7,7 @@
 
 Magnetic data is one of the most common geophysics datasets available on the surface of the Earth. Curie depth is the depth at which rocks lose their magnetism. The most prevalent magnetic mineral is magnetite, which has a Curie point of 580°C, thus the Curie depth is often interpreted as the 580°C isotherm.
 
-Current methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum. `pycurious` implements the Tanaka *et al.* (1999) and Bouligand *et al.* (2009) methods for computing the thickness of a buried magnetic source, which are covered within Jupyter notebooks.
+Current methods to derive Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole. The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum. `pycurious` implements the Tanaka *et al.* (1999) and Bouligand *et al.* (2009) methods for computing the thickness of a buried magnetic source. `pycurious` ingests maps of the magnetic anomaly and distributes the computation of Curie depth across multiple CPUs. Common computational workflows and geospatial manipulation of magnetic data are covered in the Jupyter notebooks bundled with this package.
 
 #### Binder
 
