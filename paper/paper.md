@@ -49,7 +49,7 @@ Our Python package, `pycurious`, ingests maps of the Earth's magnetic anomaly an
 - Posing the inverse problem and objective function.
 - Mapping Curie depth using the EMAG2 magnetic anomaly dataset [@Meyer2017].
 
-All documentation can be accessed from within the module via a Python function that installs the notebooks at a filesystem location specified by the user at run time.
+All documentation can be accessed from within the module via a Python function that installs the notebooks at a filesystem location specified by the user at run time. The API documentation is kept up-to-date on [GitHub pages](https://brmather.github.io/pycurious/).
 
 
 ## Installation, Dependencies and Usage
