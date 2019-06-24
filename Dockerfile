@@ -2,7 +2,7 @@
 #  Short docker file to distribute some notebooks
 #################################################
 
-ARG FROMIMG_ARG=brmather/pycurious:0.3.1
+ARG FROMIMG_ARG=brmather/pycurious:0.4
 FROM ${FROMIMG_ARG}
 
 USER jovyan
