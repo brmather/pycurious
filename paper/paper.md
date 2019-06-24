@@ -11,7 +11,6 @@ authors:
     orcid: 0000-0003-3566-1557
     affiliation: "1,2" # (Multiple affiliations must be quoted)
   - name: Robert Delhaye
-    orcid: 0000-0000-0000-0000
     affiliation: "2"
 affiliations:
  - name: School of Geoscience, The University of Sydney
