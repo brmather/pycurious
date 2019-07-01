@@ -38,8 +38,8 @@ Maus and Dimri (1995), and the decomposition of <script type="math/tex"> \Phi </
 anomaly according to Tanaka <em>et al.</em> (1999):</p>
 <ul>
 <li><a title="pycurious.grid.bouligand2009" href="#pycurious.grid.bouligand2009"><code>bouligand2009()</code></a>: analytic solution used in <a title="pycurious.optimise.CurieOptimise" href="optimise.html#pycurious.optimise.CurieOptimise"><code>CurieOptimise</code></a></li>
-<li><a title="pycurious.grid.maus1995" href="#pycurious.grid.maus1995"><code>maus1995()</code></a>: simplified version of <code>pycurious.bouligand2009</code> without higher order integration.</li>
-<li><a title="pycurious.grid.tanaka1999" href="#pycurious.grid.tanaka1999"><code>tanaka1999()</code></a>: to be used in conjunction with <code>pycurious.ComputeTanaka</code></li>
+<li><a title="pycurious.grid.maus1995" href="#pycurious.grid.maus1995"><code>maus1995()</code></a>: simplified version of <a title="pycurious.grid.bouligand2009" href="#pycurious.grid.bouligand2009"><code>bouligand2009()</code></a> without higher order integration.</li>
+<li><a title="pycurious.grid.tanaka1999" href="#pycurious.grid.tanaka1999"><code>tanaka1999()</code></a>: to be used in conjunction with <a title="pycurious.grid.ComputeTanaka" href="#pycurious.grid.ComputeTanaka"><code>ComputeTanaka()</code></a></li>
 </ul>
 <details class="source">
 <summary>Source code</summary>
@@ -75,8 +75,8 @@ Maus and Dimri (1995), and the decomposition of \\( \\Phi \\) from the magnetic
 anomaly according to Tanaka *et al.* (1999):
 
 - `bouligand2009`: analytic solution used in `pycurious.optimise.CurieOptimise`
-- `maus1995`: simplified version of `pycurious.bouligand2009` without higher order integration.
-- `tanaka1999`: to be used in conjunction with `pycurious.ComputeTanaka`
+- `maus1995`: simplified version of `bouligand2009` without higher order integration.
+- `tanaka1999`: to be used in conjunction with `ComputeTanaka`
 
 &#34;&#34;&#34;
 
@@ -1760,7 +1760,7 @@ ymax : maximum y bound in metres</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7ff58065d6a8>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f9d6a7006a8>, scale=0.001, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
@@ -1913,7 +1913,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7ff58065d6a8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f9d6a7006a8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
@@ -2008,7 +2008,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7ff58065d6a8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f9d6a7006a8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>

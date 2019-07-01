@@ -38,7 +38,7 @@ download_cached_file(resource[&quot;url&quot;], resource[&quot;local_file&quot;]
 </code></pre>
 <p>The file will commence downloading if it does not already exist in the local directory
 or if the checksum (md5) does not match. If you do not know the checksum for a file, run</p>
-<pre><code>&gt;&gt;&gt; md5sum(filename)
+<pre><code class="python">md5sum(filename)
 </code></pre>
 <p>to return its unique identifier.</p>
 <details class="source">
@@ -81,7 +81,9 @@ download_cached_file(resource[&#34;url&#34;], resource[&#34;local_file&#34;], re
 The file will commence downloading if it does not already exist in the local directory
 or if the checksum (md5) does not match. If you do not know the checksum for a file, run
 
-&gt;&gt;&gt; md5sum(filename)
+```python
+md5sum(filename)
+```
 
 to return its unique identifier.
 &#34;&#34;&#34;
