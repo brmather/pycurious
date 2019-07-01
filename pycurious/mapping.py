@@ -26,8 +26,8 @@ operations, such as:
 It requires some **additional dependencies**:
 
 - [`matplotlib`](https://matplotlib.org/) - for plotting
-- [`pyproj`](https://github.com/jswhit/pyproj) - for transforming CRS
-- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/) - for mapping
+- [`pyproj`](https://github.com/jswhit/pyproj) - for transforming between different CRS
+- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/) - for generating maps
 
 Beware that most global data are georeferenced in WGS84 (EPSG: 4326).
 The radial power spectrum must be in rad/km, which requires a transformation
@@ -35,10 +35,12 @@ from longitude / latitude to a local projection in eastings / northings.
 
 For example, EMAG2 is a global compilation of the magnetic anomaly
 georeferenced in WGS84 longitude / latitude. This will need to be projected
-in a local CRS to use with PyCurious. If we are interested in a region
-across Ireland we could use the IRENET95 local CRS (EPSG: 2157),
+in a local CRS to use with PyCurious. If, for example, we are interested in a
+region across Ireland we could use the IRENET95 local CRS (EPSG: 2157),
 
->>> transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
+```python
+transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
+```
 
 which would return a list of eastings and northings in IRENET95 projection.
 """
