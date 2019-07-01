@@ -30,8 +30,8 @@ Maus and Dimri (1995), and the decomposition of \\( \\Phi \\) from the magnetic
 anomaly according to Tanaka *et al.* (1999):
 
 - `bouligand2009`: analytic solution used in `pycurious.optimise.CurieOptimise`
-- `maus1995`: simplified version of `pycurious.bouligand2009` without higher order integration.
-- `tanaka1999`: to be used in conjunction with `pycurious.ComputeTanaka`
+- `maus1995`: simplified version of `bouligand2009` without higher order integration.
+- `tanaka1999`: to be used in conjunction with `ComputeTanaka`
 
 """
 
