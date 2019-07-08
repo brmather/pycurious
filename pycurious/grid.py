@@ -1,16 +1,16 @@
 # Copyright 2018-2019 Ben Mather, Robert Delhaye
-# 
+#
 # This file is part of PyCurious.
-# 
+#
 # PyCurious is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or any later version.
-# 
+#
 # PyCurious is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Lesser General Public License
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -61,7 +61,7 @@ class CurieGrid(object):
      ymax : maximum y bound in metres
     """
     def __init__(self, grid, xmin, xmax, ymin, ymax):
-        
+
         self.data = np.array(grid)
         ny, nx = self.data.shape
         self.xmin, self.xmax = xmin, xmax
@@ -79,7 +79,7 @@ class CurieGrid(object):
         """
         Extract a subgrid from the data at a window around
         the point (xc,yc)
-        
+
         Args:
             xc : float
                 x coordinate
@@ -115,7 +115,7 @@ class CurieGrid(object):
         imax = min(imax, self.nx)
         jmin = max(jmin, 0)
         jmax = min(jmax, self.ny)
-        
+
         data = self.data[jmin:jmax, imin:imax]
 
         return data
@@ -141,18 +141,18 @@ class CurieGrid(object):
             yc_list : 1D array
                 array of y coordinates
         """
-        
+
         nx, ny = self.nx, self.ny
         xcoords = self.xcoords
         ycoords = self.ycoords
-        
+
         nw = int(round(window/self.dx))
         n2w = nw//2
-        
+
         # this is the densest spacing possible given the data
         xc = xcoords[n2w:-n2w]
         yc = ycoords[n2w:-n2w]
-        
+
         # but we can alter it if required
         if type(spacingX) != type(None):
             xc = np.arange(xc.min(), xc.max(), spacingX)
@@ -160,7 +160,7 @@ class CurieGrid(object):
             yc = np.arange(yc.min(), yc.max(), spacingY)
 
         xq, yq = np.meshgrid(xc, yc)
-            
+
         return xq.ravel(), yq.ravel()
 
 
@@ -260,14 +260,14 @@ class CurieGrid(object):
         Compute the log of the radial spectrum for a square grid.
 
         Args:
-         subgrid : 2D array
-            window of the original data (see subgrid method)
-         taper : function (default=np.hanning)
-            taper function, set to None for no taper function
-         scale : float (detault=0.001)
-            scaling factor to get k into rad/km
-         kwargs : keyword arguments
-            keyword arguments to pass to `taper`
+            subgrid : 2D array
+                window of the original data (see subgrid method)
+            taper : function (default=np.hanning)
+                taper function, set to None for no taper function
+            scale : float (detault=0.001)
+                scaling factor to get k into rad/km
+            kwargs : keyword arguments
+                keyword arguments to pass to `taper`
 
         Returns:
             k : 1D array shape (n,)
@@ -321,8 +321,8 @@ class CurieGrid(object):
             sigma[i] = np.std(rr)
 
         return k, S, sigma
-        
-        
+
+
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
         """
         Compute azimuthal spectrum for a square grid.
@@ -375,7 +375,7 @@ class CurieGrid(object):
         for i in range(0, dtheta.size):
             PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
             S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
-        
+
         return kbins, S, dtheta
 
 
@@ -406,7 +406,7 @@ class CurieGrid(object):
         Returns:
             rtp : 2D array
                 the data reduced to the pole.
-        
+
         References:
             Blakely, R. J. (1996), Potential Theory in Gravity and Magnetic
             Applications, Cambridge University Press.
@@ -464,7 +464,7 @@ class CurieGrid(object):
         with np.errstate(divide='ignore', invalid='ignore'):
             rtp = (kz)/(a1*kx**2 + a2*ky**2 + a3*kx*ky + \
                             1j*np.sqrt(kz)*(b1*kx + b2*ky))
-        
+
         rtp[0, 0] = 0
         ft_pole = rtp*np.fft.fft2(data)
         return np.real(np.fft.ifft2(ft_pole))
@@ -489,7 +489,7 @@ class CurieGrid(object):
                 potential field at the grid points
             height : float
                 height increase (delta z) in meters.
-        
+
         Returns:
             cont : array
                 upward continued data
@@ -577,7 +577,7 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
             expected in ln(sqrt(S)) form
         sigma_lnPhi : standard deviation of lnPhi
         kmin_range : tuple (default:(0.05, 0.2))
-            minimum and maximum range of spatial frequencies to fit for the 
+            minimum and maximum range of spatial frequencies to fit for the
             top of magnetic sources - ideally low frequency, straight line
         kmax_range : tuple (default:(0.05, 0.2))
             minimum and maximum range of spatial frequencies to fit for the
@@ -628,7 +628,7 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
     X1 = sf[mask1]
     Y1 = S[mask1]
     E1 = sigma2[mask1]
-    
+
     # mask high wavenumbers
     kmin, kmax = kmax_range
     mask2 = np.logical_and(sf >=kmin, sf <=kmax)
@@ -640,8 +640,8 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
     Ztr, btr, dZtr = compute_coefficients(X1, Y1, E1)
     Zor, bor, dZor = compute_coefficients(X2, Y2, E2)
     return (Ztr,btr,dZtr), (Zor, bor, dZor)
-    
-    
+
+
 def ComputeTanaka(Ztr, dZtr, Zor, dZor):
     """
     Compute the Curie depth from the results of tanaka1999
@@ -651,7 +651,7 @@ def ComputeTanaka(Ztr, dZtr, Zor, dZor):
             top of the magnetic source
         dZtr : float / 1D array
             error of Ztr
-        Zor : float / 1D array 
+        Zor : float / 1D array
             bottom of the magnetic source
         dZor : float / 1D array
             error of Zor
