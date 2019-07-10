@@ -37,9 +37,7 @@ anomaly according to Tanaka *et al.* (1999):
 
 # -*- coding: utf-8 -*-
 import numpy as np
-from scipy.special import gamma, kv, lambertw
-from scipy.optimize import minimize
-from scipy.signal import tukey
+from scipy.special import gamma, kv
 import warnings
 
 try: range = xrange
@@ -141,8 +139,6 @@ class CurieGrid(object):
             yc_list : 1D array
                 array of y coordinates
         """
-
-        nx, ny = self.nx, self.ny
         xcoords = self.xcoords
         ycoords = self.ycoords
 
@@ -360,7 +356,6 @@ class CurieGrid(object):
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
-        sigma2 = np.zeros((dtheta.size, kbins.size))
 
         # control taper
         if taper is None:
