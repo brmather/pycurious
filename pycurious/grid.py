@@ -212,7 +212,6 @@ class CurieGrid(object):
 
         data = subgrid
         nr, nc = data.shape
-        nw = nr
 
         if nr != nc:
             warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
@@ -228,21 +227,21 @@ class CurieGrid(object):
             vtaper = xq*yq
 
         dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nw - 1)/dx_scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
 
         # fast Fourier transform and shift
         FT = np.abs(np.fft.fft2(data*vtaper))
         FT = np.fft.fftshift(FT)
 
-        kbins = np.arange(dk, dk*nw/2, dk)
+        kbins = np.arange(dk, dk*nr/2, dk)
         nbins = kbins.size - 1
 
         S = np.empty(nbins)
         k = np.empty(nbins)
         sigma = np.empty(nbins)
 
-        i0 = int((nw - 1)//2)
-        ix, iy = np.mgrid[0:nw,0:nw]
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
         kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
 
         for i in range(0, nbins):
@@ -280,7 +279,6 @@ class CurieGrid(object):
 
         data = subgrid
         nr, nc = data.shape
-        nw = nr
 
         if nr != nc:
             warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
@@ -296,21 +294,21 @@ class CurieGrid(object):
             vtaper = xq*yq
 
         dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nw - 1)/dx_scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
 
         # fast Fourier transform and shift
         FT = np.abs(np.fft.fft2(data*vtaper))
         FT = np.fft.fftshift(FT)
 
-        kbins = np.arange(dk, dk*nw/2, dk)
+        kbins = np.arange(dk, dk*nr/2, dk)
         nbins = kbins.size - 1
 
         S = np.empty(nbins)
         k = np.empty(nbins)
         sigma = np.empty(nbins)
 
-        i0 = int((nw - 1)//2)
-        ix, iy = np.mgrid[0:nw,0:nw]
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
         kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
 
         for i in range(0, nbins):
@@ -350,15 +348,14 @@ class CurieGrid(object):
         from pycurious import radon
         data = subgrid
         nr, nc = data.shape
-        nw = nr
 
         if nr != nc:
             raise RuntimeWarning("subgrid is not square {}".format((nr,nc)))
 
         dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nw - 1)/dx_scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
 
-        kbins = np.arange(dk, dk*nw/2, dk)
+        kbins = np.arange(dk, dk*nr/2, dk)
 
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
