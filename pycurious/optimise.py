@@ -241,7 +241,7 @@ class CurieOptimise(CurieGrid):
                 field constant
         """
 
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -494,7 +494,7 @@ class CurieOptimise(CurieGrid):
             large portions of the posterior probability are zero.
             see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.
         """
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -503,7 +503,7 @@ class CurieOptimise(CurieGrid):
         samples = np.empty((nsim, 4))
         x0 = np.array([beta, zt, dz, C])
 
-        if type(x_scale) == type(None):
+        if x_scale is None:
             x_scale = np.ones(4)
 
 
@@ -591,7 +591,7 @@ class CurieOptimise(CurieGrid):
             C : ndarray shape (nsim,)
                 field constant
         """
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
