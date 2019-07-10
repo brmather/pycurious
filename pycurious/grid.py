@@ -244,7 +244,7 @@ class CurieGrid(object):
         ix, iy = np.mgrid[0:nr,0:nr]
         kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
 
-        for i in range(0, nbins):
+        for i in range(nbins):
             mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
             rr = 2.0*np.log(FT[mask])
             S[i] = rr.mean()
