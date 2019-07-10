@@ -154,9 +154,9 @@ class CurieGrid(object):
         yc = ycoords[n2w:-n2w]
 
         # but we can alter it if required
-        if type(spacingX) != type(None):
+        if spacingX is not None:
             xc = np.arange(xc.min(), xc.max(), spacingX)
-        if type(spacingY) != type(None):
+        if spacingY is not None:
             yc = np.arange(yc.min(), yc.max(), spacingY)
 
         xq, yq = np.meshgrid(xc, yc)
@@ -219,7 +219,7 @@ class CurieGrid(object):
 
 
         # control taper
-        if type(taper) == type(None):
+        if taper is None:
             vtaper = 1.0
         else:
             rt = taper(nr, **kwargs)
@@ -287,7 +287,7 @@ class CurieGrid(object):
 
 
         # control taper
-        if type(taper) == type(None):
+        if taper is None:
             vtaper = 1.0
         else:
             rt = taper(nr, **kwargs)
