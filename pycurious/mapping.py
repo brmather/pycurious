@@ -181,7 +181,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     from scipy.interpolate import griddata
     xmin, xmax, ymin, ymax = extent
     
-    if type(epsg_in) != type(None):
+    if epsg_in is not None:
         xt, yt = transform_coordinates(np.array([xmin, xmin, xmax, xmax]),\
                                        np.array([ymin, ymax, ymin, ymax]),\
                                        epsg_out, epsg_in)
@@ -199,7 +199,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
 
 
-    if type(epsg_in) != type(None):
+    if epsg_in is not None:
         # convert back to output CRS
         xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
                                              coords_trim[:,1],\
