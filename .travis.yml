@@ -22,8 +22,8 @@ matrix:
       language: generic
 
 install:
-  - pip3 install Cython numpy scipy pytest git+https://github.com/kernc/pdoc.git@latex_math
-  - pip3 install -e .
+  - python3 -m pip install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
+  - python3 -m pip install -e .
 
 script:
   # run the tests
