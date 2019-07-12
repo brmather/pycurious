@@ -49,14 +49,32 @@ class CurieGrid(object):
     Accepts a 2D array and Cartesian coordinates specifying the
     bounding box of the array
 
-    Grid must be projected in metres
+    Grid must be projected in metres.
 
     Args:
-     grid : 2D array of magnetic data
-     xmin : minimum x bound in metres
-     xmax : maximum x bound in metres
-     ymin : minimum y bound in metres
-     ymax : maximum y bound in metres
+        grid : 2D array of magnetic data of shape (ny, nx)
+        xmin : minimum x bound in metres
+        xmax : maximum x bound in metres
+        ymin : minimum y bound in metres
+        ymax : maximum y bound in metres
+
+    Attributes:
+        data : 2D array of magnetic data of shape (ny, nx)
+        xmin : minimum x bound in metres
+        xmax : maximum x bound in metres
+        ymin : minimum y bound in metres
+        ymax : maximum y bound in metres
+        dx : grid spacing in the x-direction in metres
+        dy : grid spacing in the y-direction in metres
+        nx : number of nodes in the x-direction
+        ny : number of nodes in the y-direction
+        xcoords : array of coordinates in the x-direction
+        ycoords : array of coordinates in the y-direction
+
+    Notes:
+        In all instances `x` indicates eastings in metres and `y` indicates northings.
+        Using a grid of longitude / latitudinal coordinates (degrees) will result
+        in incorrect Curie depth calculations.
     """
     def __init__(self, grid, xmin, xmax, ymin, ymax):
 
