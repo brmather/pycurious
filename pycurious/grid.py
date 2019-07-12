@@ -191,13 +191,88 @@ class CurieGrid(object):
         """
         data = data.copy()
         nr, nc = data.shape
-        xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+        yq, xq = np.mgrid[0:nc,0:nr]
 
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
         data.flat[:] -= np.dot(A, c)
         return data
+
+
+    def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        """
+        Template for tapering the power spectrum used in:
+
+        - `radial_spectrum`
+        - `radial_spectrum_log`
+        - `azimuthal_spectrum`
+        """
+        data = subgrid
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if taper is None:
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
+
+        kbins = np.arange(dk, dk*nr/2, dk)
+        return vtaper, dk, kbins
+
+
+    def _FFT_spectrum(self, subgrid, vtaper, dk, kbins, const):
+        """
+        Template for computing the (fast) Fourier transform used in:
+
+        - `radial_spectrum`
+        - `radial_spectrum_log`
+
+        A constant `const` should be applied to the FFT of the magnetic anomaly
+        to convert `S` and `sigma` to specific units for further analysis.
+
+        It is useful to remember that:
+
+        ```python
+        2*log(FFT) == log(FFT**2)
+        ```
+        """
+        data = subgrid
+        nr, nc = data.shape
+
+        nbins = kbins.size - 1
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(nbins):
+            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
+            rr = const*np.log(FT[mask])
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+
 
     def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """
@@ -222,48 +297,12 @@ class CurieGrid(object):
                 Standard deviation of Phi
         """
 
-        data = subgrid
-        nr, nc = data.shape
-
-        if nr != nc:
-            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
-
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            rt = taper(nr, **kwargs)
-            ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
-        FT = np.fft.fftshift(FT)
-
-        kbins = np.arange(dk, dk*nr/2, dk)
-        nbins = kbins.size - 1
-
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-        for i in range(nbins):
-            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
-            rr = 2.0*np.log(FT[mask])
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-
-        return k, S, sigma
+        # bin the spectrum and compute the taper
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        
+        # calculate the Fourier transform and apply scaling constant to retrieve
+        # values compatible with Bouligand et al. 2009 analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)
 
 
     def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -289,48 +328,12 @@ class CurieGrid(object):
                 standard deviation of lnPhi
         """
 
-        data = subgrid
-        nr, nc = data.shape
+        # bin the spectrum and compute the taper
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
-        if nr != nc:
-            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
-
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            rt = taper(nr, **kwargs)
-            ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
-        FT = np.fft.fftshift(FT)
-
-        kbins = np.arange(dk, dk*nr/2, dk)
-        nbins = kbins.size - 1
-
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-        for i in range(0, nbins):
-            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
-            rr = np.log(np.sqrt(FT[mask]))
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-
-        return k, S, sigma
+        # calculate the Fourier transform and apply scaling constant to retrieve
+        # values compatible with Tanaka et al. 1999 analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)
 
 
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
@@ -358,19 +361,11 @@ class CurieGrid(object):
                 Standard deviation of Phi
         """
         from pycurious import radon
-        data = subgrid
-        nr, nc = data.shape
 
-        if nr != nc:
-            raise RuntimeWarning("subgrid is not square {}".format((nr,nc)))
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        kbins = np.arange(dk, dk*nr/2, dk)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
         dtheta = np.arange(0.0, 180.0, theta)
-        sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+        sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
 
         # control taper
