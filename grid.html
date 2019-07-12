@@ -94,14 +94,32 @@ class CurieGrid(object):
     Accepts a 2D array and Cartesian coordinates specifying the
     bounding box of the array
 
-    Grid must be projected in metres
+    Grid must be projected in metres.
 
     Args:
-     grid : 2D array of magnetic data
-     xmin : minimum x bound in metres
-     xmax : maximum x bound in metres
-     ymin : minimum y bound in metres
-     ymax : maximum y bound in metres
+        grid : 2D array of magnetic data of shape (ny, nx)
+        xmin : minimum x bound in metres
+        xmax : maximum x bound in metres
+        ymin : minimum y bound in metres
+        ymax : maximum y bound in metres
+
+    Attributes:
+        data : 2D array of magnetic data of shape (ny, nx)
+        xmin : minimum x bound in metres
+        xmax : maximum x bound in metres
+        ymin : minimum y bound in metres
+        ymax : maximum y bound in metres
+        dx : grid spacing in the x-direction in metres
+        dy : grid spacing in the y-direction in metres
+        nx : number of nodes in the x-direction
+        ny : number of nodes in the y-direction
+        xcoords : array of coordinates in the x-direction
+        ycoords : array of coordinates in the y-direction
+
+    Notes:
+        In all instances `x` indicates eastings in metres and `y` indicates northings.
+        Using a grid of longitude / latitudinal coordinates (degrees) will result
+        in incorrect Curie depth calculations.
     &#34;&#34;&#34;
     def __init__(self, grid, xmin, xmax, ymin, ymax):
 
@@ -114,8 +132,8 @@ class CurieGrid(object):
         self.nx, self.ny = nx, ny
         self.dx, self.dy = dx, dy
 
-        if abs(dx - dy) &gt; 1.0:
-            warnings.warn(&#34;node spacing should be identical {}&#34;.format((dx,dy)), RuntimeWarning)
+        if not np.allclose(dx, dy):
+            raise ValueError(&#34;node spacing should be identical {}&#34;.format((dx,dy)))
 
 
     def subgrid(self, window, xc, yc):
@@ -136,9 +154,9 @@ class CurieGrid(object):
                 subgrid encompassing window size
         &#34;&#34;&#34;
 
-        # check in coordinate in grid
+        # check whether coordinate is inside grid
         if xc &lt; self.xmin or xc &gt; self.xmax or yc &lt; self.ymin or yc &gt; self.ymax:
-            raise ValueError(&#34;Point ({},{}) outside data range&#34;.format(xc,yc))
+            raise ValueError(&#34;Point {} outside data range&#34;.format((xc,yc)))
 
         # find nearest index to xc,yc
         ix = np.abs(self.xcoords - xc).argmin()
@@ -153,11 +171,9 @@ class CurieGrid(object):
         jmin = iy - n2w
         jmax = iy + n2w + 1
 
-        # safeguard if window size is larger than grid
-        imin = max(imin, 0)
-        imax = min(imax, self.nx)
-        jmin = max(jmin, 0)
-        jmax = min(jmax, self.ny)
+        # check whether window fits inside grid
+        if imin &lt; 0 or imax &gt; self.nx or jmin &lt; 0 or jmax &gt; self.ny:
+            raise ValueError(&#34;Window size {} at centroid {} exceeds the data range&#34;.format(window, (xc,yc)))
 
         data = self.data[jmin:jmax, imin:imax]
 
@@ -220,13 +236,88 @@ class CurieGrid(object):
         &#34;&#34;&#34;
         data = data.copy()
         nr, nc = data.shape
-        xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+        yq, xq = np.mgrid[0:nc,0:nr]
 
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
         data.flat[:] -= np.dot(A, c)
         return data
+
+
+    def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        &#34;&#34;&#34;
+        Template for tapering the power spectrum used in:
+
+        - `radial_spectrum`
+        - `radial_spectrum_log`
+        - `azimuthal_spectrum`
+        &#34;&#34;&#34;
+        data = subgrid
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if taper is None:
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
+
+        kbins = np.arange(dk, dk*nr/2, dk)
+        return vtaper, dk, kbins
+
+
+    def _FFT_spectrum(self, subgrid, vtaper, dk, kbins, const):
+        &#34;&#34;&#34;
+        Template for computing the (fast) Fourier transform used in:
+
+        - `radial_spectrum`
+        - `radial_spectrum_log`
+
+        A constant `const` should be applied to the FFT of the magnetic anomaly
+        to convert `S` and `sigma` to specific units for further analysis.
+
+        It is useful to remember that:
+
+        ```python
+        2*log(FFT) == log(FFT**2)
+        ```
+        &#34;&#34;&#34;
+        data = subgrid
+        nr, nc = data.shape
+
+        nbins = kbins.size - 1
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(nbins):
+            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+            rr = const*np.log(FT[mask])
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+
 
     def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         &#34;&#34;&#34;
@@ -251,48 +342,12 @@ class CurieGrid(object):
                 Standard deviation of Phi
         &#34;&#34;&#34;
 
-        data = subgrid
-        nr, nc = data.shape
-
-        if nr != nc:
-            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
-
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            rt = taper(nr, **kwargs)
-            ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
-        FT = np.fft.fftshift(FT)
-
-        kbins = np.arange(dk, dk*nr/2, dk)
-        nbins = kbins.size - 1
-
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-        for i in range(nbins):
-            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
-            rr = 2.0*np.log(FT[mask])
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-
-        return k, S, sigma
+        # bin the spectrum and compute the taper
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        
+        # calculate the Fourier transform and apply scaling constant to retrieve
+        # values compatible with Bouligand et al. 2009 analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)
 
 
     def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -318,48 +373,12 @@ class CurieGrid(object):
                 standard deviation of lnPhi
         &#34;&#34;&#34;
 
-        data = subgrid
-        nr, nc = data.shape
+        # bin the spectrum and compute the taper
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
-        if nr != nc:
-            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
-
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            rt = taper(nr, **kwargs)
-            ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
-        FT = np.fft.fftshift(FT)
-
-        kbins = np.arange(dk, dk*nr/2, dk)
-        nbins = kbins.size - 1
-
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-        for i in range(0, nbins):
-            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
-            rr = np.log(np.sqrt(FT[mask]))
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-
-        return k, S, sigma
+        # calculate the Fourier transform and apply scaling constant to retrieve
+        # values compatible with Tanaka et al. 1999 analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)
 
 
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
@@ -387,19 +406,11 @@ class CurieGrid(object):
                 Standard deviation of Phi
         &#34;&#34;&#34;
         from pycurious import radon
-        data = subgrid
-        nr, nc = data.shape
 
-        if nr != nc:
-            raise RuntimeWarning(&#34;subgrid is not square {}&#34;.format((nr,nc)))
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        kbins = np.arange(dk, dk*nr/2, dk)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
         dtheta = np.arange(0.0, 180.0, theta)
-        sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+        sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
 
         # control taper
@@ -1265,13 +1276,49 @@ bottom of magnetic source - ideally low frequency, straight line</dd>
 <dd>
 <section class="desc"><p>Accepts a 2D array and Cartesian coordinates specifying the
 bounding box of the array</p>
-<p>Grid must be projected in metres</p>
-<p>Args:
-grid : 2D array of magnetic data
-xmin : minimum x bound in metres
-xmax : maximum x bound in metres
-ymin : minimum y bound in metres
-ymax : maximum y bound in metres</p></section>
+<p>Grid must be projected in metres.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>grid</code></strong> :&ensp;<code>2D</code> <code>array</code> of <code>magnetic</code> <code>data</code> of <code>shape</code> (<code>ny</code>, <code>nx</code>)</dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>xmin</code></strong> :&ensp;<code>minimum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>xmax</code></strong> :&ensp;<code>maximum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>ymin</code></strong> :&ensp;<code>minimum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>ymax</code></strong> :&ensp;<code>maximum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<h2 id="attributes">Attributes</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>array</code> of <code>magnetic</code> <code>data</code> of <code>shape</code> (<code>ny</code>, <code>nx</code>)</dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>xmin</code></strong> :&ensp;<code>minimum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>xmax</code></strong> :&ensp;<code>maximum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>ymin</code></strong> :&ensp;<code>minimum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>ymax</code></strong> :&ensp;<code>maximum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>dx</code></strong> :&ensp;<code>grid</code> <code>spacing</code> <code>in</code> <code>the</code> <code>x</code>-<code>direction</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>dy</code></strong> :&ensp;<code>grid</code> <code>spacing</code> <code>in</code> <code>the</code> <code>y</code>-<code>direction</code> <code>in</code> <code>metres</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>nx</code></strong> :&ensp;<code>number</code> of <code>nodes</code> <code>in</code> <code>the</code> <code>x</code>-<code>direction</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>ny</code></strong> :&ensp;<code>number</code> of <code>nodes</code> <code>in</code> <code>the</code> <code>y</code>-<code>direction</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>xcoords</code></strong> :&ensp;<code>array</code> of <code>coordinates</code> <code>in</code> <code>the</code> <code>x</code>-<code>direction</code></dt>
+<dd>&nbsp;</dd>
+<dt><strong><code>ycoords</code></strong> :&ensp;<code>array</code> of <code>coordinates</code> <code>in</code> <code>the</code> <code>y</code>-<code>direction</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>In all instances <code>x</code> indicates eastings in metres and <code>y</code> indicates northings.
+Using a grid of longitude / latitudinal coordinates (degrees) will result
+in incorrect Curie depth calculations.</p></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">class CurieGrid(object):
@@ -1279,14 +1326,32 @@ ymax : maximum y bound in metres</p></section>
     Accepts a 2D array and Cartesian coordinates specifying the
     bounding box of the array
 
-    Grid must be projected in metres
+    Grid must be projected in metres.
 
     Args:
-     grid : 2D array of magnetic data
-     xmin : minimum x bound in metres
-     xmax : maximum x bound in metres
-     ymin : minimum y bound in metres
-     ymax : maximum y bound in metres
+        grid : 2D array of magnetic data of shape (ny, nx)
+        xmin : minimum x bound in metres
+        xmax : maximum x bound in metres
+        ymin : minimum y bound in metres
+        ymax : maximum y bound in metres
+
+    Attributes:
+        data : 2D array of magnetic data of shape (ny, nx)
+        xmin : minimum x bound in metres
+        xmax : maximum x bound in metres
+        ymin : minimum y bound in metres
+        ymax : maximum y bound in metres
+        dx : grid spacing in the x-direction in metres
+        dy : grid spacing in the y-direction in metres
+        nx : number of nodes in the x-direction
+        ny : number of nodes in the y-direction
+        xcoords : array of coordinates in the x-direction
+        ycoords : array of coordinates in the y-direction
+
+    Notes:
+        In all instances `x` indicates eastings in metres and `y` indicates northings.
+        Using a grid of longitude / latitudinal coordinates (degrees) will result
+        in incorrect Curie depth calculations.
     &#34;&#34;&#34;
     def __init__(self, grid, xmin, xmax, ymin, ymax):
 
@@ -1299,8 +1364,8 @@ ymax : maximum y bound in metres</p></section>
         self.nx, self.ny = nx, ny
         self.dx, self.dy = dx, dy
 
-        if abs(dx - dy) &gt; 1.0:
-            warnings.warn(&#34;node spacing should be identical {}&#34;.format((dx,dy)), RuntimeWarning)
+        if not np.allclose(dx, dy):
+            raise ValueError(&#34;node spacing should be identical {}&#34;.format((dx,dy)))
 
 
     def subgrid(self, window, xc, yc):
@@ -1321,9 +1386,9 @@ ymax : maximum y bound in metres</p></section>
                 subgrid encompassing window size
         &#34;&#34;&#34;
 
-        # check in coordinate in grid
+        # check whether coordinate is inside grid
         if xc &lt; self.xmin or xc &gt; self.xmax or yc &lt; self.ymin or yc &gt; self.ymax:
-            raise ValueError(&#34;Point ({},{}) outside data range&#34;.format(xc,yc))
+            raise ValueError(&#34;Point {} outside data range&#34;.format((xc,yc)))
 
         # find nearest index to xc,yc
         ix = np.abs(self.xcoords - xc).argmin()
@@ -1338,11 +1403,9 @@ ymax : maximum y bound in metres</p></section>
         jmin = iy - n2w
         jmax = iy + n2w + 1
 
-        # safeguard if window size is larger than grid
-        imin = max(imin, 0)
-        imax = min(imax, self.nx)
-        jmin = max(jmin, 0)
-        jmax = min(jmax, self.ny)
+        # check whether window fits inside grid
+        if imin &lt; 0 or imax &gt; self.nx or jmin &lt; 0 or jmax &gt; self.ny:
+            raise ValueError(&#34;Window size {} at centroid {} exceeds the data range&#34;.format(window, (xc,yc)))
 
         data = self.data[jmin:jmax, imin:imax]
 
@@ -1405,13 +1468,88 @@ ymax : maximum y bound in metres</p></section>
         &#34;&#34;&#34;
         data = data.copy()
         nr, nc = data.shape
-        xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+        yq, xq = np.mgrid[0:nc,0:nr]
 
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
 
         data.flat[:] -= np.dot(A, c)
         return data
+
+
+    def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+        &#34;&#34;&#34;
+        Template for tapering the power spectrum used in:
+
+        - `radial_spectrum`
+        - `radial_spectrum_log`
+        - `azimuthal_spectrum`
+        &#34;&#34;&#34;
+        data = subgrid
+        nr, nc = data.shape
+
+        if nr != nc:
+            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
+
+
+        # control taper
+        if taper is None:
+            vtaper = 1.0
+        else:
+            rt = taper(nr, **kwargs)
+            ct = taper(nc, **kwargs)
+            xq, yq = np.meshgrid(ct, rt)
+            vtaper = xq*yq
+
+        dx_scale = self.dx*scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
+
+        kbins = np.arange(dk, dk*nr/2, dk)
+        return vtaper, dk, kbins
+
+
+    def _FFT_spectrum(self, subgrid, vtaper, dk, kbins, const):
+        &#34;&#34;&#34;
+        Template for computing the (fast) Fourier transform used in:
+
+        - `radial_spectrum`
+        - `radial_spectrum_log`
+
+        A constant `const` should be applied to the FFT of the magnetic anomaly
+        to convert `S` and `sigma` to specific units for further analysis.
+
+        It is useful to remember that:
+
+        ```python
+        2*log(FFT) == log(FFT**2)
+        ```
+        &#34;&#34;&#34;
+        data = subgrid
+        nr, nc = data.shape
+
+        nbins = kbins.size - 1
+
+        # fast Fourier transform and shift
+        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.fft.fftshift(FT)
+
+        S = np.empty(nbins)
+        k = np.empty(nbins)
+        sigma = np.empty(nbins)
+
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
+        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+
+        for i in range(nbins):
+            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
+            rr = const*np.log(FT[mask])
+            S[i] = rr.mean()
+            k[i] = kk[mask].mean()
+            sigma[i] = np.std(rr)
+
+        return k, S, sigma
+
 
     def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         &#34;&#34;&#34;
@@ -1436,48 +1574,12 @@ ymax : maximum y bound in metres</p></section>
                 Standard deviation of Phi
         &#34;&#34;&#34;
 
-        data = subgrid
-        nr, nc = data.shape
-
-        if nr != nc:
-            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
-
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            rt = taper(nr, **kwargs)
-            ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
-        FT = np.fft.fftshift(FT)
-
-        kbins = np.arange(dk, dk*nr/2, dk)
-        nbins = kbins.size - 1
-
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-        for i in range(nbins):
-            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
-            rr = 2.0*np.log(FT[mask])
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-
-        return k, S, sigma
+        # bin the spectrum and compute the taper
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        
+        # calculate the Fourier transform and apply scaling constant to retrieve
+        # values compatible with Bouligand et al. 2009 analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)
 
 
     def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -1503,48 +1605,12 @@ ymax : maximum y bound in metres</p></section>
                 standard deviation of lnPhi
         &#34;&#34;&#34;
 
-        data = subgrid
-        nr, nc = data.shape
+        # bin the spectrum and compute the taper
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
-        if nr != nc:
-            warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
-
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            rt = taper(nr, **kwargs)
-            ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
-        FT = np.fft.fftshift(FT)
-
-        kbins = np.arange(dk, dk*nr/2, dk)
-        nbins = kbins.size - 1
-
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-        for i in range(0, nbins):
-            mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
-            rr = np.log(np.sqrt(FT[mask]))
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-
-        return k, S, sigma
+        # calculate the Fourier transform and apply scaling constant to retrieve
+        # values compatible with Tanaka et al. 1999 analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)
 
 
     def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
@@ -1572,19 +1638,11 @@ ymax : maximum y bound in metres</p></section>
                 Standard deviation of Phi
         &#34;&#34;&#34;
         from pycurious import radon
-        data = subgrid
-        nr, nc = data.shape
 
-        if nr != nc:
-            raise RuntimeWarning(&#34;subgrid is not square {}&#34;.format((nr,nc)))
-
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-        kbins = np.arange(dk, dk*nr/2, dk)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
         dtheta = np.arange(0.0, 180.0, theta)
-        sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+        sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
 
         # control taper
@@ -1746,7 +1804,7 @@ ymax : maximum y bound in metres</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f897833e730>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f44bfac7730>, scale=0.001, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
@@ -1799,19 +1857,11 @@ ymax : maximum y bound in metres</p></section>
             Standard deviation of Phi
     &#34;&#34;&#34;
     from pycurious import radon
-    data = subgrid
-    nr, nc = data.shape
 
-    if nr != nc:
-        raise RuntimeWarning(&#34;subgrid is not square {}&#34;.format((nr,nc)))
-
-    dx_scale = self.dx*scale
-    dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-    kbins = np.arange(dk, dk*nr/2, dk)
+    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
     dtheta = np.arange(0.0, 180.0, theta)
-    sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
+    sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
     S = np.zeros((dtheta.size, kbins.size))
 
     # control taper
@@ -1895,7 +1945,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f897833e730>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f44bfac7730>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
@@ -1944,52 +1994,16 @@ will default to maximum Y resolution</dd>
             Standard deviation of Phi
     &#34;&#34;&#34;
 
-    data = subgrid
-    nr, nc = data.shape
-
-    if nr != nc:
-        warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
-
-
-    # control taper
-    if taper is None:
-        vtaper = 1.0
-    else:
-        rt = taper(nr, **kwargs)
-        ct = taper(nc, **kwargs)
-        xq, yq = np.meshgrid(ct, rt)
-        vtaper = xq*yq
-
-    dx_scale = self.dx*scale
-    dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-    # fast Fourier transform and shift
-    FT = np.abs(np.fft.fft2(data*vtaper))
-    FT = np.fft.fftshift(FT)
-
-    kbins = np.arange(dk, dk*nr/2, dk)
-    nbins = kbins.size - 1
-
-    S = np.empty(nbins)
-    k = np.empty(nbins)
-    sigma = np.empty(nbins)
-
-    i0 = int((nr - 1)//2)
-    ix, iy = np.mgrid[0:nr,0:nr]
-    kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-    for i in range(nbins):
-        mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
-        rr = 2.0*np.log(FT[mask])
-        S[i] = rr.mean()
-        k[i] = kk[mask].mean()
-        sigma[i] = np.std(rr)
-
-    return k, S, sigma</code></pre>
+    # bin the spectrum and compute the taper
+    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+    
+    # calculate the Fourier transform and apply scaling constant to retrieve
+    # values compatible with Bouligand et al. 2009 analysis
+    return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)</code></pre>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f897833e730>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f44bfac7730>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
@@ -2038,48 +2052,12 @@ will default to maximum Y resolution</dd>
             standard deviation of lnPhi
     &#34;&#34;&#34;
 
-    data = subgrid
-    nr, nc = data.shape
+    # bin the spectrum and compute the taper
+    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
 
-    if nr != nc:
-        warnings.warn(&#34;subgrid is not square {}&#34;.format((nr,nc)), RuntimeWarning)
-
-
-    # control taper
-    if taper is None:
-        vtaper = 1.0
-    else:
-        rt = taper(nr, **kwargs)
-        ct = taper(nc, **kwargs)
-        xq, yq = np.meshgrid(ct, rt)
-        vtaper = xq*yq
-
-    dx_scale = self.dx*scale
-    dk = 2.0*np.pi/(nr - 1)/dx_scale
-
-    # fast Fourier transform and shift
-    FT = np.abs(np.fft.fft2(data*vtaper))
-    FT = np.fft.fftshift(FT)
-
-    kbins = np.arange(dk, dk*nr/2, dk)
-    nbins = kbins.size - 1
-
-    S = np.empty(nbins)
-    k = np.empty(nbins)
-    sigma = np.empty(nbins)
-
-    i0 = int((nr - 1)//2)
-    ix, iy = np.mgrid[0:nr,0:nr]
-    kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
-
-    for i in range(0, nbins):
-        mask = np.logical_and(kk &gt;= kbins[i], kk &lt;= kbins[i+1])
-        rr = np.log(np.sqrt(FT[mask]))
-        S[i] = rr.mean()
-        k[i] = kk[mask].mean()
-        sigma[i] = np.std(rr)
-
-    return k, S, sigma</code></pre>
+    # calculate the Fourier transform and apply scaling constant to retrieve
+    # values compatible with Tanaka et al. 1999 analysis
+    return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)</code></pre>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.reduce_to_pole"><code class="name flex">
@@ -2278,7 +2256,7 @@ data : 2D numpy array</p></section>
     &#34;&#34;&#34;
     data = data.copy()
     nr, nc = data.shape
-    xq, yq = np.meshgrid(np.arange(0, nc), np.arange(0, nr))
+    yq, xq = np.mgrid[0:nc,0:nr]
 
     A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
     c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
@@ -2327,9 +2305,9 @@ the point (xc,yc)</p>
             subgrid encompassing window size
     &#34;&#34;&#34;
 
-    # check in coordinate in grid
+    # check whether coordinate is inside grid
     if xc &lt; self.xmin or xc &gt; self.xmax or yc &lt; self.ymin or yc &gt; self.ymax:
-        raise ValueError(&#34;Point ({},{}) outside data range&#34;.format(xc,yc))
+        raise ValueError(&#34;Point {} outside data range&#34;.format((xc,yc)))
 
     # find nearest index to xc,yc
     ix = np.abs(self.xcoords - xc).argmin()
@@ -2344,11 +2322,9 @@ the point (xc,yc)</p>
     jmin = iy - n2w
     jmax = iy + n2w + 1
 
-    # safeguard if window size is larger than grid
-    imin = max(imin, 0)
-    imax = min(imax, self.nx)
-    jmin = max(jmin, 0)
-    jmax = min(jmax, self.ny)
+    # check whether window fits inside grid
+    if imin &lt; 0 or imax &gt; self.nx or jmin &lt; 0 or jmax &gt; self.ny:
+        raise ValueError(&#34;Window size {} at centroid {} exceeds the data range&#34;.format(window, (xc,yc)))
 
     data = self.data[jmin:jmax, imin:imax]
 
