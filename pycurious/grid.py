@@ -109,9 +109,9 @@ class CurieGrid(object):
                 subgrid encompassing window size
         """
 
-        # check in coordinate in grid
+        # check whether coordinate is inside grid
         if xc < self.xmin or xc > self.xmax or yc < self.ymin or yc > self.ymax:
-            raise ValueError("Point ({},{}) outside data range".format(xc,yc))
+            raise ValueError("Point {} outside data range".format((xc,yc)))
 
         # find nearest index to xc,yc
         ix = np.abs(self.xcoords - xc).argmin()
@@ -126,11 +126,9 @@ class CurieGrid(object):
         jmin = iy - n2w
         jmax = iy + n2w + 1
 
-        # safeguard if window size is larger than grid
-        imin = max(imin, 0)
-        imax = min(imax, self.nx)
-        jmin = max(jmin, 0)
-        jmax = min(jmax, self.ny)
+        # check whether window fits inside grid
+        if imin < 0 or imax > self.nx or jmin < 0 or jmax > self.ny:
+            raise ValueError("Window size {} at centroid {} exceeds the data range".format(window, (xc,yc)))
 
         data = self.data[jmin:jmax, imin:imax]
 
