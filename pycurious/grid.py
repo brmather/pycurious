@@ -37,9 +37,7 @@ anomaly according to Tanaka *et al.* (1999):
 
 # -*- coding: utf-8 -*-
 import numpy as np
-from scipy.special import gamma, kv, lambertw
-from scipy.optimize import minimize
-from scipy.signal import tukey
+from scipy.special import gamma, kv
 import warnings
 
 try: range = xrange
@@ -141,8 +139,6 @@ class CurieGrid(object):
             yc_list : 1D array
                 array of y coordinates
         """
-
-        nx, ny = self.nx, self.ny
         xcoords = self.xcoords
         ycoords = self.ycoords
 
@@ -154,9 +150,9 @@ class CurieGrid(object):
         yc = ycoords[n2w:-n2w]
 
         # but we can alter it if required
-        if type(spacingX) != type(None):
+        if spacingX is not None:
             xc = np.arange(xc.min(), xc.max(), spacingX)
-        if type(spacingY) != type(None):
+        if spacingY is not None:
             yc = np.arange(yc.min(), yc.max(), spacingY)
 
         xq, yq = np.meshgrid(xc, yc)
@@ -212,14 +208,13 @@ class CurieGrid(object):
 
         data = subgrid
         nr, nc = data.shape
-        nw = nr
 
         if nr != nc:
             warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
 
 
         # control taper
-        if type(taper) == type(None):
+        if taper is None:
             vtaper = 1.0
         else:
             rt = taper(nr, **kwargs)
@@ -228,24 +223,24 @@ class CurieGrid(object):
             vtaper = xq*yq
 
         dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nw - 1)/dx_scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
 
         # fast Fourier transform and shift
         FT = np.abs(np.fft.fft2(data*vtaper))
         FT = np.fft.fftshift(FT)
 
-        kbins = np.arange(dk, dk*nw/2, dk)
+        kbins = np.arange(dk, dk*nr/2, dk)
         nbins = kbins.size - 1
 
         S = np.empty(nbins)
         k = np.empty(nbins)
         sigma = np.empty(nbins)
 
-        i0 = int((nw - 1)//2)
-        ix, iy = np.mgrid[0:nw,0:nw]
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
         kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
 
-        for i in range(0, nbins):
+        for i in range(nbins):
             mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
             rr = 2.0*np.log(FT[mask])
             S[i] = rr.mean()
@@ -280,14 +275,13 @@ class CurieGrid(object):
 
         data = subgrid
         nr, nc = data.shape
-        nw = nr
 
         if nr != nc:
             warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
 
 
         # control taper
-        if type(taper) == type(None):
+        if taper is None:
             vtaper = 1.0
         else:
             rt = taper(nr, **kwargs)
@@ -296,21 +290,21 @@ class CurieGrid(object):
             vtaper = xq*yq
 
         dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nw - 1)/dx_scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
 
         # fast Fourier transform and shift
         FT = np.abs(np.fft.fft2(data*vtaper))
         FT = np.fft.fftshift(FT)
 
-        kbins = np.arange(dk, dk*nw/2, dk)
+        kbins = np.arange(dk, dk*nr/2, dk)
         nbins = kbins.size - 1
 
         S = np.empty(nbins)
         k = np.empty(nbins)
         sigma = np.empty(nbins)
 
-        i0 = int((nw - 1)//2)
-        ix, iy = np.mgrid[0:nw,0:nw]
+        i0 = int((nr - 1)//2)
+        ix, iy = np.mgrid[0:nr,0:nr]
         kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
 
         for i in range(0, nbins):
@@ -350,20 +344,18 @@ class CurieGrid(object):
         from pycurious import radon
         data = subgrid
         nr, nc = data.shape
-        nw = nr
 
         if nr != nc:
             raise RuntimeWarning("subgrid is not square {}".format((nr,nc)))
 
         dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nw - 1)/dx_scale
+        dk = 2.0*np.pi/(nr - 1)/dx_scale
 
-        kbins = np.arange(dk, dk*nw/2, dk)
+        kbins = np.arange(dk, dk*nr/2, dk)
 
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(data, np.pi*dtheta/180.0)
         S = np.zeros((dtheta.size, kbins.size))
-        sigma2 = np.zeros((dtheta.size, kbins.size))
 
         # control taper
         if taper is None:
