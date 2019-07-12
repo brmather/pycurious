@@ -69,8 +69,8 @@ class CurieGrid(object):
         self.nx, self.ny = nx, ny
         self.dx, self.dy = dx, dy
 
-        if abs(dx - dy) > 1.0:
-            warnings.warn("node spacing should be identical {}".format((dx,dy)), RuntimeWarning)
+        if not np.allclose(dx, dy):
+            raise ValueError("node spacing should be identical {}".format((dx,dy)))
 
 
     def subgrid(self, window, xc, yc):
