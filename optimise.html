@@ -283,7 +283,7 @@ class CurieOptimise(CurieGrid):
                 field constant
         &#34;&#34;&#34;
 
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -536,7 +536,7 @@ class CurieOptimise(CurieGrid):
             large portions of the posterior probability are zero.
             see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.
         &#34;&#34;&#34;
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -545,7 +545,7 @@ class CurieOptimise(CurieGrid):
         samples = np.empty((nsim, 4))
         x0 = np.array([beta, zt, dz, C])
 
-        if type(x_scale) == type(None):
+        if x_scale is None:
             x_scale = np.ones(4)
 
 
@@ -633,7 +633,7 @@ class CurieOptimise(CurieGrid):
             C : ndarray shape (nsim,)
                 field constant
         &#34;&#34;&#34;
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -912,7 +912,7 @@ a description of the algorithm.</p>
                 field constant
         &#34;&#34;&#34;
 
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -1165,7 +1165,7 @@ a description of the algorithm.</p>
             large portions of the posterior probability are zero.
             see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.
         &#34;&#34;&#34;
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -1174,7 +1174,7 @@ a description of the algorithm.</p>
         samples = np.empty((nsim, 4))
         x0 = np.array([beta, zt, dz, C])
 
-        if type(x_scale) == type(None):
+        if x_scale is None:
             x_scale = np.ones(4)
 
 
@@ -1262,7 +1262,7 @@ a description of the algorithm.</p>
             C : ndarray shape (nsim,)
                 field constant
         &#34;&#34;&#34;
-        if type(process_subgrid) == type(None):
+        if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
@@ -1364,7 +1364,7 @@ define another distribution from <code>scipy.stats</code></p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.metropolis_hastings"><code class="name flex">
-<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7feea0acb6a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f48a98cf730>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>MCMC algorithm using a Metropolis-Hastings sampler.</p>
@@ -1474,7 +1474,7 @@ see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.</p></sectio
         large portions of the posterior probability are zero.
         see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.
     &#34;&#34;&#34;
-    if type(process_subgrid) == type(None):
+    if process_subgrid is None:
         # dummy function
         def process_subgrid(subgrid):
             return subgrid
@@ -1483,7 +1483,7 @@ see see Sambridge 2013, DOI:10.1093/gji/ggt342 for more information.</p></sectio
     samples = np.empty((nsim, 4))
     x0 = np.array([beta, zt, dz, C])
 
-    if type(x_scale) == type(None):
+    if x_scale is None:
         x_scale = np.ones(4)
 
 
@@ -1678,7 +1678,7 @@ Only keys stored in self.prior will be added to the total misfit</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise"><code class="name flex">
-<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7feea0acb6a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f48a98cf730>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Find the optimal parameters of <script type="math/tex"> \beta, z_t, \Delta z, C </script>
@@ -1757,7 +1757,7 @@ for a given centroid (xc,yc) and window size.</p>
             field constant
     &#34;&#34;&#34;
 
-    if type(process_subgrid) == type(None):
+    if process_subgrid is None:
         # dummy function
         def process_subgrid(subgrid):
             return subgrid
@@ -1780,7 +1780,7 @@ for a given centroid (xc,yc) and window size.</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise_routine"><code class="name flex">
-<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7feea0acb6a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f48a98cf730>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the optimal values
@@ -2058,7 +2058,7 @@ simulations then separatee lists will be returned for <script type="math/tex"> \
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.sensitivity"><code class="name flex">
-<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7feea0acb6a8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f48a98cf730>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the mean and
@@ -2137,7 +2137,7 @@ perturbing their prior distributions
         C : ndarray shape (nsim,)
             field constant
     &#34;&#34;&#34;
-    if type(process_subgrid) == type(None):
+    if process_subgrid is None:
         # dummy function
         def process_subgrid(subgrid):
             return subgrid
