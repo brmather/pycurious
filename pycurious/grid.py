@@ -655,13 +655,13 @@ def ComputeTanaka(Ztr, dZtr, Zor, dZor):
         dZtr : float / 1D array
             error of Ztr
         Zor : float / 1D array
-            bottom of the magnetic source
+            centroid depth of the magnetic source
         dZor : float / 1D array
             error of Zor
 
     Returns:
         Zb : float / 1D array
-            estimated Curie point depth
+            estimated Curie point depth at bottom of magnetic source
         eZb : float / 1D array
             error of `Zb`
     """
