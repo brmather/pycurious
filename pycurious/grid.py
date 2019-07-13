@@ -666,7 +666,7 @@ def ComputeTanaka(Ztr, dZtr, Zor, dZor):
             error of `Zb`
     """
     Zb = 2.0*Zor - Ztr
-    dZb  = 2.0*dZor - dZtr
+    dZb  = 2.0*dZor + dZtr
     return abs(Zb), dZb
 
 
