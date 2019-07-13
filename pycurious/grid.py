@@ -607,7 +607,7 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
         YE2sum = np.sum(Y/E2)
         rE2sum = np.sum(1.0/E2)
         X2E2sum = np.sum(X2/E2)
-        Y2E2sum = np.sum(Y2/E2)
+
 
         #TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
         # I think summation in second TL term needed to be split
@@ -623,8 +623,7 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
 
 
     sf=k/(2.0*np.pi)
-    S2=np.log(np.exp(S)/sf)
-
+    
     # mask low wavenumbers
     kmin, kmax = kmin_range
     mask1 = np.logical_and(sf >=kmin, sf <=kmax)
