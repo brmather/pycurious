@@ -700,13 +700,13 @@ def ComputeTanaka(Ztr, dZtr, Zor, dZor):
         dZtr : float / 1D array
             error of Ztr
         Zor : float / 1D array
-            bottom of the magnetic source
+            centroid depth of the magnetic source
         dZor : float / 1D array
             error of Zor
 
     Returns:
         Zb : float / 1D array
-            estimated Curie point depth
+            estimated Curie point depth at bottom of magnetic source
         eZb : float / 1D array
             error of `Zb`
     &#34;&#34;&#34;
@@ -840,14 +840,14 @@ def dircos(inc, dec):
 <dt><strong><code>dZtr</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
 <dd>error of Ztr</dd>
 <dt><strong><code>Zor</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
-<dd>bottom of the magnetic source</dd>
+<dd>centroid depth of the magnetic source</dd>
 <dt><strong><code>dZor</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
 <dd>error of Zor</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
 <dt><strong><code>Zb</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
-<dd>estimated Curie point depth</dd>
+<dd>estimated Curie point depth at bottom of magnetic source</dd>
 <dt><strong><code>eZb</code></strong> :&ensp;<code>float</code> / <code>1D</code> <code>array</code></dt>
 <dd>error of <code>Zb</code></dd>
 </dl></section>
@@ -863,13 +863,13 @@ def dircos(inc, dec):
         dZtr : float / 1D array
             error of Ztr
         Zor : float / 1D array
-            bottom of the magnetic source
+            centroid depth of the magnetic source
         dZor : float / 1D array
             error of Zor
 
     Returns:
         Zb : float / 1D array
-            estimated Curie point depth
+            estimated Curie point depth at bottom of magnetic source
         eZb : float / 1D array
             error of `Zb`
     &#34;&#34;&#34;
@@ -1804,7 +1804,7 @@ in incorrect Curie depth calculations.</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f938a091730>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f386e11a730>, scale=0.001, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
@@ -1945,7 +1945,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f938a091730>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f386e11a730>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
@@ -2003,7 +2003,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f938a091730>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f386e11a730>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
