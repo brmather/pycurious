@@ -1364,7 +1364,7 @@ define another distribution from <code>scipy.stats</code></p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.metropolis_hastings"><code class="name flex">
-<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f632dfb17b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>MCMC algorithm using a Metropolis-Hastings sampler.</p>
@@ -1678,7 +1678,7 @@ Only keys stored in self.prior will be added to the total misfit</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise"><code class="name flex">
-<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f632dfb17b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Find the optimal parameters of <script type="math/tex"> \beta, z_t, \Delta z, C </script>
@@ -1780,7 +1780,7 @@ for a given centroid (xc,yc) and window size.</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise_routine"><code class="name flex">
-<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f632dfb17b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the optimal values
@@ -2058,7 +2058,7 @@ simulations then separatee lists will be returned for <script type="math/tex"> \
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.sensitivity"><code class="name flex">
-<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f632dfb17b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the mean and
