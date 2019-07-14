@@ -232,17 +232,13 @@ class CurieGrid(object):
             data : 2D numpy array
 
         Returns:
-         data : 2D numpy array
+            data : 2D numpy array
         &#34;&#34;&#34;
-        data = data.copy()
         nr, nc = data.shape
         yq, xq = np.mgrid[0:nc,0:nr]
-
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
-
-        data.flat[:] -= np.dot(A, c)
-        return data
+        return data - np.dot(A, c).reshape(data.shape)
 
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -1462,17 +1458,13 @@ in incorrect Curie depth calculations.</p></section>
             data : 2D numpy array
 
         Returns:
-         data : 2D numpy array
+            data : 2D numpy array
         &#34;&#34;&#34;
-        data = data.copy()
         nr, nc = data.shape
         yq, xq = np.mgrid[0:nc,0:nr]
-
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
-
-        data.flat[:] -= np.dot(A, c)
-        return data
+        return data - np.dot(A, c).reshape(data.shape)
 
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
@@ -1802,7 +1794,7 @@ in incorrect Curie depth calculations.</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fdf83530730>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f632dfb17b8>, scale=0.001, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
@@ -1943,7 +1935,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fdf83530730>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f632dfb17b8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
@@ -2001,7 +1993,7 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7fdf83530730>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f632dfb17b8>, scale=0.001, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
@@ -2235,8 +2227,11 @@ reduced to the pole.</p>
 <dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
 <dd>&nbsp;</dd>
 </dl>
-<p>Returns:
-data : 2D numpy array</p></section>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
+<dd>&nbsp;</dd>
+</dl></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">def remove_trend_linear(self, data):
@@ -2250,17 +2245,13 @@ data : 2D numpy array</p></section>
         data : 2D numpy array
 
     Returns:
-     data : 2D numpy array
+        data : 2D numpy array
     &#34;&#34;&#34;
-    data = data.copy()
     nr, nc = data.shape
     yq, xq = np.mgrid[0:nc,0:nr]
-
     A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
     c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
-
-    data.flat[:] -= np.dot(A, c)
-    return data</code></pre>
+    return data - np.dot(A, c).reshape(data.shape)</code></pre>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.subgrid"><code class="name flex">
