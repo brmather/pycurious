@@ -187,17 +187,13 @@ class CurieGrid(object):
             data : 2D numpy array
 
         Returns:
-         data : 2D numpy array
+            data : 2D numpy array
         """
-        data = data.copy()
         nr, nc = data.shape
         yq, xq = np.mgrid[0:nc,0:nr]
-
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
-
-        data.flat[:] -= np.dot(A, c)
-        return data
+        return data - np.dot(A, c).reshape(data.shape)
 
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
