@@ -68,6 +68,33 @@ class CurieOptimise(CurieGrid):
             lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
         prior : dict
             dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
+        dx : float
+            grid spacing in the x-direction in metres
+        dy : float
+            grid spacing in the y-direction in metres
+        nx : int
+            number of nodes in the x-direction
+        ny : int
+            number of nodes in the y-direction
+        xcoords : 1D numpy array
+            1D numpy array of coordinates in the x-direction
+        ycoords : 1D numpy array
+            1D numpy array of coordinates in the y-direction
+
+    Notes:
+        In all instances `x` indicates eastings in metres and `y` indicates northings.
+        Using a grid of longitude / latitudinal coordinates (degrees) will result
+        in incorrect Curie depth calculations.
     """
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 

@@ -52,24 +52,40 @@ class CurieGrid(object):
     Grid must be projected in metres.
 
     Args:
-        grid : 2D array of magnetic data of shape (ny, nx)
-        xmin : minimum x bound in metres
-        xmax : maximum x bound in metres
-        ymin : minimum y bound in metres
-        ymax : maximum y bound in metres
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
 
     Attributes:
-        data : 2D array of magnetic data of shape (ny, nx)
-        xmin : minimum x bound in metres
-        xmax : maximum x bound in metres
-        ymin : minimum y bound in metres
-        ymax : maximum y bound in metres
-        dx : grid spacing in the x-direction in metres
-        dy : grid spacing in the y-direction in metres
-        nx : number of nodes in the x-direction
-        ny : number of nodes in the y-direction
-        xcoords : array of coordinates in the x-direction
-        ycoords : array of coordinates in the y-direction
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
+        dx : float
+            grid spacing in the x-direction in metres
+        dy : float
+            grid spacing in the y-direction in metres
+        nx : int
+            number of nodes in the x-direction
+        ny : int
+            number of nodes in the y-direction
+        xcoords : 1D numpy array
+            1D numpy array of coordinates in the x-direction
+        ycoords : 1D numpy array
+            1D numpy array of coordinates in the y-direction
 
     Notes:
         In all instances `x` indicates eastings in metres and `y` indicates northings.
