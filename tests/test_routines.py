@@ -40,7 +40,6 @@ def test_CurieGrid_routines():
     time_routine(cpd.create_centroid_list, 0.1*max_window)
     time_routine(cpd.remove_trend_linear, cpd.data)
     time_routine(cpd.radial_spectrum, cpd.data)
-    time_routine(cpd.radial_spectrum_log, cpd.data)
     time_routine(cpd.azimuthal_spectrum, cpd.data)
     time_routine(cpd.reduce_to_pole, cpd.data, 30., 30.)
     time_routine(cpd.upward_continuation, cpd.data, 10e3)
