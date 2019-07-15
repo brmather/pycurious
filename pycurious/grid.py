@@ -287,7 +287,7 @@ class CurieGrid(object):
         return k, S, sigma
 
 
-    def radial_spectrum(self, subgrid, taper=np.hanning, **kwargs):
+    def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, **kwargs):
         """
         Compute the radial spectrum for a square grid.
 
@@ -298,6 +298,10 @@ class CurieGrid(object):
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
+            power : float
+                raise the FFT of the magnetic anomaly to the power.
+                - 2.0 for Bouligand _et al._ (2009) use cases
+                - 0.5 for Tanaka _et al.__ (1999) use cases
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -331,59 +335,11 @@ class CurieGrid(object):
         vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
         
         # calculate the Fourier transform and apply scaling constant to retrieve
-        # values compatible with Bouligand et al. 2009 analysis
-        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)
+        # values compatible with Bouligand or Tanaka analysis
+        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, power)
 
 
-    def radial_spectrum_log(self, subgrid, taper=np.hanning, **kwargs):
-        """
-        Compute the log of the radial spectrum for a square grid.
-
-        > Wavenumber is returned in values of __rad/km__
-
-        Args:
-            subgrid : 2D array
-                window of the original data (see subgrid method)
-            taper : function (default=np.hanning)
-                taper function, set to None for no taper function
-            kwargs : keyword arguments
-                keyword arguments to pass to `taper`
-
-        Returns:
-            k : 1D array shape (n,)
-                wavenumber in rad/km
-            lnPhi : 1D array
-                log of the radial power spectrum in ln(sqrt(S))
-            lnsigma_Phi : 1D array
-                standard deviation of lnPhi
-
-        Notes:
-            While `subgrid` is projected in eastings / northings (in metres),
-            the wavenumber, \\( k \\), is returned in units of rad/km.
-            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
-            (1999) require the computation of Curie depth in these units.
-
-        References:
-            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
-            temperature depth in the western United States with a fractal model for
-            crustal magnetization, J. Geophys. Res., 114, B11104,
-            doi:10.1029/2009JB006494
-
-            Tanaka, A., Okubo, Y., & Matsubayashi, O. (1999). Curie point depth
-            based on spectrum analysis of the magnetic anomaly data in East and
-            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
-            doi:10.1016/S0040-1951(99)00072-4
-        """
-
-        # bin the spectrum and compute the taper
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
-
-        # calculate the Fourier transform and apply scaling constant to retrieve
-        # values compatible with Tanaka et al. 1999 analysis
-        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)
-
-
-    def azimuthal_spectrum(self, subgrid, taper=np.hanning, theta=5.0, **kwargs):
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, power=2.0, theta=5.0, **kwargs):
         """
         Compute azimuthal spectrum for a square grid.
 
@@ -441,7 +397,7 @@ class CurieGrid(object):
         nk = 1 + 2*kbins.size
         for i in range(0, dtheta.size):
             PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
-            S[i,:] = np.log( np.sqrt(PSD[1:kbins.size+1] ))
+            S[i,:] = power*np.log(PSD[1:kbins.size+1])
 
         return kbins, S, dtheta
 
