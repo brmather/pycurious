@@ -97,24 +97,40 @@ class CurieGrid(object):
     Grid must be projected in metres.
 
     Args:
-        grid : 2D array of magnetic data of shape (ny, nx)
-        xmin : minimum x bound in metres
-        xmax : maximum x bound in metres
-        ymin : minimum y bound in metres
-        ymax : maximum y bound in metres
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
 
     Attributes:
-        data : 2D array of magnetic data of shape (ny, nx)
-        xmin : minimum x bound in metres
-        xmax : maximum x bound in metres
-        ymin : minimum y bound in metres
-        ymax : maximum y bound in metres
-        dx : grid spacing in the x-direction in metres
-        dy : grid spacing in the y-direction in metres
-        nx : number of nodes in the x-direction
-        ny : number of nodes in the y-direction
-        xcoords : array of coordinates in the x-direction
-        ycoords : array of coordinates in the y-direction
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
+        dx : float
+            grid spacing in the x-direction in metres
+        dy : float
+            grid spacing in the y-direction in metres
+        nx : int
+            number of nodes in the x-direction
+        ny : int
+            number of nodes in the y-direction
+        xcoords : 1D numpy array
+            1D numpy array of coordinates in the x-direction
+        ycoords : 1D numpy array
+            1D numpy array of coordinates in the y-direction
 
     Notes:
         In all instances `x` indicates eastings in metres and `y` indicates northings.
@@ -265,6 +281,7 @@ class CurieGrid(object):
             xq, yq = np.meshgrid(ct, rt)
             vtaper = xq*yq
 
+        # scaling factor to transform wavenumber into units of rad/km
         dx_scale = self.dx*scale
         dk = 2.0*np.pi/(nr - 1)/dx_scale
 
@@ -315,17 +332,17 @@ class CurieGrid(object):
         return k, S, sigma
 
 
-    def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+    def radial_spectrum(self, subgrid, taper=np.hanning, **kwargs):
         &#34;&#34;&#34;
         Compute the radial spectrum for a square grid.
+
+        &gt; Wavenumber is returned in values of __rad/km__
 
         Args:
             subgrid : 2D array
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
-            scale : float (default: 0.001)
-                scaling factor to get k into rad/km
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -336,27 +353,44 @@ class CurieGrid(object):
                 Radial power spectrum
             sigma_Phi : 1D array shape (n,)
                 Standard deviation of Phi
+
+        Notes:
+            While `subgrid` is projected in eastings / northings (in metres),
+            the wavenumber, \\( k \\), is returned in units of rad/km.
+            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+            (1999) require the computation of Curie depth in these units.
+
+        References:
+            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+            temperature depth in the western United States with a fractal model for
+            crustal magnetization, J. Geophys. Res., 114, B11104,
+            doi:10.1029/2009JB006494
+
+            Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+            based on spectrum analysis of the magnetic anomaly data in East and
+            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+            doi:10.1016/S0040-1951(99)00072-4
         &#34;&#34;&#34;
 
         # bin the spectrum and compute the taper
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
         
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Bouligand et al. 2009 analysis
         return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)
 
 
-    def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+    def radial_spectrum_log(self, subgrid, taper=np.hanning, **kwargs):
         &#34;&#34;&#34;
         Compute the log of the radial spectrum for a square grid.
+
+        &gt; Wavenumber is returned in values of __rad/km__
 
         Args:
             subgrid : 2D array
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
-            scale : float (detault=0.001)
-                scaling factor to get k into rad/km
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -367,27 +401,44 @@ class CurieGrid(object):
                 log of the radial power spectrum in ln(sqrt(S))
             lnsigma_Phi : 1D array
                 standard deviation of lnPhi
+
+        Notes:
+            While `subgrid` is projected in eastings / northings (in metres),
+            the wavenumber, \\( k \\), is returned in units of rad/km.
+            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+            (1999) require the computation of Curie depth in these units.
+
+        References:
+            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+            temperature depth in the western United States with a fractal model for
+            crustal magnetization, J. Geophys. Res., 114, B11104,
+            doi:10.1029/2009JB006494
+
+            Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+            based on spectrum analysis of the magnetic anomaly data in East and
+            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+            doi:10.1016/S0040-1951(99)00072-4
         &#34;&#34;&#34;
 
         # bin the spectrum and compute the taper
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Tanaka et al. 1999 analysis
         return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)
 
 
-    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, theta=5.0, **kwargs):
         &#34;&#34;&#34;
         Compute azimuthal spectrum for a square grid.
+
+        &gt; Wavenumber is returned in values of __rad/km__
 
         Args:
             subgrid : 2D array
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
-            scale : float (default=0.001)
-                scaling factor to get k into rad/km
             theta : float
                 angle increment in degrees
             args : arguments
@@ -400,10 +451,27 @@ class CurieGrid(object):
                 Radial power spectrum
             sigma_Phi : 1D array shape (n,)
                 Standard deviation of Phi
+
+        Notes:
+            While `subgrid` is projected in eastings / northings (in metres),
+            the wavenumber, \\( k \\), is returned in units of rad/km.
+            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+            (1999) require the computation of Curie depth in these units.
+
+        References:
+            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+            temperature depth in the western United States with a fractal model for
+            crustal magnetization, J. Geophys. Res., 114, B11104,
+            doi:10.1029/2009JB006494
+
+            Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+            based on spectrum analysis of the magnetic anomaly data in East and
+            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+            doi:10.1016/S0040-1951(99)00072-4
         &#34;&#34;&#34;
         from pycurious import radon
 
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
@@ -1273,41 +1341,41 @@ bounding box of the array</p>
 <p>Grid must be projected in metres.</p>
 <h2 id="args">Args</h2>
 <dl>
-<dt><strong><code>grid</code></strong> :&ensp;<code>2D</code> <code>array</code> of <code>magnetic</code> <code>data</code> of <code>shape</code> (<code>ny</code>, <code>nx</code>)</dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>xmin</code></strong> :&ensp;<code>minimum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>xmax</code></strong> :&ensp;<code>maximum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>ymin</code></strong> :&ensp;<code>minimum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>ymax</code></strong> :&ensp;<code>maximum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
+<dt><strong><code>grid</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
+<dd>2D array of magnetic data</dd>
+<dt><strong><code>xmin</code></strong> :&ensp;<code>float</code></dt>
+<dd>minimum x bound in metres</dd>
+<dt><strong><code>xmax</code></strong> :&ensp;<code>float</code></dt>
+<dd>maximum x bound in metres</dd>
+<dt><strong><code>ymin</code></strong> :&ensp;<code>float</code></dt>
+<dd>minimum y bound in metres</dd>
+<dt><strong><code>ymax</code></strong> :&ensp;<code>float</code></dt>
+<dd>maximum y bound in metres</dd>
 </dl>
 <h2 id="attributes">Attributes</h2>
 <dl>
-<dt><strong><code>data</code></strong> :&ensp;<code>2D</code> <code>array</code> of <code>magnetic</code> <code>data</code> of <code>shape</code> (<code>ny</code>, <code>nx</code>)</dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>xmin</code></strong> :&ensp;<code>minimum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>xmax</code></strong> :&ensp;<code>maximum</code> <code>x</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>ymin</code></strong> :&ensp;<code>minimum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>ymax</code></strong> :&ensp;<code>maximum</code> <code>y</code> <code>bound</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>dx</code></strong> :&ensp;<code>grid</code> <code>spacing</code> <code>in</code> <code>the</code> <code>x</code>-<code>direction</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>dy</code></strong> :&ensp;<code>grid</code> <code>spacing</code> <code>in</code> <code>the</code> <code>y</code>-<code>direction</code> <code>in</code> <code>metres</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>nx</code></strong> :&ensp;<code>number</code> of <code>nodes</code> <code>in</code> <code>the</code> <code>x</code>-<code>direction</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>ny</code></strong> :&ensp;<code>number</code> of <code>nodes</code> <code>in</code> <code>the</code> <code>y</code>-<code>direction</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>xcoords</code></strong> :&ensp;<code>array</code> of <code>coordinates</code> <code>in</code> <code>the</code> <code>x</code>-<code>direction</code></dt>
-<dd>&nbsp;</dd>
-<dt><strong><code>ycoords</code></strong> :&ensp;<code>array</code> of <code>coordinates</code> <code>in</code> <code>the</code> <code>y</code>-<code>direction</code></dt>
-<dd>&nbsp;</dd>
+<dt><strong><code>grid</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
+<dd>2D array of magnetic data</dd>
+<dt><strong><code>xmin</code></strong> :&ensp;<code>float</code></dt>
+<dd>minimum x bound in metres</dd>
+<dt><strong><code>xmax</code></strong> :&ensp;<code>float</code></dt>
+<dd>maximum x bound in metres</dd>
+<dt><strong><code>ymin</code></strong> :&ensp;<code>float</code></dt>
+<dd>minimum y bound in metres</dd>
+<dt><strong><code>ymax</code></strong> :&ensp;<code>float</code></dt>
+<dd>maximum y bound in metres</dd>
+<dt><strong><code>dx</code></strong> :&ensp;<code>float</code></dt>
+<dd>grid spacing in the x-direction in metres</dd>
+<dt><strong><code>dy</code></strong> :&ensp;<code>float</code></dt>
+<dd>grid spacing in the y-direction in metres</dd>
+<dt><strong><code>nx</code></strong> :&ensp;<code>int</code></dt>
+<dd>number of nodes in the x-direction</dd>
+<dt><strong><code>ny</code></strong> :&ensp;<code>int</code></dt>
+<dd>number of nodes in the y-direction</dd>
+<dt><strong><code>xcoords</code></strong> :&ensp;<code>1D</code> <code>numpy</code> <code>array</code></dt>
+<dd>1D numpy array of coordinates in the x-direction</dd>
+<dt><strong><code>ycoords</code></strong> :&ensp;<code>1D</code> <code>numpy</code> <code>array</code></dt>
+<dd>1D numpy array of coordinates in the y-direction</dd>
 </dl>
 <h2 id="notes">Notes</h2>
 <p>In all instances <code>x</code> indicates eastings in metres and <code>y</code> indicates northings.
@@ -1323,24 +1391,40 @@ in incorrect Curie depth calculations.</p></section>
     Grid must be projected in metres.
 
     Args:
-        grid : 2D array of magnetic data of shape (ny, nx)
-        xmin : minimum x bound in metres
-        xmax : maximum x bound in metres
-        ymin : minimum y bound in metres
-        ymax : maximum y bound in metres
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
 
     Attributes:
-        data : 2D array of magnetic data of shape (ny, nx)
-        xmin : minimum x bound in metres
-        xmax : maximum x bound in metres
-        ymin : minimum y bound in metres
-        ymax : maximum y bound in metres
-        dx : grid spacing in the x-direction in metres
-        dy : grid spacing in the y-direction in metres
-        nx : number of nodes in the x-direction
-        ny : number of nodes in the y-direction
-        xcoords : array of coordinates in the x-direction
-        ycoords : array of coordinates in the y-direction
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
+        dx : float
+            grid spacing in the x-direction in metres
+        dy : float
+            grid spacing in the y-direction in metres
+        nx : int
+            number of nodes in the x-direction
+        ny : int
+            number of nodes in the y-direction
+        xcoords : 1D numpy array
+            1D numpy array of coordinates in the x-direction
+        ycoords : 1D numpy array
+            1D numpy array of coordinates in the y-direction
 
     Notes:
         In all instances `x` indicates eastings in metres and `y` indicates northings.
@@ -1491,6 +1575,7 @@ in incorrect Curie depth calculations.</p></section>
             xq, yq = np.meshgrid(ct, rt)
             vtaper = xq*yq
 
+        # scaling factor to transform wavenumber into units of rad/km
         dx_scale = self.dx*scale
         dk = 2.0*np.pi/(nr - 1)/dx_scale
 
@@ -1541,17 +1626,17 @@ in incorrect Curie depth calculations.</p></section>
         return k, S, sigma
 
 
-    def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+    def radial_spectrum(self, subgrid, taper=np.hanning, **kwargs):
         &#34;&#34;&#34;
         Compute the radial spectrum for a square grid.
+
+        &gt; Wavenumber is returned in values of __rad/km__
 
         Args:
             subgrid : 2D array
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
-            scale : float (default: 0.001)
-                scaling factor to get k into rad/km
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -1562,27 +1647,44 @@ in incorrect Curie depth calculations.</p></section>
                 Radial power spectrum
             sigma_Phi : 1D array shape (n,)
                 Standard deviation of Phi
+
+        Notes:
+            While `subgrid` is projected in eastings / northings (in metres),
+            the wavenumber, \\( k \\), is returned in units of rad/km.
+            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+            (1999) require the computation of Curie depth in these units.
+
+        References:
+            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+            temperature depth in the western United States with a fractal model for
+            crustal magnetization, J. Geophys. Res., 114, B11104,
+            doi:10.1029/2009JB006494
+
+            Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+            based on spectrum analysis of the magnetic anomaly data in East and
+            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+            doi:10.1016/S0040-1951(99)00072-4
         &#34;&#34;&#34;
 
         # bin the spectrum and compute the taper
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
         
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Bouligand et al. 2009 analysis
         return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 2.0)
 
 
-    def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+    def radial_spectrum_log(self, subgrid, taper=np.hanning, **kwargs):
         &#34;&#34;&#34;
         Compute the log of the radial spectrum for a square grid.
+
+        &gt; Wavenumber is returned in values of __rad/km__
 
         Args:
             subgrid : 2D array
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
-            scale : float (detault=0.001)
-                scaling factor to get k into rad/km
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -1593,27 +1695,44 @@ in incorrect Curie depth calculations.</p></section>
                 log of the radial power spectrum in ln(sqrt(S))
             lnsigma_Phi : 1D array
                 standard deviation of lnPhi
+
+        Notes:
+            While `subgrid` is projected in eastings / northings (in metres),
+            the wavenumber, \\( k \\), is returned in units of rad/km.
+            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+            (1999) require the computation of Curie depth in these units.
+
+        References:
+            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+            temperature depth in the western United States with a fractal model for
+            crustal magnetization, J. Geophys. Res., 114, B11104,
+            doi:10.1029/2009JB006494
+
+            Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+            based on spectrum analysis of the magnetic anomaly data in East and
+            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+            doi:10.1016/S0040-1951(99)00072-4
         &#34;&#34;&#34;
 
         # bin the spectrum and compute the taper
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Tanaka et al. 1999 analysis
         return self._FFT_spectrum(subgrid, vtaper, dk, kbins, 0.5)
 
 
-    def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
+    def azimuthal_spectrum(self, subgrid, taper=np.hanning, theta=5.0, **kwargs):
         &#34;&#34;&#34;
         Compute azimuthal spectrum for a square grid.
+
+        &gt; Wavenumber is returned in values of __rad/km__
 
         Args:
             subgrid : 2D array
                 window of the original data (see subgrid method)
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
-            scale : float (default=0.001)
-                scaling factor to get k into rad/km
             theta : float
                 angle increment in degrees
             args : arguments
@@ -1626,10 +1745,27 @@ in incorrect Curie depth calculations.</p></section>
                 Radial power spectrum
             sigma_Phi : 1D array shape (n,)
                 Standard deviation of Phi
+
+        Notes:
+            While `subgrid` is projected in eastings / northings (in metres),
+            the wavenumber, \\( k \\), is returned in units of rad/km.
+            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+            (1999) require the computation of Curie depth in these units.
+
+        References:
+            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+            temperature depth in the western United States with a fractal model for
+            crustal magnetization, J. Geophys. Res., 114, B11104,
+            doi:10.1029/2009JB006494
+
+            Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+            based on spectrum analysis of the magnetic anomaly data in East and
+            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+            doi:10.1016/S0040-1951(99)00072-4
         &#34;&#34;&#34;
         from pycurious import radon
 
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
         dtheta = np.arange(0.0, 180.0, theta)
         sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
@@ -1794,18 +1930,19 @@ in incorrect Curie depth calculations.</p></section>
 <h3>Methods</h3>
 <dl>
 <dt id="pycurious.grid.CurieGrid.azimuthal_spectrum"><code class="name flex">
-<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f353aece7b8>, scale=0.001, theta=5.0, **kwargs)</span>
+<span>def <span class="ident">azimuthal_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f4d301c37b8>, theta=5.0, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute azimuthal spectrum for a square grid.</p>
+<blockquote>
+<p>Wavenumber is returned in values of <strong>rad/km</strong></p>
+</blockquote>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>subgrid</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
 <dd>window of the original data (see subgrid method)</dd>
 <dt><strong><code>taper</code></strong> :&ensp;<code>function</code> (default=<code>np.hanning</code>)</dt>
 <dd>taper function, set to None for no taper function</dd>
-<dt><strong><code>scale</code></strong> :&ensp;<code>float</code> (default=<code>0.001</code>)</dt>
-<dd>scaling factor to get k into rad/km</dd>
 <dt><strong><code>theta</code></strong> :&ensp;<code>float</code></dt>
 <dd>angle increment in degrees</dd>
 <dt><strong><code>args</code></strong> :&ensp;<code>arguments</code></dt>
@@ -1819,20 +1956,34 @@ in incorrect Curie depth calculations.</p></section>
 <dd>Radial power spectrum</dd>
 <dt><strong><code>sigma_Phi</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
 <dd>Standard deviation of Phi</dd>
-</dl></section>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>While <code>subgrid</code> is projected in eastings / northings (in metres),
+the wavenumber, <script type="math/tex"> k </script>, is returned in units of rad/km.
+This is because both Bouligand <em>et al.</em> (2009) and Tanaka <em>et al.</em>
+(1999) require the computation of Curie depth in these units.</p>
+<h2 id="references">References</h2>
+<p>Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+temperature depth in the western United States with a fractal model for
+crustal magnetization, J. Geophys. Res., 114, B11104,
+doi:10.1029/2009JB006494</p>
+<p>Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+based on spectrum analysis of the magnetic anomaly data in East and
+Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+doi:10.1016/S0040-1951(99)00072-4</p></section>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">def azimuthal_spectrum(self, subgrid, taper=np.hanning, scale=0.001, theta=5.0, **kwargs):
+<pre><code class="python">def azimuthal_spectrum(self, subgrid, taper=np.hanning, theta=5.0, **kwargs):
     &#34;&#34;&#34;
     Compute azimuthal spectrum for a square grid.
+
+    &gt; Wavenumber is returned in values of __rad/km__
 
     Args:
         subgrid : 2D array
             window of the original data (see subgrid method)
         taper : function (default=np.hanning)
             taper function, set to None for no taper function
-        scale : float (default=0.001)
-            scaling factor to get k into rad/km
         theta : float
             angle increment in degrees
         args : arguments
@@ -1845,10 +1996,27 @@ in incorrect Curie depth calculations.</p></section>
             Radial power spectrum
         sigma_Phi : 1D array shape (n,)
             Standard deviation of Phi
+
+    Notes:
+        While `subgrid` is projected in eastings / northings (in metres),
+        the wavenumber, \\( k \\), is returned in units of rad/km.
+        This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+        (1999) require the computation of Curie depth in these units.
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+        based on spectrum analysis of the magnetic anomaly data in East and
+        Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+        doi:10.1016/S0040-1951(99)00072-4
     &#34;&#34;&#34;
     from pycurious import radon
 
-    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
     dtheta = np.arange(0.0, 180.0, theta)
     sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
@@ -1935,18 +2103,19 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum"><code class="name flex">
-<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f353aece7b8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f4d301c37b8>, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the radial spectrum for a square grid.</p>
+<blockquote>
+<p>Wavenumber is returned in values of <strong>rad/km</strong></p>
+</blockquote>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>subgrid</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
 <dd>window of the original data (see subgrid method)</dd>
 <dt><strong><code>taper</code></strong> :&ensp;<code>function</code> (default=<code>np.hanning</code>)</dt>
 <dd>taper function, set to None for no taper function</dd>
-<dt><strong><code>scale</code></strong> :&ensp;<code>float</code> (default: <code>0.001</code>)</dt>
-<dd>scaling factor to get k into rad/km</dd>
 <dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
 <dd>keyword arguments to pass to <code>taper</code></dd>
 </dl>
@@ -1958,20 +2127,34 @@ will default to maximum Y resolution</dd>
 <dd>Radial power spectrum</dd>
 <dt><strong><code>sigma_Phi</code></strong> :&ensp;<code>1D</code> <code>array</code> <code>shape</code> (<code>n</code>,)</dt>
 <dd>Standard deviation of Phi</dd>
-</dl></section>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>While <code>subgrid</code> is projected in eastings / northings (in metres),
+the wavenumber, <script type="math/tex"> k </script>, is returned in units of rad/km.
+This is because both Bouligand <em>et al.</em> (2009) and Tanaka <em>et al.</em>
+(1999) require the computation of Curie depth in these units.</p>
+<h2 id="references">References</h2>
+<p>Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+temperature depth in the western United States with a fractal model for
+crustal magnetization, J. Geophys. Res., 114, B11104,
+doi:10.1029/2009JB006494</p>
+<p>Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+based on spectrum analysis of the magnetic anomaly data in East and
+Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+doi:10.1016/S0040-1951(99)00072-4</p></section>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">def radial_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+<pre><code class="python">def radial_spectrum(self, subgrid, taper=np.hanning, **kwargs):
     &#34;&#34;&#34;
     Compute the radial spectrum for a square grid.
+
+    &gt; Wavenumber is returned in values of __rad/km__
 
     Args:
         subgrid : 2D array
             window of the original data (see subgrid method)
         taper : function (default=np.hanning)
             taper function, set to None for no taper function
-        scale : float (default: 0.001)
-            scaling factor to get k into rad/km
         kwargs : keyword arguments
             keyword arguments to pass to `taper`
 
@@ -1982,10 +2165,27 @@ will default to maximum Y resolution</dd>
             Radial power spectrum
         sigma_Phi : 1D array shape (n,)
             Standard deviation of Phi
+
+    Notes:
+        While `subgrid` is projected in eastings / northings (in metres),
+        the wavenumber, \\( k \\), is returned in units of rad/km.
+        This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+        (1999) require the computation of Curie depth in these units.
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+        based on spectrum analysis of the magnetic anomaly data in East and
+        Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+        doi:10.1016/S0040-1951(99)00072-4
     &#34;&#34;&#34;
 
     # bin the spectrum and compute the taper
-    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
     
     # calculate the Fourier transform and apply scaling constant to retrieve
     # values compatible with Bouligand et al. 2009 analysis
@@ -1993,18 +2193,19 @@ will default to maximum Y resolution</dd>
 </details>
 </dd>
 <dt id="pycurious.grid.CurieGrid.radial_spectrum_log"><code class="name flex">
-<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f353aece7b8>, scale=0.001, **kwargs)</span>
+<span>def <span class="ident">radial_spectrum_log</span></span>(<span>self, subgrid, taper=<function hanning at 0x7f4d301c37b8>, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Compute the log of the radial spectrum for a square grid.</p>
+<blockquote>
+<p>Wavenumber is returned in values of <strong>rad/km</strong></p>
+</blockquote>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>subgrid</code></strong> :&ensp;<code>2D</code> <code>array</code></dt>
 <dd>window of the original data (see subgrid method)</dd>
 <dt><strong><code>taper</code></strong> :&ensp;<code>function</code> (default=<code>np.hanning</code>)</dt>
 <dd>taper function, set to None for no taper function</dd>
-<dt><strong><code>scale</code></strong> :&ensp;<code>float</code> (<code>detault</code>=<code>0.001</code>)</dt>
-<dd>scaling factor to get k into rad/km</dd>
 <dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
 <dd>keyword arguments to pass to <code>taper</code></dd>
 </dl>
@@ -2016,20 +2217,34 @@ will default to maximum Y resolution</dd>
 <dd>log of the radial power spectrum in ln(sqrt(S))</dd>
 <dt><strong><code>lnsigma_Phi</code></strong> :&ensp;<code>1D</code> <code>array</code></dt>
 <dd>standard deviation of lnPhi</dd>
-</dl></section>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>While <code>subgrid</code> is projected in eastings / northings (in metres),
+the wavenumber, <script type="math/tex"> k </script>, is returned in units of rad/km.
+This is because both Bouligand <em>et al.</em> (2009) and Tanaka <em>et al.</em>
+(1999) require the computation of Curie depth in these units.</p>
+<h2 id="references">References</h2>
+<p>Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+temperature depth in the western United States with a fractal model for
+crustal magnetization, J. Geophys. Res., 114, B11104,
+doi:10.1029/2009JB006494</p>
+<p>Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+based on spectrum analysis of the magnetic anomaly data in East and
+Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+doi:10.1016/S0040-1951(99)00072-4</p></section>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">def radial_spectrum_log(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
+<pre><code class="python">def radial_spectrum_log(self, subgrid, taper=np.hanning, **kwargs):
     &#34;&#34;&#34;
     Compute the log of the radial spectrum for a square grid.
+
+    &gt; Wavenumber is returned in values of __rad/km__
 
     Args:
         subgrid : 2D array
             window of the original data (see subgrid method)
         taper : function (default=np.hanning)
             taper function, set to None for no taper function
-        scale : float (detault=0.001)
-            scaling factor to get k into rad/km
         kwargs : keyword arguments
             keyword arguments to pass to `taper`
 
@@ -2040,10 +2255,27 @@ will default to maximum Y resolution</dd>
             log of the radial power spectrum in ln(sqrt(S))
         lnsigma_Phi : 1D array
             standard deviation of lnPhi
+
+    Notes:
+        While `subgrid` is projected in eastings / northings (in metres),
+        the wavenumber, \\( k \\), is returned in units of rad/km.
+        This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
+        (1999) require the computation of Curie depth in these units.
+
+    References:
+        Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
+        temperature depth in the western United States with a fractal model for
+        crustal magnetization, J. Geophys. Res., 114, B11104,
+        doi:10.1029/2009JB006494
+
+        Tanaka, A., Okubo, Y., &amp; Matsubayashi, O. (1999). Curie point depth
+        based on spectrum analysis of the magnetic anomaly data in East and
+        Southeast Asia. Tectonophysics, 306(3–4), 461–470.
+        doi:10.1016/S0040-1951(99)00072-4
     &#34;&#34;&#34;
 
     # bin the spectrum and compute the taper
-    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, scale, **kwargs)
+    vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
     # calculate the Fourier transform and apply scaling constant to retrieve
     # values compatible with Tanaka et al. 1999 analysis

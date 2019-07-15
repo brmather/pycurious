@@ -110,6 +110,33 @@ class CurieOptimise(CurieGrid):
             lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
         prior : dict
             dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
+        dx : float
+            grid spacing in the x-direction in metres
+        dy : float
+            grid spacing in the y-direction in metres
+        nx : int
+            number of nodes in the x-direction
+        ny : int
+            number of nodes in the y-direction
+        xcoords : 1D numpy array
+            1D numpy array of coordinates in the x-direction
+        ycoords : 1D numpy array
+            1D numpy array of coordinates in the y-direction
+
+    Notes:
+        In all instances `x` indicates eastings in metres and `y` indicates northings.
+        Using a grid of longitude / latitudinal coordinates (degrees) will result
+        in incorrect Curie depth calculations.
     &#34;&#34;&#34;
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
@@ -713,7 +740,33 @@ a description of the algorithm.</p>
 <dt><strong><code>prior</code></strong> :&ensp;<code>dict</code></dt>
 <dd>dictionary of priors for <script type="math/tex"> \beta, z_t, \Delta z, C </script>
 </dd>
-</dl></section>
+<dt><strong><code>grid</code></strong> :&ensp;<code>2D</code> <code>numpy</code> <code>array</code></dt>
+<dd>2D array of magnetic data</dd>
+<dt><strong><code>xmin</code></strong> :&ensp;<code>float</code></dt>
+<dd>minimum x bound in metres</dd>
+<dt><strong><code>xmax</code></strong> :&ensp;<code>float</code></dt>
+<dd>maximum x bound in metres</dd>
+<dt><strong><code>ymin</code></strong> :&ensp;<code>float</code></dt>
+<dd>minimum y bound in metres</dd>
+<dt><strong><code>ymax</code></strong> :&ensp;<code>float</code></dt>
+<dd>maximum y bound in metres</dd>
+<dt><strong><code>dx</code></strong> :&ensp;<code>float</code></dt>
+<dd>grid spacing in the x-direction in metres</dd>
+<dt><strong><code>dy</code></strong> :&ensp;<code>float</code></dt>
+<dd>grid spacing in the y-direction in metres</dd>
+<dt><strong><code>nx</code></strong> :&ensp;<code>int</code></dt>
+<dd>number of nodes in the x-direction</dd>
+<dt><strong><code>ny</code></strong> :&ensp;<code>int</code></dt>
+<dd>number of nodes in the y-direction</dd>
+<dt><strong><code>xcoords</code></strong> :&ensp;<code>1D</code> <code>numpy</code> <code>array</code></dt>
+<dd>1D numpy array of coordinates in the x-direction</dd>
+<dt><strong><code>ycoords</code></strong> :&ensp;<code>1D</code> <code>numpy</code> <code>array</code></dt>
+<dd>1D numpy array of coordinates in the y-direction</dd>
+</dl>
+<h2 id="notes">Notes</h2>
+<p>In all instances <code>x</code> indicates eastings in metres and <code>y</code> indicates northings.
+Using a grid of longitude / latitudinal coordinates (degrees) will result
+in incorrect Curie depth calculations.</p></section>
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python">class CurieOptimise(CurieGrid):
@@ -739,6 +792,33 @@ a description of the algorithm.</p>
             lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
         prior : dict
             dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
+        grid : 2D numpy array
+            2D array of magnetic data
+        xmin : float
+            minimum x bound in metres
+        xmax : float
+            maximum x bound in metres
+        ymin : float
+            minimum y bound in metres
+        ymax : float
+            maximum y bound in metres
+        dx : float
+            grid spacing in the x-direction in metres
+        dy : float
+            grid spacing in the y-direction in metres
+        nx : int
+            number of nodes in the x-direction
+        ny : int
+            number of nodes in the y-direction
+        xcoords : 1D numpy array
+            1D numpy array of coordinates in the x-direction
+        ycoords : 1D numpy array
+            1D numpy array of coordinates in the y-direction
+
+    Notes:
+        In all instances `x` indicates eastings in metres and `y` indicates northings.
+        Using a grid of longitude / latitudinal coordinates (degrees) will result
+        in incorrect Curie depth calculations.
     &#34;&#34;&#34;
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
@@ -1364,7 +1444,7 @@ define another distribution from <code>scipy.stats</code></p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.metropolis_hastings"><code class="name flex">
-<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f4d301c37b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>MCMC algorithm using a Metropolis-Hastings sampler.</p>
@@ -1678,7 +1758,7 @@ Only keys stored in self.prior will be added to the total misfit</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise"><code class="name flex">
-<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f4d301c37b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Find the optimal parameters of <script type="math/tex"> \beta, z_t, \Delta z, C </script>
@@ -1780,7 +1860,7 @@ for a given centroid (xc,yc) and window size.</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise_routine"><code class="name flex">
-<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f4d301c37b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the optimal values
@@ -2058,7 +2138,7 @@ simulations then separatee lists will be returned for <script type="math/tex"> \
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.sensitivity"><code class="name flex">
-<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f353aece7b8>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f4d301c37b8>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the mean and
