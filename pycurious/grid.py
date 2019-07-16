@@ -103,7 +103,7 @@ class CurieGrid(object):
         self.nx, self.ny = nx, ny
         self.dx, self.dy = dx, dy
 
-        if not np.allclose(dx, dy):
+        if not np.allclose(dx, dy, 1.0):
             raise ValueError("node spacing should be identical {}".format((dx,dy)))
 
 
