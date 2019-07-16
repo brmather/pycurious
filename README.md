@@ -54,6 +54,7 @@ Also, the following packages are required:
 
 __Optional dependencies__ for mapping module and running the Notebooks:
 
+- [`jupyter`](https://jupyter.org/)
 - [`matplotlib`](https://matplotlib.org/)
 - [`pyproj`](https://github.com/jswhit/pyproj)
 - [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
