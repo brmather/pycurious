@@ -1,0 +1,1 @@
+../pycurious/Examples/data/test_mag_data.txt
