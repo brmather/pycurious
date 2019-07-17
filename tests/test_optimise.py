@@ -4,31 +4,53 @@ import pycurious
 import numpy as np
 from scipy.optimize import minimize
 
-# global variables
-max_window = 100e3
+# load magnetic anomaly - i.e. random fractal noise
+try:
+    mag_data = np.loadtxt("test_mag_data.txt")
+except:
+    mag_data = np.loadtxt("tests/test_mag_data.txt")
 
-# square grid 100km x 100km
-xmin = 0.0
-xmax = 100e3
-ymin = 0.0
-ymax = 100e3
+nx, ny = 305, 305
 
-nx = 100
-ny = 100
+x = mag_data[:,0]
+y = mag_data[:,1]
+d = mag_data[:,2].reshape(ny,nx)
 
-# random noise
-mag_grid = np.random.randn(ny,nx)
+xmin, xmax = x.min(), x.max()
+ymin, ymax = y.min(), y.max()
 
-xc = 50e3
-yc = 50e3
+xc = (xmax - xmin)/2
+yc = (ymax - ymin)/2
+
+# square window
+max_window = 300e3
 
 
 def test_optimisation():
-    grid = pycurious.CurieOptimise(mag_grid, xmin, xmax, ymin, ymax)
-    beta, zt, dz, C = grid.optimise(max_window, xc, yc)
+    grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
+    beta, zt, dz, C = grid.optimise(max_window, xc, yc, taper=np.hanning)
+
+    x_opt = np.array([beta, zt, dz])
+
+    # hard-coded parameters used to generate the magnetic anomaly
+    zt0 = 0.305
+    dz0 = 10.0 + zt0
+    beta0 = 3.0
+
+    x0 = np.array([beta0, zt0, dz0])
+
+    # compare if they are close or not
+    # some parameters should be more similar than others
+    tol = np.array([0.3, 0.1, 2.0])
+
+    if (np.abs(x_opt - x0) < tol).all():
+        print("PASSED! All parameters were successfully inverted within an acceptance range")
+    else:
+        assert False, "FAILED! Some or all parameters were not inverted within an acceptance range"
+
 
 def test_priors():
-    grid = pycurious.CurieOptimise(mag_grid, xmin, xmax, ymin, ymax)
+    grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
     beta0, zt0, dz0, C0 = grid.optimise(max_window, xc, yc)
 
     grid.add_prior(beta=(1.0, 0.1))
@@ -40,6 +62,7 @@ def test_priors():
         assert False, "FAILED! Optimisation with priors failed"
 
 def test_valid_numbers():
+    # create phoney power spectrum
     S = np.array([ 22.16409774,  19.95258494,  18.27873722,  17.10575637,\
                    16.53959747,  16.31539575,  15.69619005,  15.29953307,\
                    14.83475976,  14.54031396,  14.33361716,  13.81764026,\
@@ -66,7 +89,7 @@ def test_valid_numbers():
 
     sigma_S = np.ones_like(S)
 
-    grid = pycurious.CurieOptimise(mag_grid, xmin, xmax, ymin, ymax)
+    grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
 
     beta0 = 3.0
     zt0 = 1.0
