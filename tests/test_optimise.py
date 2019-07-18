@@ -2,31 +2,19 @@
 import pytest
 import pycurious
 import numpy as np
+import numpy.testing as npt
 from scipy.optimize import minimize
 
-# load magnetic anomaly - i.e. random fractal noise
-try:
-    mag_data = np.loadtxt("test_mag_data.txt")
-except:
-    mag_data = np.loadtxt("tests/test_mag_data.txt")
-
-nx, ny = 305, 305
-
-x = mag_data[:,0]
-y = mag_data[:,1]
-d = mag_data[:,2].reshape(ny,nx)
-
-xmin, xmax = x.min(), x.max()
-ymin, ymax = y.min(), y.max()
-
-xc = (xmax - xmin)/2
-yc = (ymax - ymin)/2
-
-# square window
-max_window = 300e3
+from conftest import load_magnetic_anomaly
 
 
-def test_optimisation():
+def test_optimisation(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+    max_window = load_magnetic_anomaly['max_window']
+
     grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
     beta, zt, dz, C = grid.optimise(max_window, xc, yc, taper=np.hanning)
 
@@ -43,25 +31,37 @@ def test_optimisation():
     # some parameters should be more similar than others
     tol = np.array([0.3, 0.1, 2.0])
 
-    if (np.abs(x_opt - x0) < tol).all():
-        print("PASSED! All parameters were successfully inverted within an acceptance range")
-    else:
-        assert False, "FAILED! Some or all parameters were not inverted within an acceptance range"
+    parameters = ["beta", "zt", "dz"]
+    err_msg = "FAILED! {} = {:.4f} is not within an acceptable tolerance of {}"
+
+    for i in range(x0.size):
+        npt.assert_allclose(x_opt[i], x0[i], atol=tol[i], \
+            err_msg=err_msg.format(parameters[i], x_opt[i], tol[i]))
 
 
-def test_priors():
+def test_priors(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+    max_window = load_magnetic_anomaly['max_window']
+
     grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
     beta0, zt0, dz0, C0 = grid.optimise(max_window, xc, yc)
 
     grid.add_prior(beta=(1.0, 0.1))
     beta1, zt1, dz1, C1 = grid.optimise(max_window, xc, yc)
 
-    if abs(beta1 - 1.0) < abs(beta0 - 1.0):
-        print("PASSED! Optimisation is sensitive to prior information")
-    else:
-        assert False, "FAILED! Optimisation with priors failed"
+    assert abs(beta1 - 1.0) < abs(beta0 - 1.0), "FAILED! Optimisation with priors failed"
 
-def test_valid_numbers():
+
+def test_valid_numbers(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+    max_window = load_magnetic_anomaly['max_window']
+
     # create phoney power spectrum
     S = np.array([ 22.16409774,  19.95258494,  18.27873722,  17.10575637,\
                    16.53959747,  16.31539575,  15.69619005,  15.29953307,\
@@ -106,12 +106,8 @@ def test_valid_numbers():
     res = minimize(grid.min_func, x0, args=(k, S, sigma_S), method='TNC', bounds=list(zip(lower_bound,upper_bound)))
     print("beta={:.2f}, zt={:.2f}, dz={:.2f}, C={:.2f}".format(*res.x))
 
-    if np.isfinite(res.x).all():
-        print("PASSED! All numbers are finite")
-    else:
-        assert False, "FAILED! Not all numbers are finite"
+    parameters = ["beta", "zt", "dz", "C"]
+    err_msg = "FAILED! {} = {} is not a finite number"
 
-if __name__ == "__main__":
-    test_optimisation()
-    test_priors()
-    test_valid_numbers()
+    for i in range(res.x.size):
+        assert np.isfinite(res.x[i]), err_msg.format(parameters[i], res.x[i])
