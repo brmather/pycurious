@@ -3,37 +3,31 @@ import pytest
 import pycurious
 import numpy as np
 
-# load magnetic anomaly - i.e. random fractal noise
-try:
-    mag_data = np.loadtxt("test_mag_data.txt")
-except:
-    mag_data = np.loadtxt("tests/test_mag_data.txt")
-
-nx, ny = 305, 305
-
-x = mag_data[:,0]
-y = mag_data[:,1]
-d = mag_data[:,2].reshape(ny,nx)
-
-xmin, xmax = x.min(), x.max()
-ymin, ymax = y.min(), y.max()
-
-xc = (xmax - xmin)/2
-yc = (ymax - ymin)/2
+from conftest import load_magnetic_anomaly
 
 
-def test_subgrid():
+def test_subgrid(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+
     grid = pycurious.CurieGrid(d, xmin, xmax, ymin, ymax)
 
     window_size = 100e3
     subgrid = grid.subgrid(window_size, xc, yc)
 
-    if subgrid.shape[0] < grid.data.shape[0] and subgrid.shape[1] < grid.data.shape[1]:
-        print("PASSED! Subgrid successfully extracted from domain")
-    else:
-        assert False, "FAILED! Subgrid is of shape {} and domain is of shape {}".format(subgrid.shape, grid.data.shape)
+    error_msg = "FAILED! Subgrid is of shape {} and domain is of shape {}".format(subgrid.shape, grid.data.shape)
+    assert subgrid.shape[0] < grid.data.shape[0], error_msg
+    assert subgrid.shape[1] < grid.data.shape[1], error_msg
 
-def test_FFT():
+
+def test_FFT(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+
     grid = pycurious.CurieGrid(d, xmin, xmax, ymin, ymax)
 
     # Take Fourier transform
@@ -51,13 +45,17 @@ def test_FFT():
     sigma_Phi2 = sigma_Phi[i3:2*i3]
     sigma_Phi3 = sigma_Phi[2*i3:]
 
-    if Phi1.mean() > Phi2.mean() > Phi3.mean() and \
-       sigma_Phi1.mean() > sigma_Phi2.mean() > sigma_Phi3.mean():
-        print("PASSED! Fast Fourier Transform produced a radial power spectrum")
-    else:
-        assert False, "FAILED! Fast Fourier Transform did not produce a valid power spectrum"
+    error_msg = "FAILED! Fast Fourier Transform did not produce a valid power spectrum"
+    assert Phi1.mean() > Phi2.mean() > Phi3.mean(), error_msg
+    assert sigma_Phi1.mean() > sigma_Phi2.mean() > sigma_Phi3.mean(), error_msg
 
-def test_taper_functions():
+
+def test_taper_functions(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+
     grid = pycurious.CurieGrid(d, xmin, xmax, ymin, ymax)
 
     # Take Fourier transform using different taper functions
@@ -69,14 +67,18 @@ def test_taper_functions():
     grad_Phi2 = np.gradient(Phi2, k)
     grad_Phi3 = np.gradient(Phi3, k)
 
-    if Phi1.mean() > Phi2.mean() and Phi1.mean() > Phi3.mean() and \
-       grad_Phi1.mean() > grad_Phi2.mean() and grad_Phi1.mean() > grad_Phi3.mean():
-        print("PASSED! Tapered power spectrum is shifted lower")
-    else:
-        assert False, "FAILED! Tapered power spectrum is not significantly different from 'taper=None'"
+    assert Phi1.mean() > Phi2.mean(), "FAILED! 'taper=np.hanning' not significantly different from 'taper=None'"
+    assert Phi1.mean() > Phi3.mean(), "FAILED! 'taper=np.hamming' not significantly different from 'taper=None'"
+    assert grad_Phi1.mean() > grad_Phi2.mean(), "FAILED! 'taper=np.hanning' has steeper gradient from 'taper=None'"
+    assert grad_Phi1.mean() > grad_Phi3.mean(), "FAILED! 'taper=np.hamming' has steeper gradient from 'taper=None'"
 
 
-def test_Tanaka():
+def test_Tanaka(load_magnetic_anomaly):
+    d  = load_magnetic_anomaly['mag_data']
+    xc = load_magnetic_anomaly['xc']
+    yc = load_magnetic_anomaly['yc']
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly['extent']
+
     grid = pycurious.CurieGrid(d, xmin, xmax, ymin, ymax)
 
     # wavenumber bands for Z0 and Zt, respectively
@@ -87,14 +89,5 @@ def test_Tanaka():
     (Ztr,btr,dZtr), (Zor, bor, dZor) = pycurious.tanaka1999(k, Phi, sigma_Phi, kwin_Z0, kwin_Zt)
     Zb, eZb = pycurious.ComputeTanaka(Ztr, dZtr, Zor, dZor)
 
-    if np.abs(Zb - 10.0) < 2.0 and eZb < Zb:
-        print("PASSED! Tanaka method returned a sensible Curie depth estimate")
-    else:
-        assert False, "FAILED! Tanaka CPD is {:.4f} different from expected, uncertainty is {:.4f}".format(Zb-10.0, eZb)
-
-
-if __name__ == "__main__":
-    test_subgrid()
-    test_FFT()
-    test_taper_functions()
-    test_Tanaka()
+    error_msg = "FAILED! Tanaka CPD is {:.4f} different from expected, uncertainty is {:.4f}".format(Zb-10.0, eZb)
+    assert np.abs(Zb - 10.0) < 2.0 and eZb < Zb, error_msg
