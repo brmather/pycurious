@@ -44,18 +44,18 @@ or if the checksum (md5) does not match. If you do not know the checksum for a f
 <details class="source">
 <summary>Source code</summary>
 <pre><code class="python"># Copyright 2018-2019 Ben Mather, Robert Delhaye
-# 
+#
 # This file is part of PyCurious.
-# 
+#
 # PyCurious is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or any later version.
-# 
+#
 # PyCurious is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Lesser General Public License
 # along with PyCurious.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
@@ -88,6 +88,7 @@ md5sum(filename)
 to return its unique identifier.
 &#34;&#34;&#34;
 
+
 def download_file(url, local_filename, expected_size=&#34;Unknown&#34;):
     &#34;&#34;&#34;
     Download files from a URL to a local filename.
@@ -105,9 +106,9 @@ def download_file(url, local_filename, expected_size=&#34;Unknown&#34;):
 
     # We might want to bundle some files if they are small / compressed or not readily available for download
 
-    if (os.path.isfile(url)):
+    if os.path.isfile(url):
         shutil.copy(url, local_filename)
-    
+
     else:
         r = requests.get(url, stream=True)
 
@@ -115,17 +116,23 @@ def download_file(url, local_filename, expected_size=&#34;Unknown&#34;):
         last_time = start_time
         datasize = 0
 
-        with open(local_filename, &#39;wb&#39;) as f:
-            for chunk in r.iter_content(chunk_size=10000000): 
-                if chunk: # filter out keep-alive new chunks
+        with open(local_filename, &#34;wb&#34;) as f:
+            for chunk in r.iter_content(chunk_size=10000000):
+                if chunk:  # filter out keep-alive new chunks
                     f.write(chunk)
                     f.flush()
                     datasize += len(chunk)
                     if (time.time() - last_time) &gt; 2.5:
-                        print (&#34;{:.1f} Mb in {:.1f}s / {}&#34;.format(datasize / 1.0e6, time.time() - start_time, expected_size))
+                        print(
+                            &#34;{:.1f} Mb in {:.1f}s / {}&#34;.format(
+                                datasize / 1.0e6,
+                                time.time() - start_time,
+                                expected_size,
+                            )
+                        )
                         last_time = time.time()
 
-    return 
+    return
 
 
 def md5sum(filename):
@@ -135,14 +142,16 @@ def md5sum(filename):
     import hashlib
     from functools import partial
 
-    with open(filename, mode=&#39;rb&#39;) as f:
+    with open(filename, mode=&#34;rb&#34;) as f:
         d = hashlib.md5()
-        for buf in iter(partial(f.read, 4096), b&#39;&#39;):
+        for buf in iter(partial(f.read, 4096), b&#34;&#34;):
             d.update(buf)
     return d.hexdigest()
 
 
-def download_cached_file(location_url, local_file, expected_md5, expected_size=&#34;Unknown&#34;):
+def download_cached_file(
+    location_url, local_file, expected_md5, expected_size=&#34;Unknown&#34;
+):
     &#34;&#34;&#34;
     Download files from a URL to a local filename.
 
@@ -163,21 +172,21 @@ def download_cached_file(location_url, local_file, expected_md5, expected_size=&
 
     try:
         assert md5sum(local_file) == expected_md5
-        print (&#34;Using cached file - {}&#34;.format(local_file))
-        return(2)
-    
+        print(&#34;Using cached file - {}&#34;.format(local_file))
+        return 2
+
     except (IOError, AssertionError) as error_info:
         # No file or the wrong file ... best go download it
         # print &#34;Assertion failed - {}&#34;.format(sys.exc_info())
-        
+
         try:
             data_file = download_file(location_url, local_file, expected_size)
-            print (&#34;Downloaded from {}&#34;.format( location_url ))
-            return(1)
+            print(&#34;Downloaded from {}&#34;.format(location_url))
+            return 1
 
         except:
-            print (&#34;Unable to download {} [{}] &#34;.format( location_url, sys.exc_info() ))
-            return(0)
+            print(&#34;Unable to download {} [{}] &#34;.format(location_url, sys.exc_info()))
+            return 0
 
 
 def report_cached_file(local_file, expected_md5):
@@ -192,14 +201,18 @@ def report_cached_file(local_file, expected_md5):
     &#34;&#34;&#34;
     import os
     import os.path
-    
+
     if not os.path.isfile(local_file):
-        print (&#34;Local file {} does not exist&#34;.format(local_file))
+        print(&#34;Local file {} does not exist&#34;.format(local_file))
     else:
         if len(expected_md5) == 0 or md5sum(local_file) == expected_md5:
-            print (&#34;Cached file {} is valid&#34;.format(local_file))
+            print(&#34;Cached file {} is valid&#34;.format(local_file))
         else:
-            print (&#34;Cached file {} failed, checksum {}&#34;.format(local_file, md5sum(local_file)))</code></pre>
+            print(
+                &#34;Cached file {} failed, checksum {}&#34;.format(
+                    local_file, md5sum(local_file)
+                )
+            )</code></pre>
 </details>
 </section>
 <section>
@@ -229,7 +242,9 @@ been downloaded from its checksum.</p>
 </dl></section>
 <details class="source">
 <summary>Source code</summary>
-<pre><code class="python">def download_cached_file(location_url, local_file, expected_md5, expected_size=&#34;Unknown&#34;):
+<pre><code class="python">def download_cached_file(
+    location_url, local_file, expected_md5, expected_size=&#34;Unknown&#34;
+):
     &#34;&#34;&#34;
     Download files from a URL to a local filename.
 
@@ -250,21 +265,21 @@ been downloaded from its checksum.</p>
 
     try:
         assert md5sum(local_file) == expected_md5
-        print (&#34;Using cached file - {}&#34;.format(local_file))
-        return(2)
-    
+        print(&#34;Using cached file - {}&#34;.format(local_file))
+        return 2
+
     except (IOError, AssertionError) as error_info:
         # No file or the wrong file ... best go download it
         # print &#34;Assertion failed - {}&#34;.format(sys.exc_info())
-        
+
         try:
             data_file = download_file(location_url, local_file, expected_size)
-            print (&#34;Downloaded from {}&#34;.format( location_url ))
-            return(1)
+            print(&#34;Downloaded from {}&#34;.format(location_url))
+            return 1
 
         except:
-            print (&#34;Unable to download {} [{}] &#34;.format( location_url, sys.exc_info() ))
-            return(0)</code></pre>
+            print(&#34;Unable to download {} [{}] &#34;.format(location_url, sys.exc_info()))
+            return 0</code></pre>
 </details>
 </dd>
 <dt id="pycurious.download.download_file"><code class="name flex">
@@ -298,9 +313,9 @@ been downloaded from its checksum.</p>
 
     # We might want to bundle some files if they are small / compressed or not readily available for download
 
-    if (os.path.isfile(url)):
+    if os.path.isfile(url):
         shutil.copy(url, local_filename)
-    
+
     else:
         r = requests.get(url, stream=True)
 
@@ -308,17 +323,23 @@ been downloaded from its checksum.</p>
         last_time = start_time
         datasize = 0
 
-        with open(local_filename, &#39;wb&#39;) as f:
-            for chunk in r.iter_content(chunk_size=10000000): 
-                if chunk: # filter out keep-alive new chunks
+        with open(local_filename, &#34;wb&#34;) as f:
+            for chunk in r.iter_content(chunk_size=10000000):
+                if chunk:  # filter out keep-alive new chunks
                     f.write(chunk)
                     f.flush()
                     datasize += len(chunk)
                     if (time.time() - last_time) &gt; 2.5:
-                        print (&#34;{:.1f} Mb in {:.1f}s / {}&#34;.format(datasize / 1.0e6, time.time() - start_time, expected_size))
+                        print(
+                            &#34;{:.1f} Mb in {:.1f}s / {}&#34;.format(
+                                datasize / 1.0e6,
+                                time.time() - start_time,
+                                expected_size,
+                            )
+                        )
                         last_time = time.time()
 
-    return </code></pre>
+    return</code></pre>
 </details>
 </dd>
 <dt id="pycurious.download.md5sum"><code class="name flex">
@@ -335,9 +356,9 @@ been downloaded from its checksum.</p>
     import hashlib
     from functools import partial
 
-    with open(filename, mode=&#39;rb&#39;) as f:
+    with open(filename, mode=&#34;rb&#34;) as f:
         d = hashlib.md5()
-        for buf in iter(partial(f.read, 4096), b&#39;&#39;):
+        for buf in iter(partial(f.read, 4096), b&#34;&#34;):
             d.update(buf)
     return d.hexdigest()</code></pre>
 </details>
@@ -368,14 +389,18 @@ been downloaded from its checksum.</p>
     &#34;&#34;&#34;
     import os
     import os.path
-    
+
     if not os.path.isfile(local_file):
-        print (&#34;Local file {} does not exist&#34;.format(local_file))
+        print(&#34;Local file {} does not exist&#34;.format(local_file))
     else:
         if len(expected_md5) == 0 or md5sum(local_file) == expected_md5:
-            print (&#34;Cached file {} is valid&#34;.format(local_file))
+            print(&#34;Cached file {} is valid&#34;.format(local_file))
         else:
-            print (&#34;Cached file {} failed, checksum {}&#34;.format(local_file, md5sum(local_file)))</code></pre>
+            print(
+                &#34;Cached file {} failed, checksum {}&#34;.format(
+                    local_file, md5sum(local_file)
+                )
+            )</code></pre>
 </details>
 </dd>
 </dl>
