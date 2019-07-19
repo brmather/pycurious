@@ -40,8 +40,10 @@ import numpy as np
 from scipy.special import gamma, kv
 import warnings
 
-try: range = xrange
-except: pass
+try:
+    range = xrange
+except:
+    pass
 
 
 class CurieGrid(object):
@@ -92,6 +94,7 @@ class CurieGrid(object):
         Using a grid of longitude / latitudinal coordinates (degrees) will result
         in incorrect Curie depth calculations.
     """
+
     def __init__(self, grid, xmin, xmax, ymin, ymax):
 
         self.data = np.array(grid)
@@ -104,8 +107,7 @@ class CurieGrid(object):
         self.dx, self.dy = dx, dy
 
         if not np.allclose(dx, dy, 1.0):
-            raise ValueError("node spacing should be identical {}".format((dx,dy)))
-
+            raise ValueError("node spacing should be identical {}".format((dx, dy)))
 
     def subgrid(self, window, xc, yc):
         """
@@ -127,14 +129,14 @@ class CurieGrid(object):
 
         # check whether coordinate is inside grid
         if xc < self.xmin or xc > self.xmax or yc < self.ymin or yc > self.ymax:
-            raise ValueError("Point {} outside data range".format((xc,yc)))
+            raise ValueError("Point {} outside data range".format((xc, yc)))
 
         # find nearest index to xc,yc
         ix = np.abs(self.xcoords - xc).argmin()
         iy = np.abs(self.ycoords - yc).argmin()
 
-        nw = int(round(window/self.dx))
-        n2w = nw//2
+        nw = int(round(window / self.dx))
+        n2w = nw // 2
 
         # extract a square window from the data
         imin = ix - n2w
@@ -144,12 +146,15 @@ class CurieGrid(object):
 
         # check whether window fits inside grid
         if imin < 0 or imax > self.nx or jmin < 0 or jmax > self.ny:
-            raise ValueError("Window size {} at centroid {} exceeds the data range".format(window, (xc,yc)))
+            raise ValueError(
+                "Window size {} at centroid {} exceeds the data range".format(
+                    window, (xc, yc)
+                )
+            )
 
         data = self.data[jmin:jmax, imin:imax]
 
         return data
-
 
     def create_centroid_list(self, window, spacingX=None, spacingY=None):
         """
@@ -174,8 +179,8 @@ class CurieGrid(object):
         xcoords = self.xcoords
         ycoords = self.ycoords
 
-        nw = int(round(window/self.dx))
-        n2w = nw//2
+        nw = int(round(window / self.dx))
+        n2w = nw // 2
 
         # this is the densest spacing possible given the data
         xc = xcoords[n2w:-n2w]
@@ -191,7 +196,6 @@ class CurieGrid(object):
 
         return xq.ravel(), yq.ravel()
 
-
     def remove_trend_linear(self, data):
         """
         Remove the best-fitting linear trend from the data
@@ -206,11 +210,10 @@ class CurieGrid(object):
             data : 2D numpy array
         """
         nr, nc = data.shape
-        yq, xq = np.mgrid[0:nc,0:nr]
+        yq, xq = np.mgrid[0:nc, 0:nr]
         A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
         c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
         return data - np.dot(A, c).reshape(data.shape)
-
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """
@@ -224,8 +227,7 @@ class CurieGrid(object):
         nr, nc = data.shape
 
         if nr != nc:
-            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
-
+            warnings.warn("subgrid is not square {}".format((nr, nc)), RuntimeWarning)
 
         # control taper
         if taper is None:
@@ -234,15 +236,14 @@ class CurieGrid(object):
             rt = taper(nr, **kwargs)
             ct = taper(nc, **kwargs)
             xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq*yq
+            vtaper = xq * yq
 
         # scaling factor to transform wavenumber into units of rad/km
-        dx_scale = self.dx*scale
-        dk = 2.0*np.pi/(nr - 1)/dx_scale
+        dx_scale = self.dx * scale
+        dk = 2.0 * np.pi / (nr - 1) / dx_scale
 
-        kbins = np.arange(dk, dk*nr/2, dk)
+        kbins = np.arange(dk, dk * nr / 2, dk)
         return vtaper, dk, kbins
-
 
     def _FFT_spectrum(self, subgrid, vtaper, dk, kbins, const):
         """
@@ -266,26 +267,25 @@ class CurieGrid(object):
         nbins = kbins.size - 1
 
         # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data*vtaper))
+        FT = np.abs(np.fft.fft2(data * vtaper))
         FT = np.fft.fftshift(FT)
 
         S = np.empty(nbins)
         k = np.empty(nbins)
         sigma = np.empty(nbins)
 
-        i0 = int((nr - 1)//2)
-        ix, iy = np.mgrid[0:nr,0:nr]
-        kk = np.hypot((ix - i0)*dk, (iy - i0)*dk)
+        i0 = int((nr - 1) // 2)
+        ix, iy = np.mgrid[0:nr, 0:nr]
+        kk = np.hypot((ix - i0) * dk, (iy - i0) * dk)
 
         for i in range(nbins):
-            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i+1])
-            rr = const*np.log(FT[mask])
+            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
+            rr = const * np.log(FT[mask])
             S[i] = rr.mean()
             k[i] = kk[mask].mean()
             sigma[i] = np.std(rr)
 
         return k, S, sigma
-
 
     def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, **kwargs):
         """
@@ -333,13 +333,14 @@ class CurieGrid(object):
 
         # bin the spectrum and compute the taper
         vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
-        
+
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Bouligand or Tanaka analysis
         return self._FFT_spectrum(subgrid, vtaper, dk, kbins, power)
 
-
-    def azimuthal_spectrum(self, subgrid, taper=np.hanning, power=2.0, theta=5.0, **kwargs):
+    def azimuthal_spectrum(
+        self, subgrid, taper=np.hanning, power=2.0, theta=5.0, **kwargs
+    ):
         """
         Compute azimuthal spectrum for a square grid.
 
@@ -385,7 +386,7 @@ class CurieGrid(object):
         vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
 
         dtheta = np.arange(0.0, 180.0, theta)
-        sinogram = radon.radon2d(subgrid, np.pi*dtheta/180.0)
+        sinogram = radon.radon2d(subgrid, np.pi * dtheta / 180.0)
         S = np.zeros((dtheta.size, kbins.size))
 
         # control taper
@@ -394,13 +395,12 @@ class CurieGrid(object):
         else:
             vtaper = taper(sinogram.shape[0], **kwargs)
 
-        nk = 1 + 2*kbins.size
+        nk = 1 + 2 * kbins.size
         for i in range(0, dtheta.size):
-            PSD = np.abs(np.fft.fft(vtaper*sinogram[:,i], n=nk))
-            S[i,:] = power*np.log(PSD[1:kbins.size+1])
+            PSD = np.abs(np.fft.fft(vtaper * sinogram[:, i], n=nk))
+            S[i, :] = power * np.log(PSD[1 : kbins.size + 1])
 
         return kbins, S, dtheta
-
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
         """
@@ -465,7 +465,7 @@ class CurieGrid(object):
         nr, nc = data.shape
 
         if nr != nc:
-            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+            warnings.warn("subgrid is not square {}".format((nr, nc)), RuntimeWarning)
 
         fx, fy, fz = ang2vec(1.0, inc, dec)
         if sinc is None or sdec is None:
@@ -476,22 +476,25 @@ class CurieGrid(object):
         kx, ky = [k for k in _fftfreqs(self.dx, self.dy, data.shape)]
         kz = np.hypot(kx, ky)
 
-        a1 = mz*fz - mx*fx
-        a2 = mz*fz - my*fy
-        a3 = -my*fx - mx*fy
-        b1 = mx*fz + mz*fx
-        b2 = my*fz + mz*fy
+        a1 = mz * fz - mx * fx
+        a2 = mz * fz - my * fy
+        a3 = -my * fx - mx * fy
+        b1 = mx * fz + mz * fx
+        b2 = my * fz + mz * fy
 
         # The division gives a RuntimeWarning because of the zero frequency term.
         # This suppresses the warning.
-        with np.errstate(divide='ignore', invalid='ignore'):
-            rtp = (kz)/(a1*kx**2 + a2*ky**2 + a3*kx*ky + \
-                            1j*np.sqrt(kz)*(b1*kx + b2*ky))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rtp = (kz) / (
+                a1 * kx ** 2
+                + a2 * ky ** 2
+                + a3 * kx * ky
+                + 1j * np.sqrt(kz) * (b1 * kx + b2 * ky)
+            )
 
         rtp[0, 0] = 0
-        ft_pole = rtp*np.fft.fft2(data)
+        ft_pole = rtp * np.fft.fft2(data)
         return np.real(np.fft.ifft2(ft_pole))
-
 
     def upward_continuation(self, data, height):
         """
@@ -524,24 +527,27 @@ class CurieGrid(object):
         nr, nc = data.shape
 
         if nr != nc:
-            warnings.warn("subgrid is not square {}".format((nr,nc)), RuntimeWarning)
+            warnings.warn("subgrid is not square {}".format((nr, nc)), RuntimeWarning)
 
         if height <= 0:
-            warnings.warn("Using 'height' <= 0 means downward continuation, " +
-                          "which is known to be unstable.")
+            warnings.warn(
+                "Using 'height' <= 0 means downward continuation, "
+                + "which is known to be unstable."
+            )
 
-        fx = 2.0*np.pi*np.fft.fftfreq(nr, self.dx)
-        fy = 2.0*np.pi*np.fft.fftfreq(nc, self.dy)
+        fx = 2.0 * np.pi * np.fft.fftfreq(nr, self.dx)
+        fy = 2.0 * np.pi * np.fft.fftfreq(nc, self.dy)
 
         kx, ky = np.meshgrid(fy, fx)[::-1]
         kz = np.hypot(kx, ky)
 
-        upcont_ft = np.fft.fft2(data)*np.exp(-height*kz)
+        upcont_ft = np.fft.fft2(data) * np.exp(-height * kz)
         cont = np.real(np.fft.ifft2(upcont_ft))
         return cont
 
 
 # Helper functions to calculate Curie depth
+
 
 def bouligand2009(kh, beta, zt, dz, C):
     """
@@ -577,13 +583,19 @@ def bouligand2009(kh, beta, zt, dz, C):
         129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
     # from scipy.special import kv
-    khdz = kh*dz
+    khdz = kh * dz
     coshkhdz = np.cosh(khdz)
 
-    Phi1d = C - 2.0*kh*zt - (beta-1.0)*np.log(kh) - khdz
-    A = np.sqrt(np.pi)/gamma(1.0+0.5*beta) * \
-        (0.5*coshkhdz*gamma(0.5*(1.0+beta)) - \
-        kv((-0.5*(1.0+beta)), khdz) * np.power(0.5*khdz,(0.5*(1.0+beta)) ))
+    Phi1d = C - 2.0 * kh * zt - (beta - 1.0) * np.log(kh) - khdz
+    A = (
+        np.sqrt(np.pi)
+        / gamma(1.0 + 0.5 * beta)
+        * (
+            0.5 * coshkhdz * gamma(0.5 * (1.0 + beta))
+            - kv((-0.5 * (1.0 + beta)), khdz)
+            * np.power(0.5 * khdz, (0.5 * (1.0 + beta)))
+        )
+    )
     Phi1d += np.log(A)
     return Phi1d
 
@@ -615,53 +627,51 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
     """
     # for now...
     S = lnPhi
-    sigma2 = sigma_lnPhi**2
+    sigma2 = sigma_lnPhi ** 2
 
     def compute_coefficients(X, Y, E):
-        X2 = X**2
-        Y2 = Y**2
-        E2 = E**2
+        X2 = X ** 2
+        Y2 = Y ** 2
+        E2 = E ** 2
 
         XY = np.multiply(X, Y)
-        XE2sum = np.sum(X/E2)
-        YE2sum = np.sum(Y/E2)
-        rE2sum = np.sum(1.0/E2)
-        X2E2sum = np.sum(X2/E2)
+        XE2sum = np.sum(X / E2)
+        YE2sum = np.sum(Y / E2)
+        rE2sum = np.sum(1.0 / E2)
+        X2E2sum = np.sum(X2 / E2)
 
-
-        #TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
+        # TL = XE2sum*YE2sum - np.sum(XY/E2*rE2sum)
         # I think summation in second TL term needed to be split
-        TL = XE2sum*YE2sum - np.sum(XY/E2)*rE2sum
-        BL = XE2sum**2 - X2E2sum*rE2sum
+        TL = XE2sum * YE2sum - np.sum(XY / E2) * rE2sum
+        BL = XE2sum ** 2 - X2E2sum * rE2sum
 
-        Z  = TL/BL
-        b  = (np.sum(XY/E2) - Z*X2E2sum)/XE2sum
-        #dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
+        Z = TL / BL
+        b = (np.sum(XY / E2) - Z * X2E2sum) / XE2sum
+        # dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum) )
         ## There was a missing **2 term at end of error term.
-        dZ = np.sqrt( rE2sum/(X2E2sum*rE2sum - XE2sum**2) )
+        dZ = np.sqrt(rE2sum / (X2E2sum * rE2sum - XE2sum ** 2))
         return Z, b, dZ
 
+    sf = k / (2.0 * np.pi)
 
-    sf=k/(2.0*np.pi)
-    
     # mask low wavenumbers
     kmin, kmax = kmin_range
-    mask1 = np.logical_and(sf >=kmin, sf <=kmax)
+    mask1 = np.logical_and(sf >= kmin, sf <= kmax)
     X1 = sf[mask1]
     Y1 = S[mask1]
     E1 = sigma2[mask1]
 
     # mask high wavenumbers
     kmin, kmax = kmax_range
-    mask2 = np.logical_and(sf >=kmin, sf <=kmax)
+    mask2 = np.logical_and(sf >= kmin, sf <= kmax)
     X2 = sf[mask2]
-    Y2 = np.log(np.exp(S[mask2])/(X2*2*np.pi))
-    E2 = np.log(np.exp(sigma2[mask2])/(X2*2*np.pi))
+    Y2 = np.log(np.exp(S[mask2]) / (X2 * 2 * np.pi))
+    E2 = np.log(np.exp(sigma2[mask2]) / (X2 * 2 * np.pi))
 
     # compute top and bottom of magnetic layer
     Ztr, btr, dZtr = compute_coefficients(X1, Y1, E1)
     Zor, bor, dZor = compute_coefficients(X2, Y2, E2)
-    return (Ztr,btr,dZtr), (Zor, bor, dZor)
+    return (Ztr, btr, dZtr), (Zor, bor, dZor)
 
 
 def ComputeTanaka(Ztr, dZtr, Zor, dZor):
@@ -684,8 +694,8 @@ def ComputeTanaka(Ztr, dZtr, Zor, dZor):
         eZb : float / 1D array
             error of `Zb`
     """
-    Zb = 2.0*Zor - Ztr
-    dZb  = 2.0*dZor + dZtr
+    Zb = 2.0 * Zor - Ztr
+    dZb = 2.0 * dZor + dZtr
     return abs(Zb), dZb
 
 
@@ -722,16 +732,17 @@ def maus1995(beta, zt, kh, C=0.0):
         estimation using a self-similar magnetization model, Geophys. J. Int.,
         129, 163-168, doi:10.1111/j.1365-246X.1997.tb00945.x
     """
-    return C - 2.0*kh*zt - (beta-1.0)*np.log(kh)
+    return C - 2.0 * kh * zt - (beta - 1.0) * np.log(kh)
 
 
 def _fftfreqs(dx, dy, shape):
     """
     Get two 2D-arrays with the wave numbers in the x and y directions.
     """
-    fx = 2.0*np.pi*np.fft.fftfreq(shape[0], dx)
-    fy = 2.0*np.pi*np.fft.fftfreq(shape[1], dy)
+    fx = 2.0 * np.pi * np.fft.fftfreq(shape[0], dx)
+    fy = 2.0 * np.pi * np.fft.fftfreq(shape[1], dy)
     return np.meshgrid(fy, fx)[::-1]
+
 
 def ang2vec(intensity, inc, dec):
     """
@@ -788,8 +799,10 @@ def dircos(inc, dec):
         Inclination is positive down and declination is measured with respect
         to x (North).
     """
-    d2r = np.pi/180.0
-    vect = [np.cos(d2r * inc) * np.cos(d2r * dec), \
-            np.cos(d2r * inc) * np.sin(d2r * dec), \
-            np.sin(d2r * inc)]
+    d2r = np.pi / 180.0
+    vect = [
+        np.cos(d2r * inc) * np.cos(d2r * dec),
+        np.cos(d2r * inc) * np.sin(d2r * dec),
+        np.sin(d2r * inc),
+    ]
     return vect

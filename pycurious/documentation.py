@@ -1,16 +1,16 @@
 # Copyright 2018-2019 Ben Mather, Robert Delhaye
-# 
+#
 # This file is part of PyCurious.
-# 
+#
 # PyCurious is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or any later version.
-# 
+#
 # PyCurious is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Lesser General Public License
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -48,8 +48,19 @@ def install_documentation(path="./PyCurious-Examples"):
 
     """
 
-    Notebooks_Path = _pkg_resources.resource_filename("pycurious", os.path.join("Examples"))
+    Notebooks_Path = _pkg_resources.resource_filename(
+        "pycurious", os.path.join("Examples")
+    )
 
-    ct = _dir_util.copy_tree(Notebooks_Path, path, preserve_mode=1, preserve_times=1, preserve_symlinks=1, update=0, verbose=1, dry_run=0)
+    ct = _dir_util.copy_tree(
+        Notebooks_Path,
+        path,
+        preserve_mode=1,
+        preserve_times=1,
+        preserve_symlinks=1,
+        update=0,
+        verbose=1,
+        dry_run=0,
+    )
 
     return
