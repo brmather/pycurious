@@ -1,16 +1,16 @@
 # Copyright 2018-2019 Ben Mather, Robert Delhaye
-# 
+#
 # This file is part of PyCurious.
-# 
+#
 # PyCurious is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or any later version.
-# 
+#
 # PyCurious is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Lesser General Public License
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -41,8 +41,10 @@ from scipy.special import polygamma
 from scipy import stats
 from multiprocessing import Pool, Process, Queue, cpu_count
 
-try: range=xrange
-except: pass
+try:
+    range = xrange
+except:
+    pass
 
 
 class CurieOptimise(CurieGrid):
@@ -96,6 +98,7 @@ class CurieOptimise(CurieGrid):
         Using a grid of longitude / latitudinal coordinates (degrees) will result
         in incorrect Curie depth calculations.
     """
+
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
         super(CurieOptimise, self).__init__(grid, xmin, xmax, ymin, ymax)
@@ -106,8 +109,8 @@ class CurieOptimise(CurieGrid):
         # lower / upper bounds
         # [beta, zt, dz, C]
         lb = [0.0, 0.0, 0.0, None]
-        ub = [None]*len(lb)
-        bounds = list(zip(lb,ub))
+        ub = [None] * len(lb)
+        bounds = list(zip(lb, ub))
         self.bounds = bounds
 
         self.max_processors = kwargs.pop("max_processors", cpu_count())
@@ -146,14 +149,12 @@ class CurieOptimise(CurieGrid):
             else:
                 raise ValueError("prior must be one of {}".format(self.prior.keys()))
 
-
     def reset_priors(self):
         """
         Reset priors to uniform distribution
         """
-        self.prior = {'beta':None, 'zt':None, 'dz':None, 'C':None}
-        self.prior_pdf = {'beta':None, 'zt':None, 'dz':None, 'C':None}
-
+        self.prior = {"beta": None, "zt": None, "dz": None, "C": None}
+        self.prior_pdf = {"beta": None, "zt": None, "dz": None, "C": None}
 
     def objective_routine(self, **kwargs):
         """
@@ -190,8 +191,7 @@ class CurieOptimise(CurieGrid):
         Returns:
             misfit : float
         """
-        return 0.5*np.sum((x - x0)**2/sigma_x0**2)
-
+        return 0.5 * np.sum((x - x0) ** 2 / sigma_x0 ** 2)
 
     def min_func(self, x, kh, Phi, sigma_Phi):
         """
@@ -229,8 +229,19 @@ class CurieOptimise(CurieGrid):
             misfit += self.objective_routine(beta=beta, zt=zt, dz=dz, C=C)
         return misfit
 
-
-    def optimise(self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def optimise(
+        self,
+        window,
+        xc,
+        yc,
+        beta=3.0,
+        zt=1.0,
+        dz=10.0,
+        C=5.0,
+        taper=np.hanning,
+        process_subgrid=None,
+        **kwargs
+    ):
         """
         Find the optimal parameters of \\( \\beta, z_t, \\Delta z, C \\)
         for a given centroid (xc,yc) and window size.
@@ -289,7 +300,6 @@ class CurieOptimise(CurieGrid):
         res = minimize(self.min_func, x0, args=(k, Phi, sigma_Phi), bounds=self.bounds)
         return res.x
 
-
     def _func_queue(self, func, q_in, q_out, window, *args, **kwargs):
         """ Retrive processes from the queue """
         while True:
@@ -303,7 +313,6 @@ class CurieOptimise(CurieGrid):
             res = func(*pass_args, **kwargs)
             q_out.put((pos, res))
         return
-
 
     def parallelise_routine(self, window, xc_list, yc_list, func, *args, **kwargs):
         """
@@ -383,9 +392,7 @@ class CurieOptimise(CurieGrid):
             pass_args = [func, q_in, q_out, window]
             pass_args.extend(args)
 
-            p = Process(target=self._func_queue,\
-                        args=tuple(pass_args),\
-                        kwargs=kwargs)
+            p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
 
             processes.append(p)
 
@@ -401,7 +408,6 @@ class CurieOptimise(CurieGrid):
         for i in range(len(sent)):
             i, res = q_out.get()
             xOpt[i] = res
-
 
         # wait until each processor has finished
         [p.join() for p in processes]
@@ -423,9 +429,19 @@ class CurieOptimise(CurieGrid):
         else:
             raise ValueError("Cannot determine shape of output")
 
-
-
-    def optimise_routine(self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def optimise_routine(
+        self,
+        window,
+        xc_list,
+        yc_list,
+        beta=3.0,
+        zt=1.0,
+        dz=10.0,
+        C=5.0,
+        taper=np.hanning,
+        process_subgrid=None,
+        **kwargs
+    ):
         """
         Iterate through a list of centroids to compute the optimal values
         of \\( \\beta, z_t, \\Delta z, C \\) for a given window size.
@@ -464,10 +480,36 @@ class CurieOptimise(CurieGrid):
                 field constant
 
         """
-        return self.parallelise_routine(window, xc_list, yc_list, self.optimise, beta, zt, dz, C, taper, process_subgrid, **kwargs)
+        return self.parallelise_routine(
+            window,
+            xc_list,
+            yc_list,
+            self.optimise,
+            beta,
+            zt,
+            dz,
+            C,
+            taper,
+            process_subgrid,
+            **kwargs
+        )
 
-
-    def metropolis_hastings(self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def metropolis_hastings(
+        self,
+        window,
+        xc,
+        yc,
+        nsim,
+        burnin,
+        x_scale=None,
+        beta=3.0,
+        zt=1.0,
+        dz=10.0,
+        C=5.0,
+        taper=np.hanning,
+        process_subgrid=None,
+        **kwargs
+    ):
         """
         MCMC algorithm using a Metropolis-Hastings sampler.
 
@@ -526,13 +568,11 @@ class CurieOptimise(CurieGrid):
             def process_subgrid(subgrid):
                 return subgrid
 
-
         samples = np.empty((nsim, 4))
         x0 = np.array([beta, zt, dz, C])
 
         if x_scale is None:
             x_scale = np.ones(4)
-
 
         # get subgrid
         subgrid = self.subgrid(window, xc, yc)
@@ -541,15 +581,15 @@ class CurieOptimise(CurieGrid):
         # compute radial spectrum
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
-        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi)/1000)
+        P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi) / 1000)
 
         # Burn-in phase
         for i in range(burnin):
             # add random perturbation
-            x1 = x0 + np.random.normal(size=4)*x_scale
+            x1 = x0 + np.random.normal(size=4) * x_scale
 
             # evaluate proposal probability + tempering
-            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi)/1000)
+            P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi) / 1000)
 
             # iterate towards MAP estimate
             if P1 > P0:
@@ -561,13 +601,13 @@ class CurieOptimise(CurieGrid):
         # Now sample posterior
         for i in range(nsim):
             # add random perturbation
-            x1 = x0 + np.random.normal(size=4)*x_scale
+            x1 = x0 + np.random.normal(size=4) * x_scale
 
             # evaluate proposal probability
             P0 = max(P0, 1e-99)
             P1 = np.exp(-self.min_func(x1, k, Phi, sigma_Phi))
 
-            P = min(P1/P0, 1.0)
+            P = min(P1 / P0, 1.0)
 
             # randomly accept probability
             if np.random.rand() <= P:
@@ -578,9 +618,20 @@ class CurieOptimise(CurieGrid):
 
         return list(samples.T)
 
-
-
-    def sensitivity(self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=np.hanning, process_subgrid=None, **kwargs):
+    def sensitivity(
+        self,
+        window,
+        xc,
+        yc,
+        nsim,
+        beta=3.0,
+        zt=1.0,
+        dz=10.0,
+        C=5.0,
+        taper=np.hanning,
+        process_subgrid=None,
+        **kwargs
+    ):
         """
         Iterate through a list of centroids to compute the mean and
         standard deviation of \\( \\beta, z_t, \\Delta z, C \\) by
@@ -623,16 +674,15 @@ class CurieOptimise(CurieGrid):
             def process_subgrid(subgrid):
                 return subgrid
 
-
         samples = np.empty((nsim, 4))
         x0 = np.array([beta, zt, dz, C])
-        
+
         use_keys = []
         for key in self.prior_pdf:
             prior_pdf = self.prior_pdf[key]
             if prior_pdf is not None:
                 use_keys.append(key)
-        
+
         # get subgrid
         subgrid = self.subgrid(window, xc, yc)
         subgrid = process_subgrid(subgrid)
@@ -648,9 +698,10 @@ class CurieOptimise(CurieGrid):
 
             # minimise function
             rPhi = np.random.normal(Phi, sigma_Phi)
-            res = minimize(self.min_func, x0, args=(k, rPhi, sigma_Phi), bounds=self.bounds)
+            res = minimize(
+                self.min_func, x0, args=(k, rPhi, sigma_Phi), bounds=self.bounds
+            )
             samples[sim] = res.x
-
 
         # restore priors
         for key in use_keys:

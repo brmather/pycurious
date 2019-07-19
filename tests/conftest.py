@@ -1,4 +1,3 @@
-
 import pytest
 import pycurious
 import numpy as np
@@ -14,23 +13,25 @@ def load_magnetic_anomaly():
 
     nx, ny = 305, 305
 
-    x = mag_data[:,0]
-    y = mag_data[:,1]
-    d = mag_data[:,2].reshape(ny,nx)
+    x = mag_data[:, 0]
+    y = mag_data[:, 1]
+    d = mag_data[:, 2].reshape(ny, nx)
 
     max_window = 300e3
 
     xmin, xmax = x.min(), x.max()
     ymin, ymax = y.min(), y.max()
 
-    xc = 0.5*(xmin + xmax)
-    yc = 0.5*(ymin + ymax)
+    xc = 0.5 * (xmin + xmax)
+    yc = 0.5 * (ymin + ymax)
 
     # store inside dictionary
-    mag_dict = {'extent': [xmin,xmax,ymin,ymax], \
-                'mag_data': d, \
-                'xc': xc, \
-                'yc': yc, \
-                'max_window': max_window}
+    mag_dict = {
+        "extent": [xmin, xmax, ymin, ymax],
+        "mag_data": d,
+        "xc": xc,
+        "yc": yc,
+        "max_window": max_window,
+    }
 
     return mag_dict
