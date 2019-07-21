@@ -45,7 +45,7 @@ Common computational workflows and geospatial manipulation of magnetic data are 
 The `mapping` module includes a set of functions that help to wrangle maps of the magnetic anomaly into a useful form for `pycurious`.
 Such an approach is commonly encountered for transforming global compilations of the magnetic anomaly, e.g. EMAG2 [@Meyer2017], from latitudinal/longitudinal coordinates to a local projection in eastings/northings.
 
-![Radial power spectra (right) computed from different sized windows of a synthetic magnetic anomaly (left) using `pycurious`.](figure.png)
+![Radial power spectra (right) computed from different sized windows of a synthetic magnetic anomaly (left) using `pycurious`. Larger window sizes increase the number of points in the low wavenumber range of the radial power spectrum, which is important for estimating the thickness of magnetic sources in the crust.](figure.png)
 
 `pycurious` includes the following functionality:
 
