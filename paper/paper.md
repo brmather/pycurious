@@ -38,12 +38,12 @@ Current methods to derive the Curie depth first compute the (fast) Fourier trans
 The depth and thickness of magnetic sources is estimated from the slope of the radial power spectrum.
 
 Our Python package, `pycurious`, ingests a map of the Earth's magnetic anomaly and distributes the computation of Curie depth across multiple CPUs.
-`pycurious` implements the @Tanaka:1999 and @Bouligand:2009 methods for computing the thickness of a buried magnetic source.
+`pycurious` implements the @Tanaka1999 and @Bouligand2009 methods for computing the thickness of a buried magnetic source.
 The former selects portions of the radial power spectrum in the low and high frequency domain to compute the depth of magnetic sources, while the latter fits an analytical solution to the entire power spectrum.
-We cast the @Bouligand:2009 method within a Bayesian framework to estimate the uncertainty of Curie depth calculations [@Mather:2019].
+We cast the @Bouligand2009 method within a Bayesian framework to estimate the uncertainty of Curie depth calculations [@Mather2019].
 Common computational workflows and geospatial manipulation of magnetic data are covered in the Jupyter notebooks bundled with this package.
 The `mapping` module includes a set of functions that help to wrangle maps of the magnetic anomaly into a useful form for `pycurious`.
-Such an approach is commonly encountered for transforming global compilations of the magnetic anomaly, e.g. EMAG2 [@Meyer:2017], from latitudinal/longitudinal coordinates to a local projection in eastings/northings.
+Such an approach is commonly encountered for transforming global compilations of the magnetic anomaly, e.g. EMAG2 [@Meyer2017], from latitudinal/longitudinal coordinates to a local projection in eastings/northings.
 
 ![Radial power spectra (right) computed from different sized windows of a synthetic magnetic anomaly (left) using `pycurious`.](figure.png)
 
@@ -66,7 +66,7 @@ The notebooks cover:
 - Computing Curie depth from a synthetic magnetic anomaly.
 - Exploring parameter sensitivity.
 - Posing the inverse problem and objective function.
-- Mapping Curie depth using the EMAG2 magnetic anomaly dataset [@Meyer:2017].
+- Mapping Curie depth using the EMAG2 magnetic anomaly dataset [@Meyer2017].
 
 All documentation can be accessed from within the module via a Python function that installs the notebooks at a filesystem location specified by the user at run time.
 The API documentation is kept up-to-date on [GitHub pages](https://brmather.github.io/pycurious/).
