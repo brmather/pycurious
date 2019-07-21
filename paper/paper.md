@@ -30,8 +30,8 @@ Seismic velocity has proven effective to infer upper-mantle temperature, but its
 In contrast, magnetic data are among the most widespread geophysical datasets available on the surface of the Earth and can offer useful insight into its thermal structure. 
 
 The magnetic anomaly is the observed magnetic field less the contribution from the core and external fields.
-Geologic features enhance or depress the local magnetic field, but none more so than the concentration of magnetite in the Earth's crust.
-Magnetite is the most prevalent magnetic mineral, in terms of both susceptibility and concentration, and has a Curie point of 580°C.
+Geologic features enhance or depress the local magnetic field; this response is primarily controlled by the concentration of magnetite in the Earth's crust.
+Magnetite is the most prevalent magnetic mineral, in terms of both its magnetic susceptibility and concentration in the crust, and has a Curie point of 580°C.
 The depth at which rocks lose their permanent magnetic properties is referred to as the Curie depth.
 Due to the prevalence of magnetite in the crust, the Curie depth is often interpreted as the 580°C isotherm.
 Current methods to derive the Curie depth first compute the (fast) Fourier transform over a square window of a magnetic anomaly that has been reduced to the pole.
