@@ -19,7 +19,7 @@ from os import path
 import io
 
 ## in development set version to none and ...
-PYPI_VERSION = "0.4"
+PYPI_VERSION = "1.0"
 
 # Return the git revision as a string (from numpy)
 def git_version():
