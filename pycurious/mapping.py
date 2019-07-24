@@ -1,16 +1,16 @@
 # Copyright 2018-2019 Ben Mather, Robert Delhaye
-# 
+#
 # This file is part of PyCurious.
-# 
+#
 # PyCurious is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or any later version.
-# 
+#
 # PyCurious is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Lesser General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Lesser General Public License
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -48,8 +48,11 @@ which would return a list of eastings and northings in IRENET95 projection.
 # -*- coding: utf-8 -*-
 import numpy as np
 
-try: range=xrange
-except: pass
+try:
+    range = xrange
+except:
+    pass
+
 
 def transform_coordinates(x, y, epsg_in, epsg_out):
     """
@@ -74,8 +77,9 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
             y coordinates projected in `epsg_out`
     """
     import pyproj
-    proj_in  = pyproj.Proj("+init=EPSG:"+str(epsg_in))
-    proj_out = pyproj.Proj("+init=EPSG:"+str(epsg_out))
+
+    proj_in = pyproj.Proj("+init=EPSG:" + str(epsg_in))
+    proj_out = pyproj.Proj("+init=EPSG:" + str(epsg_out))
     return pyproj.transform(proj_in, proj_out, x, y)
 
 
@@ -131,18 +135,18 @@ def trim(coords, data, extent, buffer_amount=0.0):
     data_mask = np.ones(data.shape[0], dtype=bool)
 
     # Add a 1 percent buffer zone
-    x_buffer = buffer_amount*(xmax - xmin)
-    y_buffer = buffer_amount*(ymax - ymin)
+    x_buffer = buffer_amount * (xmax - xmin)
+    y_buffer = buffer_amount * (ymax - ymin)
 
-    mask_e = coords[:,0] < xmin - x_buffer
-    mask_w = coords[:,0] > xmax + x_buffer
-    mask_n = coords[:,1] < ymin - y_buffer
-    mask_s = coords[:,1] > ymax + y_buffer
+    mask_e = coords[:, 0] < xmin - x_buffer
+    mask_w = coords[:, 0] > xmax + x_buffer
+    mask_n = coords[:, 1] < ymin - y_buffer
+    mask_s = coords[:, 1] > ymax + y_buffer
     data_mask[mask_n] = False
     data_mask[mask_s] = False
     data_mask[mask_e] = False
     data_mask[mask_w] = False
-    
+
     data_trim = data[data_mask]
     coords_trim = coords[data_mask]
 
@@ -179,12 +183,16 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
             rectangular section of data bounded by extent
     """
     from scipy.interpolate import griddata
+
     xmin, xmax, ymin, ymax = extent
-    
-    if type(epsg_in) != type(None):
-        xt, yt = transform_coordinates(np.array([xmin, xmin, xmax, xmax]),\
-                                       np.array([ymin, ymax, ymin, ymax]),\
-                                       epsg_out, epsg_in)
+
+    if epsg_in is not None:
+        xt, yt = transform_coordinates(
+            np.array([xmin, xmin, xmax, xmax]),
+            np.array([ymin, ymax, ymin, ymax]),
+            epsg_out,
+            epsg_in,
+        )
         # find the coordinates that will completely
         # engulf the extent
         xtmin, xtmax = min(xt), max(xt)
@@ -198,24 +206,24 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     # trim data - buffer = 5%
     coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
 
-
-    if type(epsg_in) != type(None):
+    if epsg_in is not None:
         # convert back to output CRS
-        xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
-                                             coords_trim[:,1],\
-                                             epsg_in, epsg_out)
+        xtrim, ytrim = transform_coordinates(
+            coords_trim[:, 0], coords_trim[:, 1], epsg_in, epsg_out
+        )
         coords_trim = np.column_stack([xtrim, ytrim])
-
 
     if shape == None:
         # estimate based on the data spacing
-        xunique = np.unique(coords_trim[:,0])
-        yunique = np.unique(coords_trim[:,1])
+        xunique = np.unique(coords_trim[:, 0])
+        yunique = np.unique(coords_trim[:, 1])
         dx = np.diff(xunique).mean()
         dy = np.diff(yunique).mean()
-        nc = int((xtmax - xtmin)/dx)
-        nr = int((ytmax - ytmin)/dy)
-        print("using nrows={}, ncols={} with cell spacing of {}".format(nr,nc,(dy,dx)))
+        nc = int((xtmax - xtmin) / dx)
+        nr = int((ytmax - ytmin) / dy)
+        print(
+            "using nrows={}, ncols={} with cell spacing of {}".format(nr, nc, (dy, dx))
+        )
     else:
         nr, nc = shape
 
@@ -247,7 +255,7 @@ def import_geotiff(file_path):
             e.g. [xmin, xmax, ymin, ymax]
     """
     from osgeo import gdal, osr
-    
+
     gtiff = gdal.Open(file_path)
     data = gtiff.ReadAsArray()
     gt = gtiff.GetGeoTransform()
@@ -256,8 +264,12 @@ def import_geotiff(file_path):
     inproj = osr.SpatialReference()
     inproj.ImportFromWkt(gtproj)
 
-    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],\
-                gt[3], gt[3] + gtiff.RasterYSize*gt[5])
+    gtextent = (
+        gt[0],
+        gt[0] + gtiff.RasterXSize * gt[1],
+        gt[3],
+        gt[3] + gtiff.RasterYSize * gt[5],
+    )
 
     # print projection information
     print(inproj)
@@ -289,16 +301,17 @@ def export_geotiff(file_path, array, extent, epsg):
 
     """
     from osgeo import gdal, osr
+
     # import ogr, gdal, osr, os
 
     cols = array.shape[1]
     rows = array.shape[0]
 
     xmin, xmax, ymin, ymax = extent
-    spacingX = (xmax - xmin)/cols
-    spacingY = (ymax - ymin)/rows
+    spacingX = (xmax - xmin) / cols
+    spacingY = (ymax - ymin) / rows
 
-    driver = gdal.GetDriverByName('GTiff')
+    driver = gdal.GetDriverByName("GTiff")
     outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Float64)
     outRaster.SetGeoTransform((xmin, spacingX, 0, ymin, 0, spacingY))
     outband = outRaster.GetRasterBand(1)

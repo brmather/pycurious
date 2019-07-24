@@ -54,6 +54,7 @@ Also, the following packages are required:
 
 __Optional dependencies__ for mapping module and running the Notebooks:
 
+- [`jupyter`](https://jupyter.org/)
 - [`matplotlib`](https://matplotlib.org/)
 - [`pyproj`](https://github.com/jswhit/pyproj)
 - [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
@@ -68,6 +69,67 @@ python2 -m pip install pycurious
 python3 -m pip install pycurious
 ```
 All the dependencies will be automatically installed by `pip`.
+
+### Installing with conda
+
+You can install `pycurious` using the [conda package manager](https://conda.io).
+Its required dependencies can be easily installed with:
+
+```bash
+conda install numpy scipy cython
+```
+
+And the full set of dependencies with:
+
+```bash
+conda install numpy scipy cython matplotlib pyproj cartopy
+```
+
+Then `pycurious` can be installed with `pip`:
+
+```bash
+pip install pycurious
+```
+
+#### Conda environment
+
+Alternatively, you can create a custom
+[conda environment](https://conda.io/docs/user-guide/tasks/manage-environments.html)
+where `pycurious` can be installed along with its dependencies.
+
+Clone the repository:
+```bash
+git clone https://github.com/brmather/pycurious
+cd pycurious
+```
+
+Create the environment from the `environment.yml` file:
+```bash
+conda env create -f environment.yml
+```
+
+Activate the newly created environment:
+```bash
+conda activate pycurious
+```
+
+And install `pycurious` with `pip`:
+```bash
+pip install pycurious
+```
+
+#### Issue with gcc
+
+If the `pycurious` installation fails due to [an issue with `gcc` and
+Anaconda](https://github.com/Anaconda-Platform/anaconda-project/issues/183), you just
+need to install `gxx_linux-64` with conda:
+
+```bash
+conda install gxx_linux-64
+```
+
+And then install `pycurious` normally.
+
 
 ### Installing using Docker
 

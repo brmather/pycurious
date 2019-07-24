@@ -11,7 +11,7 @@ been working on something similar already.
 
 ## How to create a Pull Request (PR)
 
-Create your own fork of the project on github: log into your github account, navigate to the [`pycurious` repository](https://github.com/brmather/pycurious/tree/dev)
+Create your own fork of the project on GitHub: log into your GitHub account, navigate to the [`pycurious` repository](https://github.com/brmather/pycurious/tree/dev)
 and click on the *fork* button at the top right corner of this repository. You can find detailed instructions and a discussion of how to fork a repository, clone it locally and work on the changes
 [in the GitHub guides](https://guides.github.com/activities/forking/). 
 
@@ -20,6 +20,14 @@ and click on the *fork* button at the top right corner of this repository. You c
 It is much easier to merge in small changes to the code than extensive ones that touch multiple files. If a small incremental change is possible, please issue a request for that change rather than saving everything up. 
 
 It is a good idea to commit frequently and with commit messages that refer to the changes that have been make and why they have been made. The commit message is usually browsed without seeing the actual changes themselves and which sections of the code have been altered so a helpful message provides relevant details. 
+
+## We want your help!
+
+We welcome all contributions to `pycurious`, but if you would like to assist us on our development milestones, then we would appreciate all pull requests pertaining to the following areas:
+
+- Implementing different taper functions in addition to built-in numpy functions (e.g. `numpy.hanning`, `numpy.hanning`)
+- Enhancing I/O capabilities (e.g. exporting to netCDF, HDF5 formats)
+- Expanding the Jupyter notebook examples for specific use cases and study areas.
 
 ## Tests
 
