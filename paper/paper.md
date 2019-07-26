@@ -14,9 +14,9 @@ authors:
     orcid: 0000-0003-2128-4295
     affiliation: "2"
 affiliations:
- - name: School of Geoscience, The University of Sydney
+ - name: School of Geoscience, The University of Sydney, Sydney, Australia
    index: 1
- - name: School of Cosmic Physics, Dublin Institute for Advanced Studies
+ - name: School of Cosmic Physics, Dublin Institute for Advanced Studies,  Dublin, Ireland
    index: 2
 date: 30 April 2019
 bibliography: paper.bib
@@ -43,7 +43,7 @@ The former selects portions of the radial power spectrum in the low and high fre
 We cast the @Bouligand2009 method within a Bayesian framework to estimate the uncertainty of Curie depth calculations [@Mather2019].
 Common computational workflows and geospatial manipulation of magnetic data are covered in the Jupyter notebooks bundled with this package.
 The `mapping` module includes a set of functions that help to wrangle maps of the magnetic anomaly into a useful form for `pycurious`.
-Such an approach is commonly encountered for transforming global compilations of the magnetic anomaly, e.g. EMAG2 [@Meyer2017], from latitudinal/longitudinal coordinates to a local projection in eastings/northings.
+Such an approach is commonly encountered for transforming global compilations of the magnetic anomaly, e.g., EMAG2 [@Meyer2017], from latitudinal/longitudinal coordinates to a local projection in eastings/northings.
 
 ![Radial power spectra (right) computed from different sized windows of a synthetic magnetic anomaly (left) using `pycurious`. Larger window sizes increase the number of points in the low wavenumber range of the radial power spectrum, which is important for estimating the thickness of magnetic sources in the crust.](figure.png)
 
