@@ -143,8 +143,7 @@ A more straightforward installation for `pycurious` and all of its dependencies 
 To install the docker image and start the Jupyter notebook examples:
 
 ```bash
-docker pull brmather/pycurious:latest
-docker run --name pycurious -p 8888:8888 brmather/pycurious:latest
+docker run --name pycurious -p 127.0.0.1:8888:8888 brmather/pycurious:latest
 ```
 
 ## Usage
