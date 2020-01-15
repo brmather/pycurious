@@ -430,29 +430,43 @@ class CurieOptimise(CurieGrid):
 
         nprocs = self.max_processors
 
-        for i in range(nprocs):
-            pass_args = [func, q_in, q_out, window]
-            pass_args.extend(args)
+        if nprocs == 1:
+            # skip all the OpenMP cruft
+            for i in range(n):
+                xc = xc_list[i]
+                yc = yc_list[i]
 
-            p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
+                res = func(window, xc, yc, *args, **kwargs)
+                xOpt[i] = res
 
-            processes.append(p)
+        elif nprocs &gt; 1:
+            # more than one processor
+            for i in range(nprocs):
+                pass_args = [func, q_in, q_out, window]
+                pass_args.extend(args)
 
-        for p in processes:
-            p.daemon = True
-            p.start()
+                p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
 
-        # put items in the queue
-        sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
-        [q_in.put((None, None, None)) for _ in range(nprocs)]
+                processes.append(p)
 
-        # get the results
-        for i in range(len(sent)):
-            i, res = q_out.get()
-            xOpt[i] = res
+            for p in processes:
+                p.daemon = True
+                p.start()
 
-        # wait until each processor has finished
-        [p.join() for p in processes]
+            # put items in the queue
+            sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
+            [q_in.put((None, None, None)) for _ in range(nprocs)]
+
+            # get the results
+            for i in range(len(sent)):
+                index, res = q_out.get()
+                xOpt[index] = res
+
+            # wait until each processor has finished
+            [p.join() for p in processes]
+
+        else:
+            raise ValueError(&#34;{} processors is invalid, specify a positive integer value&#34;.format(nprocs))
 
         # process dimensions of output
         ndim = np.array(res).ndim
@@ -1161,29 +1175,43 @@ in incorrect Curie depth calculations.</p></section>
 
         nprocs = self.max_processors
 
-        for i in range(nprocs):
-            pass_args = [func, q_in, q_out, window]
-            pass_args.extend(args)
+        if nprocs == 1:
+            # skip all the OpenMP cruft
+            for i in range(n):
+                xc = xc_list[i]
+                yc = yc_list[i]
 
-            p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
+                res = func(window, xc, yc, *args, **kwargs)
+                xOpt[i] = res
 
-            processes.append(p)
+        elif nprocs &gt; 1:
+            # more than one processor
+            for i in range(nprocs):
+                pass_args = [func, q_in, q_out, window]
+                pass_args.extend(args)
 
-        for p in processes:
-            p.daemon = True
-            p.start()
+                p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
 
-        # put items in the queue
-        sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
-        [q_in.put((None, None, None)) for _ in range(nprocs)]
+                processes.append(p)
 
-        # get the results
-        for i in range(len(sent)):
-            i, res = q_out.get()
-            xOpt[i] = res
+            for p in processes:
+                p.daemon = True
+                p.start()
 
-        # wait until each processor has finished
-        [p.join() for p in processes]
+            # put items in the queue
+            sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
+            [q_in.put((None, None, None)) for _ in range(nprocs)]
+
+            # get the results
+            for i in range(len(sent)):
+                index, res = q_out.get()
+                xOpt[index] = res
+
+            # wait until each processor has finished
+            [p.join() for p in processes]
+
+        else:
+            raise ValueError(&#34;{} processors is invalid, specify a positive integer value&#34;.format(nprocs))
 
         # process dimensions of output
         ndim = np.array(res).ndim
@@ -1544,7 +1572,7 @@ define another distribution from <code>scipy.stats</code></p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.metropolis_hastings"><code class="name flex">
-<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f34314b5c80>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">metropolis_hastings</span></span>(<span>self, window, xc, yc, nsim, burnin, x_scale=None, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fdc2df29c80>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>MCMC algorithm using a Metropolis-Hastings sampler.</p>
@@ -1871,7 +1899,7 @@ Only keys stored in self.prior will be added to the total misfit</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise"><code class="name flex">
-<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f34314b5c80>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise</span></span>(<span>self, window, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fdc2df29c80>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Find the optimal parameters of <script type="math/tex"> \beta, z_t, \Delta z, C </script>
@@ -1985,7 +2013,7 @@ for a given centroid (xc,yc) and window size.</p>
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.optimise_routine"><code class="name flex">
-<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f34314b5c80>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">optimise_routine</span></span>(<span>self, window, xc_list, yc_list, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fdc2df29c80>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the optimal values
@@ -2226,29 +2254,43 @@ simulations then separatee lists will be returned for <script type="math/tex"> \
 
     nprocs = self.max_processors
 
-    for i in range(nprocs):
-        pass_args = [func, q_in, q_out, window]
-        pass_args.extend(args)
+    if nprocs == 1:
+        # skip all the OpenMP cruft
+        for i in range(n):
+            xc = xc_list[i]
+            yc = yc_list[i]
 
-        p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
+            res = func(window, xc, yc, *args, **kwargs)
+            xOpt[i] = res
 
-        processes.append(p)
+    elif nprocs &gt; 1:
+        # more than one processor
+        for i in range(nprocs):
+            pass_args = [func, q_in, q_out, window]
+            pass_args.extend(args)
 
-    for p in processes:
-        p.daemon = True
-        p.start()
+            p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
 
-    # put items in the queue
-    sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
-    [q_in.put((None, None, None)) for _ in range(nprocs)]
+            processes.append(p)
 
-    # get the results
-    for i in range(len(sent)):
-        i, res = q_out.get()
-        xOpt[i] = res
+        for p in processes:
+            p.daemon = True
+            p.start()
 
-    # wait until each processor has finished
-    [p.join() for p in processes]
+        # put items in the queue
+        sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
+        [q_in.put((None, None, None)) for _ in range(nprocs)]
+
+        # get the results
+        for i in range(len(sent)):
+            index, res = q_out.get()
+            xOpt[index] = res
+
+        # wait until each processor has finished
+        [p.join() for p in processes]
+
+    else:
+        raise ValueError(&#34;{} processors is invalid, specify a positive integer value&#34;.format(nprocs))
 
     # process dimensions of output
     ndim = np.array(res).ndim
@@ -2284,7 +2326,7 @@ simulations then separatee lists will be returned for <script type="math/tex"> \
 </details>
 </dd>
 <dt id="pycurious.optimise.CurieOptimise.sensitivity"><code class="name flex">
-<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7f34314b5c80>, process_subgrid=None, **kwargs)</span>
+<span>def <span class="ident">sensitivity</span></span>(<span>self, window, xc, yc, nsim, beta=3.0, zt=1.0, dz=10.0, C=5.0, taper=<function hanning at 0x7fdc2df29c80>, process_subgrid=None, **kwargs)</span>
 </code></dt>
 <dd>
 <section class="desc"><p>Iterate through a list of centroids to compute the mean and
