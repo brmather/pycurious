@@ -388,29 +388,43 @@ class CurieOptimise(CurieGrid):
 
         nprocs = self.max_processors
 
-        for i in range(nprocs):
-            pass_args = [func, q_in, q_out, window]
-            pass_args.extend(args)
+        if nprocs == 1:
+            # skip all the OpenMP cruft
+            for i in range(n):
+                xc = xc_list[i]
+                yc = yc_list[i]
 
-            p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
+                res = func(window, xc, yc, *args, **kwargs)
+                xOpt[i] = res
 
-            processes.append(p)
+        elif nprocs > 1:
+            # more than one processor
+            for i in range(nprocs):
+                pass_args = [func, q_in, q_out, window]
+                pass_args.extend(args)
 
-        for p in processes:
-            p.daemon = True
-            p.start()
+                p = Process(target=self._func_queue, args=tuple(pass_args), kwargs=kwargs)
 
-        # put items in the queue
-        sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
-        [q_in.put((None, None, None)) for _ in range(nprocs)]
+                processes.append(p)
 
-        # get the results
-        for i in range(len(sent)):
-            i, res = q_out.get()
-            xOpt[i] = res
+            for p in processes:
+                p.daemon = True
+                p.start()
 
-        # wait until each processor has finished
-        [p.join() for p in processes]
+            # put items in the queue
+            sent = [q_in.put((i, xc_list[i], yc_list[i])) for i in range(n)]
+            [q_in.put((None, None, None)) for _ in range(nprocs)]
+
+            # get the results
+            for i in range(len(sent)):
+                index, res = q_out.get()
+                xOpt[index] = res
+
+            # wait until each processor has finished
+            [p.join() for p in processes]
+
+        else:
+            raise ValueError("{} processors is invalid, specify a positive integer value".format(nprocs))
 
         # process dimensions of output
         ndim = np.array(res).ndim
