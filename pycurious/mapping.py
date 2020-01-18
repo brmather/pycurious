@@ -237,6 +237,46 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     return vq
 
 
+def ungrid(grid, extent, coordinates, **kwargs):
+    """
+    Maps the value at unstructured coordinates from a regular 2D grid.
+    Uses the `scipy.ndimage.map_coordinates` function with cubic interpolation
+    
+    Args:
+        grid : array shape (ny,nx)
+            regularly spaced grid 
+        extent : tuple
+            bounding box of `grid` e.g. [xmin,xmax,ymin,ymax]
+        coordinates : array shape (n,2)
+            coordinates (x,y) to interpolate `grid`
+        kwargs : keyword arguments
+            keyword arguments to pass to `map_coordinates`
+     
+    Returns:
+        grid_interp : array shape (n,)
+            interpolated values at coordinates
+    """
+    from scipy.ndimage import map_coordinates
+    
+    ny, nx = grid.shape
+    xmin, xmax, ymin, ymax = extent
+    
+    # normalise coordinates within extent
+    icoords = coordinates.copy()
+    icoords[:,0] -= xmin
+    icoords[:,1] -= ymin
+    icoords[:,0] /= (xmax - xmin)
+    icoords[:,1] /= (ymax - ymin)
+    
+    # icoords now somewhere within range [0, 1]
+    # project coordinates to the number of grid indices
+    icoords[:,0] *= nx - 1
+    icoords[:,1] *= ny - 1
+    
+    # now interpolate
+    return map_coordinates(grid, icoords.T, **kwargs)
+
+
 def import_geotiff(file_path):
     """
     Import a GeoTIFF to a numpy array and prints
