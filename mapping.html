@@ -288,6 +288,46 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     return vq
 
 
+def ungrid(grid, extent, coordinates, **kwargs):
+    &#34;&#34;&#34;
+    Maps the value at unstructured coordinates from a regular 2D grid.
+    Uses the `scipy.ndimage.map_coordinates` function with cubic interpolation
+    
+    Args:
+        grid : array shape (ny,nx)
+            regularly spaced grid 
+        extent : tuple
+            bounding box of `grid` e.g. [xmin,xmax,ymin,ymax]
+        coordinates : array shape (n,2)
+            coordinates (x,y) to interpolate `grid`
+        kwargs : keyword arguments
+            keyword arguments to pass to `map_coordinates`
+     
+    Returns:
+        grid_interp : array shape (n,)
+            interpolated values at coordinates
+    &#34;&#34;&#34;
+    from scipy.ndimage import map_coordinates
+    
+    ny, nx = grid.shape
+    xmin, xmax, ymin, ymax = extent
+    
+    # normalise coordinates within extent
+    icoords = coordinates.copy()
+    icoords[:,0] -= xmin
+    icoords[:,1] -= ymin
+    icoords[:,0] /= (xmax - xmin)
+    icoords[:,1] /= (ymax - ymin)
+    
+    # icoords now somewhere within range [0, 1]
+    # project coordinates to the number of grid indices
+    icoords[:,0] *= nx - 1
+    icoords[:,1] *= ny - 1
+    
+    # now interpolate
+    return map_coordinates(grid, icoords.T, **kwargs)
+
+
 def import_geotiff(file_path):
     &#34;&#34;&#34;
     Import a GeoTIFF to a numpy array and prints
@@ -807,6 +847,70 @@ reference systems (CRS).</p>
     return coords_trim, data_trim</code></pre>
 </details>
 </dd>
+<dt id="pycurious.mapping.ungrid"><code class="name flex">
+<span>def <span class="ident">ungrid</span></span>(<span>grid, extent, coordinates, **kwargs)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Maps the value at unstructured coordinates from a regular 2D grid.
+Uses the <code>scipy.ndimage.map_coordinates</code> function with cubic interpolation</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><a title="pycurious.mapping.grid" href="#pycurious.mapping.grid"><code>grid()</code></a></strong> :&ensp;<code>array</code> <code>shape</code> (<code>ny</code>,<code>nx</code>)</dt>
+<dd>regularly spaced grid</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>bounding box of <a title="pycurious.mapping.grid" href="#pycurious.mapping.grid"><code>grid()</code></a> e.g. [xmin,xmax,ymin,ymax]</dd>
+<dt><strong><code>coordinates</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,<code>2</code>)</dt>
+<dd>coordinates (x,y) to interpolate <a title="pycurious.mapping.grid" href="#pycurious.mapping.grid"><code>grid()</code></a></dd>
+<dt><strong><code>kwargs</code></strong> :&ensp;<code>keyword</code> <code>arguments</code></dt>
+<dd>keyword arguments to pass to <code>map_coordinates</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>grid_interp</code></strong> :&ensp;<code>array</code> <code>shape</code> (<code>n</code>,)</dt>
+<dd>interpolated values at coordinates</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def ungrid(grid, extent, coordinates, **kwargs):
+    &#34;&#34;&#34;
+    Maps the value at unstructured coordinates from a regular 2D grid.
+    Uses the `scipy.ndimage.map_coordinates` function with cubic interpolation
+    
+    Args:
+        grid : array shape (ny,nx)
+            regularly spaced grid 
+        extent : tuple
+            bounding box of `grid` e.g. [xmin,xmax,ymin,ymax]
+        coordinates : array shape (n,2)
+            coordinates (x,y) to interpolate `grid`
+        kwargs : keyword arguments
+            keyword arguments to pass to `map_coordinates`
+     
+    Returns:
+        grid_interp : array shape (n,)
+            interpolated values at coordinates
+    &#34;&#34;&#34;
+    from scipy.ndimage import map_coordinates
+    
+    ny, nx = grid.shape
+    xmin, xmax, ymin, ymax = extent
+    
+    # normalise coordinates within extent
+    icoords = coordinates.copy()
+    icoords[:,0] -= xmin
+    icoords[:,1] -= ymin
+    icoords[:,0] /= (xmax - xmin)
+    icoords[:,1] /= (ymax - ymin)
+    
+    # icoords now somewhere within range [0, 1]
+    # project coordinates to the number of grid indices
+    icoords[:,0] *= nx - 1
+    icoords[:,1] *= ny - 1
+    
+    # now interpolate
+    return map_coordinates(grid, icoords.T, **kwargs)</code></pre>
+</details>
+</dd>
 </dl>
 </section>
 <section>
@@ -831,6 +935,7 @@ reference systems (CRS).</p>
 <li><code><a title="pycurious.mapping.import_geotiff" href="#pycurious.mapping.import_geotiff">import_geotiff</a></code></li>
 <li><code><a title="pycurious.mapping.transform_coordinates" href="#pycurious.mapping.transform_coordinates">transform_coordinates</a></code></li>
 <li><code><a title="pycurious.mapping.trim" href="#pycurious.mapping.trim">trim</a></code></li>
+<li><code><a title="pycurious.mapping.ungrid" href="#pycurious.mapping.ungrid">ungrid</a></code></li>
 </ul>
 </li>
 </ul>
