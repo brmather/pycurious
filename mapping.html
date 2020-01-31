@@ -411,7 +411,41 @@ def export_geotiff(file_path, array, extent, epsg):
     outRasterSRS.ImportFromEPSG(epsg)
     outRaster.SetProjection(outRasterSRS.ExportToWkt())
     outband.FlushCache()
-    return</code></pre>
+    return
+
+
+def export_netcdf4(file_path, array, extent):
+    &#34;&#34;&#34;
+    Export a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+        array: 2D array
+            array to save to netCDF4
+        extent : tuple
+            bounding box in the projection of the netCDF4
+            e.g. [xmin, xmax, ymin, ymax]
+    &#34;&#34;&#34;
+    import netCDF4
+
+    ny, nx = array.shape
+    xmin, xmax, ymin, ymax = extent
+
+    with netCDF4.Dataset(file_path, &#39;w&#39;) as cdf:
+        cdf.createDimension(&#39;x&#39;, nx)
+        cdf.createDimension(&#39;y&#39;, ny)
+        cdf_x = cdf.createVariable(&#39;x&#39;, np.float, (&#39;x&#39;,), zlib=True)
+        cdf_y = cdf.createVariable(&#39;y&#39;, np.float, (&#39;y&#39;,), zlib=True)
+        cdf_x[:] = np.linspace(xmin, xmax, nx)
+        cdf_y[:] = np.linspace(ymin, ymax, ny)
+
+        cdf_data = cdf.createVariable(&#39;data&#39;, np.float, (&#39;y&#39;,&#39;x&#39;), zlib=True)
+        cdf_data[:,:]  = array</code></pre>
 </details>
 </section>
 <section>
@@ -530,6 +564,61 @@ e.g. 4326 for WGS84</dd>
     outRaster.SetProjection(outRasterSRS.ExportToWkt())
     outband.FlushCache()
     return</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.export_netcdf4"><code class="name flex">
+<span>def <span class="ident">export_netcdf4</span></span>(<span>file_path, array, extent)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Export a netCDF4 file from a numpy array
+over a user-defined extent.</p>
+<p><strong>Requires <code>netcdf4</code>.</strong>
+<code>pip install netcdf4</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>file_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>path to write the netCDF4</dd>
+<dt><strong><code>array</code></strong></dt>
+<dd>2D array
+array to save to netCDF4</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>bounding box in the projection of the netCDF4
+e.g. [xmin, xmax, ymin, ymax]</dd>
+</dl></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def export_netcdf4(file_path, array, extent):
+    &#34;&#34;&#34;
+    Export a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+        array: 2D array
+            array to save to netCDF4
+        extent : tuple
+            bounding box in the projection of the netCDF4
+            e.g. [xmin, xmax, ymin, ymax]
+    &#34;&#34;&#34;
+    import netCDF4
+
+    ny, nx = array.shape
+    xmin, xmax, ymin, ymax = extent
+
+    with netCDF4.Dataset(file_path, &#39;w&#39;) as cdf:
+        cdf.createDimension(&#39;x&#39;, nx)
+        cdf.createDimension(&#39;y&#39;, ny)
+        cdf_x = cdf.createVariable(&#39;x&#39;, np.float, (&#39;x&#39;,), zlib=True)
+        cdf_y = cdf.createVariable(&#39;y&#39;, np.float, (&#39;y&#39;,), zlib=True)
+        cdf_x[:] = np.linspace(xmin, xmax, nx)
+        cdf_y[:] = np.linspace(ymin, ymax, ny)
+
+        cdf_data = cdf.createVariable(&#39;data&#39;, np.float, (&#39;y&#39;,&#39;x&#39;), zlib=True)
+        cdf_data[:,:]  = array</code></pre>
 </details>
 </dd>
 <dt id="pycurious.mapping.grid"><code class="name flex">
@@ -931,6 +1020,7 @@ Uses the <code>scipy.ndimage.map_coordinates</code> function with cubic interpol
 <ul class="">
 <li><code><a title="pycurious.mapping.convert_extent" href="#pycurious.mapping.convert_extent">convert_extent</a></code></li>
 <li><code><a title="pycurious.mapping.export_geotiff" href="#pycurious.mapping.export_geotiff">export_geotiff</a></code></li>
+<li><code><a title="pycurious.mapping.export_netcdf4" href="#pycurious.mapping.export_netcdf4">export_netcdf4</a></code></li>
 <li><code><a title="pycurious.mapping.grid" href="#pycurious.mapping.grid">grid</a></code></li>
 <li><code><a title="pycurious.mapping.import_geotiff" href="#pycurious.mapping.import_geotiff">import_geotiff</a></code></li>
 <li><code><a title="pycurious.mapping.transform_coordinates" href="#pycurious.mapping.transform_coordinates">transform_coordinates</a></code></li>
