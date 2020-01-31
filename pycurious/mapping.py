@@ -361,3 +361,37 @@ def export_geotiff(file_path, array, extent, epsg):
     outRaster.SetProjection(outRasterSRS.ExportToWkt())
     outband.FlushCache()
     return
+
+
+def export_netcdf4(file_path, array, extent):
+    """
+    Export a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+        array: 2D array
+            array to save to netCDF4
+        extent : tuple
+            bounding box in the projection of the netCDF4
+            e.g. [xmin, xmax, ymin, ymax]
+    """
+    import netCDF4
+
+    ny, nx = array.shape
+    xmin, xmax, ymin, ymax = extent
+
+    with netCDF4.Dataset(file_path, 'w') as cdf:
+        cdf.createDimension('x', nx)
+        cdf.createDimension('y', ny)
+        cdf_x = cdf.createVariable('x', np.float, ('x',), zlib=True)
+        cdf_y = cdf.createVariable('y', np.float, ('y',), zlib=True)
+        cdf_x[:] = np.linspace(xmin, xmax, nx)
+        cdf_y[:] = np.linspace(ymin, ymax, ny)
+
+        cdf_data = cdf.createVariable('data', np.float, ('y','x'), zlib=True)
+        cdf_data[:,:]  = array
