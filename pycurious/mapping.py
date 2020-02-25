@@ -374,7 +374,7 @@ def export_netcdf4(file_path, array, extent):
         array: 2D array
             array to save to netCDF4
         extent : tuple
-            bounding box in the projection of the netCDF4
+            bounding box in the projection of the netCDF4 file
             e.g. [xmin, xmax, ymin, ymax]
     """
     import netCDF4
@@ -382,7 +382,7 @@ def export_netcdf4(file_path, array, extent):
     ny, nx = array.shape
     xmin, xmax, ymin, ymax = extent
 
-    with netCDF4.Dataset(file_path, 'w') as cdf:
+    with netCDF4.Dataset(str(file_path), 'w') as cdf:
         cdf.createDimension('x', nx)
         cdf.createDimension('y', ny)
         cdf_x = cdf.createVariable('x', np.float, ('x',), zlib=True)
@@ -390,5 +390,53 @@ def export_netcdf4(file_path, array, extent):
         cdf_x[:] = np.linspace(xmin, xmax, nx)
         cdf_y[:] = np.linspace(ymin, ymax, ny)
 
-        cdf_data = cdf.createVariable('data', np.float, ('y','x'), zlib=True)
+        cdf_data = cdf.createVariable('z', np.float, ('y','x'), zlib=True)
         cdf_data[:,:]  = array
+
+
+def import_netcdf4(file_path):
+    """
+    Import a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+
+    Returns:
+        array : ndarray
+            numpy array containing the gridded netCDF4 data
+        extent : tuple
+            bounding box in the projection of the netCDF4 file
+            e.g. [xmin, xmax, ymin, ymax]
+
+    Note:
+        The layout of the netCDF4 file must follow the standard
+        naming convention such as 'lon', 'lat', 'z', 'data', etc 
+        otherwise this import function will not work as intended.
+    """
+    import netCDF4
+
+    with netCDF4.Dataset(str(file_path), 'r') as cdf:
+        try:
+            lons = cdf['lon']
+            lats = cdf['lat']
+        except:
+            lons = cdf['x']
+            lats = cdf['y']
+        else:
+            raise ValueError(print(cdf))
+
+        try:
+            data = cdf['z'][:]
+        except:
+            data = cdf['data'][:]
+        else:
+            raise ValueError(print(cdf))
+
+        extent = [lons.min(), lons.max(), lats.min(), lats.max()]
+
+    return data, extent
