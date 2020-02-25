@@ -5,7 +5,7 @@ include COPYING
 include COPYING.LESSER
 include setup.cfg
 include src/*
-include __init__.py
-recursive-include pycurious/*.py
-recursive-include pycurious/*.ipynb
+recursive-include pycurious/ *.py
+recursive-include pycurious/ *.ipynb
+include pycurious/Examples/data/test_mag_data.txt
 include tests/*.py

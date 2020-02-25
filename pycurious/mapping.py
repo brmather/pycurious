@@ -1,36 +1,85 @@
+# Copyright 2018-2019 Ben Mather, Robert Delhaye
+#
+# This file is part of PyCurious.
+#
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+#
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+
 """
-Copyright 2018 Ben Mather, Robert Delhaye
+The `pycurious.mapping` module of PyCurious contains various functions to help
+manipulate geospatial data into common formats. It handles commonly encounted
+operations, such as:
 
-This file is part of PyCurious.
+- Gridding scattered data points
+- Converting between coordinate reference systems (CRS)
+- Importing and exporting GeoTiff files
 
-PyCurious is free software: you can redistribute it and/or modify
-it under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation, either version 3 of the License, or any later version.
+It requires some **additional dependencies**:
 
-PyCurious is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Lesser General Public License for more details.
+- [`matplotlib`](https://matplotlib.org/) - for plotting
+- [`pyproj`](https://github.com/jswhit/pyproj) - for transforming between different CRS
+- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/) - for generating maps
 
-You should have received a copy of the GNU Lesser General Public License
-along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
+Beware that most global data are georeferenced in WGS84 (EPSG: 4326).
+The radial power spectrum must be in rad/km, which requires a transformation
+from longitude / latitude to a local projection in eastings / northings.
+
+For example, EMAG2 is a global compilation of the magnetic anomaly
+georeferenced in WGS84 longitude / latitude. This will need to be projected
+in a local CRS to use with PyCurious. If, for example, we are interested in a
+region across Ireland we could use the IRENET95 local CRS (EPSG: 2157),
+
+```python
+transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
+```
+
+which would return a list of eastings and northings in IRENET95 projection.
 """
 
 # -*- coding: utf-8 -*-
 import numpy as np
 
-try: range=xrange
-except: pass
+try:
+    range = xrange
+except:
+    pass
+
 
 def transform_coordinates(x, y, epsg_in, epsg_out):
     """
     Transform between any coordinate system.
 
-    Requires `pyproj`
+    **Requires `pyproj`** - install using pip.
+
+    Args:
+        x : float / 1D array
+            x coordinates (may be in degrees or metres/eastings)
+        y : float / 1D array
+            y coordinates (may be in degrees or metres/northings)
+        epsg_in : int
+            CRS of x and y coordinates
+        epsg_out : int
+            CRS of output
+
+    Returns:
+        x_out : float / list of floats
+            x coordinates projected in `epsg_out`
+        y_out : float / list of floats
+            y coordinates projected in `epsg_out`
     """
     import pyproj
-    proj_in  = pyproj.Proj("+init=EPSG:"+str(epsg_in))
-    proj_out = pyproj.Proj("+init=EPSG:"+str(epsg_out))
+
+    proj_in = pyproj.Proj("+init=EPSG:" + str(epsg_in))
+    proj_out = pyproj.Proj("+init=EPSG:" + str(epsg_out))
     return pyproj.transform(proj_in, proj_out, x, y)
 
 
@@ -62,7 +111,7 @@ def trim(coords, data, extent, buffer_amount=0.0):
     """
     Trim a smaller section of a large dataset taking into
     consideration transformations into various coordinate
-    reference systems (CRS)
+    reference systems (CRS).
     
     Args:
         coords : array shape (n,2)
@@ -83,21 +132,18 @@ def trim(coords, data, extent, buffer_amount=0.0):
     xmin, xmax, ymin, ymax = extent
 
     # Extract only the data within the extent
-    data_mask = np.ones(data.shape[0], dtype=bool)
+    data_mask = np.zeros(data.shape[0], dtype=bool)
 
     # Add a 1 percent buffer zone
-    x_buffer = buffer_amount*(xmax - xmin)
-    y_buffer = buffer_amount*(ymax - ymin)
+    x_buffer = buffer_amount * (xmax - xmin)
+    y_buffer = buffer_amount * (ymax - ymin)
 
-    mask_e = coords[:,0] < xmin - x_buffer
-    mask_w = coords[:,0] > xmax + x_buffer
-    mask_n = coords[:,1] < ymin - y_buffer
-    mask_s = coords[:,1] > ymax + y_buffer
-    data_mask[mask_n] = False
-    data_mask[mask_s] = False
-    data_mask[mask_e] = False
-    data_mask[mask_w] = False
-    
+    data_mask += coords[:, 0] < xmin - x_buffer
+    data_mask += coords[:, 0] > xmax + x_buffer
+    data_mask += coords[:, 1] < ymin - y_buffer
+    data_mask += coords[:, 1] > ymax + y_buffer
+    data_mask = np.invert(data_mask)
+
     data_trim = data[data_mask]
     coords_trim = coords[data_mask]
 
@@ -108,7 +154,9 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     """
     Grid a smaller section of a large dataset taking into
     consideration transformations into various coordinate
-    reference systems (CRS)
+    reference systems (CRS).
+
+    **Requires `scipy.interpolate.griddata`**
     
     Args:
         coords : array shape (n,2)
@@ -116,7 +164,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
         data : array shape (n,) 
             values corresponding to coordinates
         extent : tuple
-           box contained within the data in espg_out coordinates
+           bounding box in espg_out coordinates
         shape : tuple (nrows,ncols)
            size of the box, if None, shape is estimated from coords spacing
         epsg_in : int
@@ -132,12 +180,16 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
             rectangular section of data bounded by extent
     """
     from scipy.interpolate import griddata
+
     xmin, xmax, ymin, ymax = extent
-    
-    if type(epsg_in) != type(None):
-        xt, yt = transform_coordinates(np.array([xmin, xmin, xmax, xmax]),\
-                                       np.array([ymin, ymax, ymin, ymax]),\
-                                       epsg_out, epsg_in)
+
+    if epsg_in is not None:
+        xt, yt = transform_coordinates(
+            np.array([xmin, xmin, xmax, xmax]),
+            np.array([ymin, ymax, ymin, ymax]),
+            epsg_out,
+            epsg_in,
+        )
         # find the coordinates that will completely
         # engulf the extent
         xtmin, xtmax = min(xt), max(xt)
@@ -151,24 +203,24 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     # trim data - buffer = 5%
     coords_trim, data_trim = trim(coords, data, xtextent, 0.05)
 
-
-    if type(epsg_in) != type(None):
+    if epsg_in is not None:
         # convert back to output CRS
-        xtrim, ytrim = transform_coordinates(coords_trim[:,0],\
-                                             coords_trim[:,1],\
-                                             epsg_in, epsg_out)
+        xtrim, ytrim = transform_coordinates(
+            coords_trim[:, 0], coords_trim[:, 1], epsg_in, epsg_out
+        )
         coords_trim = np.column_stack([xtrim, ytrim])
-
 
     if shape == None:
         # estimate based on the data spacing
-        xunique = np.unique(coords_trim[:,0])
-        yunique = np.unique(coords_trim[:,1])
+        xunique = np.unique(coords_trim[:, 0])
+        yunique = np.unique(coords_trim[:, 1])
         dx = np.diff(xunique).mean()
         dy = np.diff(yunique).mean()
-        nc = int((xtmax - xtmin)/dx)
-        nr = int((ytmax - ytmin)/dy)
-        print("using nrows={}, ncols={} with cell spacing of {}".format(nr,nc,(dy,dx)))
+        nc = int((xtmax - xtmin) / dx)
+        nr = int((ytmax - ytmin) / dy)
+        print(
+            "using nrows={}, ncols={} with cell spacing of {}".format(nr, nc, (dy, dx))
+        )
     else:
         nr, nc = shape
 
@@ -182,10 +234,52 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     return vq
 
 
+def ungrid(grid, extent, coordinates, **kwargs):
+    """
+    Maps the value at unstructured coordinates from a regular 2D grid.
+    Uses the `scipy.ndimage.map_coordinates` function with cubic interpolation
+    
+    Args:
+        grid : array shape (ny,nx)
+            regularly spaced grid 
+        extent : tuple
+            bounding box of `grid` e.g. [xmin,xmax,ymin,ymax]
+        coordinates : array shape (n,2)
+            coordinates (x,y) to interpolate `grid`
+        kwargs : keyword arguments
+            keyword arguments to pass to `map_coordinates`
+     
+    Returns:
+        grid_interp : array shape (n,)
+            interpolated values at coordinates
+    """
+    from scipy.ndimage import map_coordinates
+    
+    ny, nx = grid.shape
+    xmin, xmax, ymin, ymax = extent
+    
+    # normalise coordinates within extent
+    icoords = coordinates.copy()
+    icoords[:,0] -= xmin
+    icoords[:,1] -= ymin
+    icoords[:,0] /= (xmax - xmin)
+    icoords[:,1] /= (ymax - ymin)
+    
+    # icoords now somewhere within range [0, 1]
+    # project coordinates to the number of grid indices
+    icoords[:,0] *= nx - 1
+    icoords[:,1] *= ny - 1
+    
+    # now interpolate
+    return map_coordinates(grid, icoords.T, **kwargs)
+
+
 def import_geotiff(file_path):
     """
     Import a GeoTIFF to a numpy array and prints
-    information of the Coordinate Reference System (CRS)
+    information of the Coordinate Reference System (CRS).
+
+    **Requires `osgeo`.**
 
     Args:
         file_path : str
@@ -194,11 +288,11 @@ def import_geotiff(file_path):
     Returns:
         data : 2D array
         extent : tuple
-            extent in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF
             e.g. [xmin, xmax, ymin, ymax]
     """
     from osgeo import gdal, osr
-    
+
     gtiff = gdal.Open(file_path)
     data = gtiff.ReadAsArray()
     gt = gtiff.GetGeoTransform()
@@ -207,8 +301,12 @@ def import_geotiff(file_path):
     inproj = osr.SpatialReference()
     inproj.ImportFromWkt(gtproj)
 
-    gtextent = (gt[0], gt[0] + gtiff.RasterXSize*gt[1],\
-                gt[3], gt[3] + gtiff.RasterYSize*gt[5])
+    gtextent = (
+        gt[0],
+        gt[0] + gtiff.RasterXSize * gt[1],
+        gt[3],
+        gt[3] + gtiff.RasterYSize * gt[5],
+    )
 
     # print projection information
     print(inproj)
@@ -222,7 +320,9 @@ def import_geotiff(file_path):
 def export_geotiff(file_path, array, extent, epsg):
     """
     Export a GeoTIFF from a numpy array projected in a
-    predefined Coordinate Reference System (CRS)
+    predefined Coordinate Reference System (CRS).
+
+    **Requires `osgeo`.**
 
     Args:
         file_path : str
@@ -230,7 +330,7 @@ def export_geotiff(file_path, array, extent, epsg):
         array: 2D array
             array to save to GeoTiff
         extent : tuple
-            extent in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF
             e.g. [xmin, xmax, ymin, ymax]
         epsg : int
             CRS of the GeoTIFF
@@ -238,16 +338,17 @@ def export_geotiff(file_path, array, extent, epsg):
 
     """
     from osgeo import gdal, osr
+
     # import ogr, gdal, osr, os
 
     cols = array.shape[1]
     rows = array.shape[0]
 
     xmin, xmax, ymin, ymax = extent
-    spacingX = (xmax - xmin)/cols
-    spacingY = (ymax - ymin)/rows
+    spacingX = (xmax - xmin) / cols
+    spacingY = (ymax - ymin) / rows
 
-    driver = gdal.GetDriverByName('GTiff')
+    driver = gdal.GetDriverByName("GTiff")
     outRaster = driver.Create(file_path, cols, rows, 1, gdal.GDT_Float64)
     outRaster.SetGeoTransform((xmin, spacingX, 0, ymin, 0, spacingY))
     outband = outRaster.GetRasterBand(1)
@@ -257,3 +358,85 @@ def export_geotiff(file_path, array, extent, epsg):
     outRaster.SetProjection(outRasterSRS.ExportToWkt())
     outband.FlushCache()
     return
+
+
+def export_netcdf4(file_path, array, extent):
+    """
+    Export a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+        array: 2D array
+            array to save to netCDF4
+        extent : tuple
+            bounding box in the projection of the netCDF4 file
+            e.g. [xmin, xmax, ymin, ymax]
+    """
+    import netCDF4
+
+    ny, nx = array.shape
+    xmin, xmax, ymin, ymax = extent
+
+    with netCDF4.Dataset(str(file_path), 'w') as cdf:
+        cdf.createDimension('x', nx)
+        cdf.createDimension('y', ny)
+        cdf_x = cdf.createVariable('x', np.float, ('x',), zlib=True)
+        cdf_y = cdf.createVariable('y', np.float, ('y',), zlib=True)
+        cdf_x[:] = np.linspace(xmin, xmax, nx)
+        cdf_y[:] = np.linspace(ymin, ymax, ny)
+
+        cdf_data = cdf.createVariable('z', np.float, ('y','x'), zlib=True)
+        cdf_data[:,:]  = array
+
+
+def import_netcdf4(file_path):
+    """
+    Import a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+
+    Returns:
+        array : ndarray
+            numpy array containing the gridded netCDF4 data
+        extent : tuple
+            bounding box in the projection of the netCDF4 file
+            e.g. [xmin, xmax, ymin, ymax]
+
+    Note:
+        The layout of the netCDF4 file must follow the standard
+        naming convention such as 'lon', 'lat', 'z', 'data', etc 
+        otherwise this import function will not work as intended.
+    """
+    import netCDF4
+
+    with netCDF4.Dataset(str(file_path), 'r') as cdf:
+        try:
+            lons = cdf['lon']
+            lats = cdf['lat']
+        except:
+            lons = cdf['x']
+            lats = cdf['y']
+        else:
+            raise ValueError(print(cdf))
+
+        try:
+            data = cdf['z'][:]
+        except:
+            data = cdf['data'][:]
+        else:
+            raise ValueError(print(cdf))
+
+        extent = [lons.min(), lons.max(), lats.min(), lats.max()]
+
+    return data, extent
