@@ -425,7 +425,7 @@ def export_netcdf4(file_path, array, extent):
         array: 2D array
             array to save to netCDF4
         extent : tuple
-            bounding box in the projection of the netCDF4
+            bounding box in the projection of the netCDF4 file
             e.g. [xmin, xmax, ymin, ymax]
     &#34;&#34;&#34;
     import netCDF4
@@ -433,7 +433,7 @@ def export_netcdf4(file_path, array, extent):
     ny, nx = array.shape
     xmin, xmax, ymin, ymax = extent
 
-    with netCDF4.Dataset(file_path, &#39;w&#39;) as cdf:
+    with netCDF4.Dataset(str(file_path), &#39;w&#39;) as cdf:
         cdf.createDimension(&#39;x&#39;, nx)
         cdf.createDimension(&#39;y&#39;, ny)
         cdf_x = cdf.createVariable(&#39;x&#39;, np.float, (&#39;x&#39;,), zlib=True)
@@ -441,8 +441,56 @@ def export_netcdf4(file_path, array, extent):
         cdf_x[:] = np.linspace(xmin, xmax, nx)
         cdf_y[:] = np.linspace(ymin, ymax, ny)
 
-        cdf_data = cdf.createVariable(&#39;data&#39;, np.float, (&#39;y&#39;,&#39;x&#39;), zlib=True)
-        cdf_data[:,:]  = array</code></pre>
+        cdf_data = cdf.createVariable(&#39;z&#39;, np.float, (&#39;y&#39;,&#39;x&#39;), zlib=True)
+        cdf_data[:,:]  = array
+
+
+def import_netcdf4(file_path):
+    &#34;&#34;&#34;
+    Import a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+
+    Returns:
+        array : ndarray
+            numpy array containing the gridded netCDF4 data
+        extent : tuple
+            bounding box in the projection of the netCDF4 file
+            e.g. [xmin, xmax, ymin, ymax]
+
+    Note:
+        The layout of the netCDF4 file must follow the standard
+        naming convention such as &#39;lon&#39;, &#39;lat&#39;, &#39;z&#39;, &#39;data&#39;, etc 
+        otherwise this import function will not work as intended.
+    &#34;&#34;&#34;
+    import netCDF4
+
+    with netCDF4.Dataset(str(file_path), &#39;r&#39;) as cdf:
+        try:
+            lons = cdf[&#39;lon&#39;]
+            lats = cdf[&#39;lat&#39;]
+        except:
+            lons = cdf[&#39;x&#39;]
+            lats = cdf[&#39;y&#39;]
+        else:
+            raise ValueError(print(cdf))
+
+        try:
+            data = cdf[&#39;z&#39;][:]
+        except:
+            data = cdf[&#39;data&#39;][:]
+        else:
+            raise ValueError(print(cdf))
+
+        extent = [lons.min(), lons.max(), lats.min(), lats.max()]
+
+    return data, extent</code></pre>
 </details>
 </section>
 <section>
@@ -579,7 +627,7 @@ over a user-defined extent.</p>
 <dd>2D array
 array to save to netCDF4</dd>
 <dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
-<dd>bounding box in the projection of the netCDF4
+<dd>bounding box in the projection of the netCDF4 file
 e.g. [xmin, xmax, ymin, ymax]</dd>
 </dl></section>
 <details class="source">
@@ -598,7 +646,7 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
         array: 2D array
             array to save to netCDF4
         extent : tuple
-            bounding box in the projection of the netCDF4
+            bounding box in the projection of the netCDF4 file
             e.g. [xmin, xmax, ymin, ymax]
     &#34;&#34;&#34;
     import netCDF4
@@ -606,7 +654,7 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
     ny, nx = array.shape
     xmin, xmax, ymin, ymax = extent
 
-    with netCDF4.Dataset(file_path, &#39;w&#39;) as cdf:
+    with netCDF4.Dataset(str(file_path), &#39;w&#39;) as cdf:
         cdf.createDimension(&#39;x&#39;, nx)
         cdf.createDimension(&#39;y&#39;, ny)
         cdf_x = cdf.createVariable(&#39;x&#39;, np.float, (&#39;x&#39;,), zlib=True)
@@ -614,7 +662,7 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
         cdf_x[:] = np.linspace(xmin, xmax, nx)
         cdf_y[:] = np.linspace(ymin, ymax, ny)
 
-        cdf_data = cdf.createVariable(&#39;data&#39;, np.float, (&#39;y&#39;,&#39;x&#39;), zlib=True)
+        cdf_data = cdf.createVariable(&#39;z&#39;, np.float, (&#39;y&#39;,&#39;x&#39;), zlib=True)
         cdf_data[:,:]  = array</code></pre>
 </details>
 </dd>
@@ -803,6 +851,81 @@ e.g. [xmin, xmax, ymin, ymax]</dd>
     gtiff = None
 
     return data, gtextent</code></pre>
+</details>
+</dd>
+<dt id="pycurious.mapping.import_netcdf4"><code class="name flex">
+<span>def <span class="ident">import_netcdf4</span></span>(<span>file_path)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Import a netCDF4 file from a numpy array
+over a user-defined extent.</p>
+<p><strong>Requires <code>netcdf4</code>.</strong>
+<code>pip install netcdf4</code></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>file_path</code></strong> :&ensp;<code>str</code></dt>
+<dd>path to write the netCDF4</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><strong><code>array</code></strong> :&ensp;<code>ndarray</code></dt>
+<dd>numpy array containing the gridded netCDF4 data</dd>
+<dt><strong><code>extent</code></strong> :&ensp;<code>tuple</code></dt>
+<dd>bounding box in the projection of the netCDF4 file
+e.g. [xmin, xmax, ymin, ymax]</dd>
+</dl>
+<h2 id="note">Note</h2>
+<p>The layout of the netCDF4 file must follow the standard
+naming convention such as 'lon', 'lat', 'z', 'data', etc
+otherwise this import function will not work as intended.</p></section>
+<details class="source">
+<summary>Source code</summary>
+<pre><code class="python">def import_netcdf4(file_path):
+    &#34;&#34;&#34;
+    Import a netCDF4 file from a numpy array
+    over a user-defined extent.
+
+    **Requires `netcdf4`.**
+    `pip install netcdf4`
+
+    Args:
+        file_path : str
+            path to write the netCDF4
+
+    Returns:
+        array : ndarray
+            numpy array containing the gridded netCDF4 data
+        extent : tuple
+            bounding box in the projection of the netCDF4 file
+            e.g. [xmin, xmax, ymin, ymax]
+
+    Note:
+        The layout of the netCDF4 file must follow the standard
+        naming convention such as &#39;lon&#39;, &#39;lat&#39;, &#39;z&#39;, &#39;data&#39;, etc 
+        otherwise this import function will not work as intended.
+    &#34;&#34;&#34;
+    import netCDF4
+
+    with netCDF4.Dataset(str(file_path), &#39;r&#39;) as cdf:
+        try:
+            lons = cdf[&#39;lon&#39;]
+            lats = cdf[&#39;lat&#39;]
+        except:
+            lons = cdf[&#39;x&#39;]
+            lats = cdf[&#39;y&#39;]
+        else:
+            raise ValueError(print(cdf))
+
+        try:
+            data = cdf[&#39;z&#39;][:]
+        except:
+            data = cdf[&#39;data&#39;][:]
+        else:
+            raise ValueError(print(cdf))
+
+        extent = [lons.min(), lons.max(), lats.min(), lats.max()]
+
+    return data, extent</code></pre>
 </details>
 </dd>
 <dt id="pycurious.mapping.transform_coordinates"><code class="name flex">
@@ -1017,6 +1140,7 @@ Uses the <code>scipy.ndimage.map_coordinates</code> function with cubic interpol
 <li><code><a title="pycurious.mapping.export_netcdf4" href="#pycurious.mapping.export_netcdf4">export_netcdf4</a></code></li>
 <li><code><a title="pycurious.mapping.grid" href="#pycurious.mapping.grid">grid</a></code></li>
 <li><code><a title="pycurious.mapping.import_geotiff" href="#pycurious.mapping.import_geotiff">import_geotiff</a></code></li>
+<li><code><a title="pycurious.mapping.import_netcdf4" href="#pycurious.mapping.import_netcdf4">import_netcdf4</a></code></li>
 <li><code><a title="pycurious.mapping.transform_coordinates" href="#pycurious.mapping.transform_coordinates">transform_coordinates</a></code></li>
 <li><code><a title="pycurious.mapping.trim" href="#pycurious.mapping.trim">trim</a></code></li>
 <li><code><a title="pycurious.mapping.ungrid" href="#pycurious.mapping.ungrid">ungrid</a></code></li>
