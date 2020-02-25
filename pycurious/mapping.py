@@ -132,20 +132,17 @@ def trim(coords, data, extent, buffer_amount=0.0):
     xmin, xmax, ymin, ymax = extent
 
     # Extract only the data within the extent
-    data_mask = np.ones(data.shape[0], dtype=bool)
+    data_mask = np.zeros(data.shape[0], dtype=bool)
 
     # Add a 1 percent buffer zone
     x_buffer = buffer_amount * (xmax - xmin)
     y_buffer = buffer_amount * (ymax - ymin)
 
-    mask_e = coords[:, 0] < xmin - x_buffer
-    mask_w = coords[:, 0] > xmax + x_buffer
-    mask_n = coords[:, 1] < ymin - y_buffer
-    mask_s = coords[:, 1] > ymax + y_buffer
-    data_mask[mask_n] = False
-    data_mask[mask_s] = False
-    data_mask[mask_e] = False
-    data_mask[mask_w] = False
+    data_mask += coords[:, 0] < xmin - x_buffer
+    data_mask += coords[:, 0] > xmax + x_buffer
+    data_mask += coords[:, 1] < ymin - y_buffer
+    data_mask += coords[:, 1] > ymax + y_buffer
+    data_mask = np.invert(data_mask)
 
     data_trim = data[data_mask]
     coords_trim = coords[data_mask]
