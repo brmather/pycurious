@@ -19,7 +19,7 @@ from os import path
 import io
 
 ## in development set version to none and ...
-PYPI_VERSION = "1.1"
+PYPI_VERSION = "1.1.1"
 
 # Return the git revision as a string (from numpy)
 def git_version():
@@ -50,7 +50,7 @@ if PYPI_VERSION is None:
     PYPI_VERSION = git_version()
 
 this_directory = path.abspath(path.dirname(__file__))
-with open(path.join(this_directory, "README.md")) as f:
+with open(path.join(this_directory, "README.md"), encoding='utf-8') as f:
     long_description = f.read()
 
 
