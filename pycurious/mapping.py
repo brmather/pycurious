@@ -78,9 +78,10 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     """
     import pyproj
 
-    proj_in = pyproj.Proj("+init=EPSG:" + str(epsg_in))
-    proj_out = pyproj.Proj("+init=EPSG:" + str(epsg_out))
-    return pyproj.transform(proj_in, proj_out, x, y)
+    proj_in = pyproj.CRS("EPSG:" + str(epsg_in))
+    proj_out = pyproj.CRS("EPSG:" + str(epsg_out))
+    transformer = pyproj.Transformer.from_crs(proj_in, proj_out, always_xy=True)
+    return transformer.transform(x,y)
 
 
 def convert_extent(extent_in, epsg_in, epsg_out):
