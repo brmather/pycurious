@@ -129,9 +129,10 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     &#34;&#34;&#34;
     import pyproj
 
-    proj_in = pyproj.Proj(&#34;+init=EPSG:&#34; + str(epsg_in))
-    proj_out = pyproj.Proj(&#34;+init=EPSG:&#34; + str(epsg_out))
-    return pyproj.transform(proj_in, proj_out, x, y)
+    proj_in = pyproj.CRS(&#34;EPSG:&#34; + str(epsg_in))
+    proj_out = pyproj.CRS(&#34;EPSG:&#34; + str(epsg_out))
+    transformer = pyproj.Transformer.from_crs(proj_in, proj_out, always_xy=True)
+    return transformer.transform(x,y)
 
 
 def convert_extent(extent_in, epsg_in, epsg_out):
@@ -978,9 +979,10 @@ otherwise this import function will not work as intended.</p></section>
     &#34;&#34;&#34;
     import pyproj
 
-    proj_in = pyproj.Proj(&#34;+init=EPSG:&#34; + str(epsg_in))
-    proj_out = pyproj.Proj(&#34;+init=EPSG:&#34; + str(epsg_out))
-    return pyproj.transform(proj_in, proj_out, x, y)</code></pre>
+    proj_in = pyproj.CRS(&#34;EPSG:&#34; + str(epsg_in))
+    proj_out = pyproj.CRS(&#34;EPSG:&#34; + str(epsg_out))
+    transformer = pyproj.Transformer.from_crs(proj_in, proj_out, always_xy=True)
+    return transformer.transform(x,y)</code></pre>
 </details>
 </dd>
 <dt id="pycurious.mapping.trim"><code class="name flex">
