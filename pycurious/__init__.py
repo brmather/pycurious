@@ -144,6 +144,7 @@ easier to quickly merge into the existing code. Proofreading typos, bug fixes,
 # -*- coding: utf-8 -*-
 from .documentation import install_documentation
 from .grid import CurieGrid, bouligand2009, tanaka1999, maus1995, ComputeTanaka
-from .optimise import CurieOptimise
+from .optimise_bouligand import CurieOptimiseBouligand
+from .optimise_tanaka import CurieOptimiseTanaka
 from . import mapping
 from . import download

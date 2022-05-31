@@ -36,6 +36,7 @@ anomaly according to Tanaka *et al.* (1999):
 """
 
 # -*- coding: utf-8 -*-
+from .parallel import CurieParallel
 import numpy as np
 from scipy.special import gamma, kv
 import warnings
@@ -46,7 +47,7 @@ except:
     pass
 
 
-class CurieGrid(object):
+class CurieGrid(CurieParallel):
     """
     Accepts a 2D array and Cartesian coordinates specifying the
     bounding box of the array
@@ -95,7 +96,9 @@ class CurieGrid(object):
         in incorrect Curie depth calculations.
     """
 
-    def __init__(self, grid, xmin, xmax, ymin, ymax):
+    def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
+
+        super(CurieGrid, self).__init__()
 
         self.data = np.array(grid)
         ny, nx = self.data.shape
@@ -674,29 +677,29 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
     return (Ztr, btr, dZtr), (Zor, bor, dZor)
 
 
-def ComputeTanaka(Ztr, dZtr, Zor, dZor):
+def ComputeTanaka(zT, dzT, z0, dz0):
     """
     Compute the Curie depth from the results of tanaka1999
 
     Args:
-        Ztr : float / 1D array
+        zT : float / 1D array
             top of the magnetic source
-        dZtr : float / 1D array
-            error of Ztr
-        Zor : float / 1D array
+        dzT : float / 1D array
+            standard deviation of zT
+        z0 : float / 1D array
             centroid depth of the magnetic source
-        dZor : float / 1D array
-            error of Zor
+        dz0 : float / 1D array
+            standard deviation of z0
 
     Returns:
-        Zb : float / 1D array
+        CPD : float / 1D array
             estimated Curie point depth at bottom of magnetic source
-        eZb : float / 1D array
-            error of `Zb`
+        CPD_stdev : float / 1D array
+            standard deviation
     """
-    Zb = 2.0 * Zor - Ztr
-    dZb = 2.0 * dZor + dZtr
-    return abs(Zb), dZb
+    CPD = 2.0*z0 - zT
+    CPD_stdev = np.sqrt(dzT**2 + (dz0*2)**2)
+    return CPD, CPD_stdev
 
 
 def maus1995(beta, zt, kh, C=0.0):
