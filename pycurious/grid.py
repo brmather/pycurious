@@ -341,69 +341,6 @@ class CurieGrid(CurieParallel):
         # values compatible with Bouligand or Tanaka analysis
         return self._FFT_spectrum(subgrid, vtaper, dk, kbins, power)
 
-    def azimuthal_spectrum(
-        self, subgrid, taper=np.hanning, power=2.0, theta=5.0, **kwargs
-    ):
-        """
-        Compute azimuthal spectrum for a square grid.
-
-        > Wavenumber is returned in values of __rad/km__
-
-        Args:
-            subgrid : 2D array
-                window of the original data (see subgrid method)
-            taper : function (default=np.hanning)
-                taper function, set to None for no taper function
-            theta : float
-                angle increment in degrees
-            args : arguments
-                arguments o pass to taper
-
-        Returns:
-            k : 1D array shape (n,)
-                wavenumber in rad/km
-            Phi : 1D array shape (n,)
-                Radial power spectrum
-            sigma_Phi : 1D array shape (n,)
-                Standard deviation of Phi
-
-        Notes:
-            While `subgrid` is projected in eastings / northings (in metres),
-            the wavenumber, \\( k \\), is returned in units of rad/km.
-            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
-            (1999) require the computation of Curie depth in these units.
-
-        References:
-            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
-            temperature depth in the western United States with a fractal model for
-            crustal magnetization, J. Geophys. Res., 114, B11104,
-            doi:10.1029/2009JB006494
-
-            Tanaka, A., Okubo, Y., & Matsubayashi, O. (1999). Curie point depth
-            based on spectrum analysis of the magnetic anomaly data in East and
-            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
-            doi:10.1016/S0040-1951(99)00072-4
-        """
-        from pycurious import radon
-
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
-
-        dtheta = np.arange(0.0, 180.0, theta)
-        sinogram = radon.radon2d(subgrid, np.pi * dtheta / 180.0)
-        S = np.zeros((dtheta.size, kbins.size))
-
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            vtaper = taper(sinogram.shape[0], **kwargs)
-
-        nk = 1 + 2 * kbins.size
-        for i in range(0, dtheta.size):
-            PSD = np.abs(np.fft.fft(vtaper * sinogram[:, i], n=nk))
-            S[i, :] = power * np.log(PSD[1 : kbins.size + 1])
-
-        return kbins, S, dtheta
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
         """
