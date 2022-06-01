@@ -101,7 +101,7 @@ class CurieOptimiseBouligand(CurieGrid):
 
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
-        super(CurieOptimise, self).__init__(grid, xmin, xmax, ymin, ymax)
+        super(CurieOptimiseBouligand, self).__init__(grid, xmin, xmax, ymin, ymax)
 
         # initialise prior dictionary
         self.reset_priors()
