@@ -23,8 +23,8 @@ class CurieOptimiseTanaka(CurieGrid):
         window, 
         xc, 
         yc, 
-        z0_range=(0,0.1), 
         zt_range=(0.2,0.3), 
+        z0_range=(0,0.1), 
         taper=np.hanning, 
         process_subgrid=None):
 
@@ -41,12 +41,12 @@ class CurieOptimiseTanaka(CurieGrid):
         subgrid = process_subgrid(subgrid)
 
         # calcualte spectra
-        k, Phi, sigma_Phi = grid.radial_spectrum(subgrid, taper=taper, power=0.5)
+        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, power=0.5)
         Phi_n = np.log(np.exp(Phi)/k)
         sigma_Phi_n = np.log(np.exp(sigma_Phi)/k)
 
-        z0_min, z0_max = (0,0.1)
-        zt_min, zt_max = (0.2,0.3)
+        z0_min, z0_max = z0_range
+        zt_min, zt_max = zt_range
 
         # divide everything by 2 pi
         k_new = k/(2*np.pi)
@@ -68,6 +68,11 @@ class CurieOptimiseTanaka(CurieGrid):
         Phi_z0 = Phi_n_new[mask_z0] # weighted
         sigma_Phi_z0 = sigma_Phi_n_new[mask_z0]
 
+        if np.count_nonzero(mask_zt) < 3:
+            raise ValueError("Not enough points inside zt_range, increase the range")
+        elif np.count_nonzero(mask_z0) < 3:
+            raise ValueError("Not enough points inside z0_range, increase the range") 
+
         ## calcualte linear regression and return the residual (sum of squared errors (SSE))
         (zt_slope, zt_intercept), zt_cov = curve_fit(linear_func, k_zt, Phi_zt, sigma=sigma_Phi_zt, absolute_sigma=True)
         (z0_slope, z0_intercept), z0_cov = curve_fit(linear_func, k_z0, Phi_z0, sigma=sigma_Phi_z0, absolute_sigma=True)
@@ -76,30 +81,31 @@ class CurieOptimiseTanaka(CurieGrid):
         zt_slope_stdev = np.sqrt(np.diag(zt_cov))[0]
         z0_slope_stdev = np.sqrt(np.diag(z0_cov))[0]
 
-        return (zt_slope, z0_slope, zt_slope_stdev, z0_slope_stdev)
+        return (zt_slope, z0_slope, zt_intercept, z0_intercept, zt_slope_stdev, z0_slope_stdev)
 
     def optimise_routine(self,
         window, 
         xc_list, 
         yc_list, 
-        z0_range=(0,0.1), 
         zt_range=(0.2,0.3), 
+        z0_range=(0,0.1), 
         taper=np.hanning, 
-        process_subgrid=None):
+        process_subgrid=None,
+        **kwargs):
 
         return self.parallelise_routine(
             window,
             xc_list,
             yc_list,
             self.optimise,
-            z0_range,
             zt_range,
+            z0_range,
             taper,
             process_subgrid,
             **kwargs
         )
 
-    def calculate_CPD(self, zt, z0, sigma_zt, sigma_z0):
+    def calculate_CPD(self, zt, z0, sigma_zt=0.0, sigma_z0=0.0):
         """
         Compute the Curie depth from the results of tanaka1999
 
@@ -119,6 +125,6 @@ class CurieOptimiseTanaka(CurieGrid):
             CPD_stdev : float / 1D array
                 standard deviation
         """
-        CPD = 2.0*z0 - zt
+        CPD = 2.0*np.abs(z0) - np.abs(zt)
         CPD_stdev = np.sqrt(sigma_zt**2 + (sigma_z0*2)**2)
         return (CPD, CPD_stdev)

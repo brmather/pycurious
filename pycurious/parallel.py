@@ -26,7 +26,7 @@ except:
 
 class CurieParallel(object):
 
-	def __init__(self, **kwargs):
+    def __init__(self, **kwargs):
 
         self.max_processors = kwargs.pop("max_processors", cpu_count())
 
