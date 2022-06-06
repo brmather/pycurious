@@ -41,7 +41,7 @@ class CurieOptimiseTanaka(CurieGrid):
         subgrid = process_subgrid(subgrid)
 
         # calcualte spectra
-        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, power=0.5)
+        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, power=1)
         Phi_n = np.log(np.exp(Phi)/k)
         sigma_Phi_n = np.log(np.exp(sigma_Phi)/k)
 
