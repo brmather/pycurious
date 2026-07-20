@@ -239,7 +239,9 @@ class CurieGrid(CurieParallel):
 
         # scaling factor to transform wavenumber into units of rad/km
         dx_scale = self.dx * scale
-        dk = 2.0 * np.pi / (nr - 1) / dx_scale
+        # the DFT fundamental is 2*pi/(N*dx). Using (N-1) overstates every
+        # wavenumber by N/(N-1) and so understates every depth by (N-1)/N.
+        dk = 2.0 * np.pi / nr / dx_scale
 
         kbins = np.arange(dk, dk * nr / 2, dk)
         return vtaper, dk, kbins
@@ -257,6 +259,12 @@ class CurieGrid(CurieParallel):
         ```python
         2*log(FFT) == log(FFT**2)
         ```
+
+        Returns `(k, S, sigma, counts)`, where `counts` is the number of FFT
+        cells averaged into each radial bin.
+
+        > This method returned three values prior to v2. Subclasses that
+        > override it must now also return `counts`.
         """
         data = subgrid
         nr, nc = data.shape
@@ -270,21 +278,31 @@ class CurieGrid(CurieParallel):
         S = np.empty(nbins)
         k = np.empty(nbins)
         sigma = np.empty(nbins)
+        counts = np.empty(nbins, dtype=int)
 
-        i0 = int((nr - 1) // 2)
-        ix, iy = np.mgrid[0:nr, 0:nr]
-        kk = np.hypot((ix - i0) * dk, (iy - i0) * dk)
+        # index of the zero frequency after fftshift, which is nr//2 for both
+        # odd and even nr -- (nr-1)//2 is off by one when nr is even
+        i0 = int(nr // 2)
+        j0 = int(nc // 2)
+        ix, iy = np.mgrid[0:nr, 0:nc]
+        kk = np.hypot((ix - i0) * dk, (iy - j0) * dk)
 
         for i in range(nbins):
-            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
+            # half-open above, so a cell landing on a bin edge is counted once
+            # rather than in both adjacent annuli
+            if i == nbins - 1:
+                mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
+            else:
+                mask = np.logical_and(kk >= kbins[i], kk < kbins[i + 1])
             rr = const * np.log(FT[mask])
             S[i] = rr.mean()
             k[i] = kk[mask].mean()
             sigma[i] = np.std(rr)
+            counts[i] = rr.size
 
-        return k, S, sigma
+        return k, S, sigma, counts
 
-    def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, **kwargs):
+    def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, return_counts=False, **kwargs):
         """
         Compute the radial spectrum for a square grid.
 
@@ -297,8 +315,12 @@ class CurieGrid(CurieParallel):
                 taper function, set to None for no taper function
             power : float
                 raise the FFT of the magnetic anomaly to the power.
-                - 2.0 for Bouligand _et al._ (2009) use cases
-                - 0.5 for Tanaka _et al.__ (1999) use cases
+                - 2.0 for Bouligand _et al._ (2009) use cases, which gives
+                  the log power spectrum \\( \\ln \\Phi_{\\Delta T} \\)
+                - 1.0 for Tanaka _et al._ (1999) use cases, which gives the
+                  log amplitude spectrum \\( \\ln \\Phi_{\\Delta T}^{1/2} \\)
+            return_counts : bool (default=False)
+                also return the number of FFT cells averaged into each bin
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -308,9 +330,19 @@ class CurieGrid(CurieParallel):
             Phi : 1D array shape (n,)
                 Radial power spectrum
             sigma_Phi : 1D array shape (n,)
-                Standard deviation of Phi
+                Standard deviation of Phi within each radial bin
+            counts : 1D array shape (n,)
+                number of FFT cells in each radial bin.
+                Only returned if `return_counts=True`.
 
         Notes:
+            `Phi` is the mean of \\( \\ln |FFT| \\) over each annulus, so
+            `sigma_Phi` describes the scatter of the individual cells, not
+            the uncertainty of that mean. Dividing by the square root of
+            `counts` gives the standard error, though note the cells are not
+            independent -- a real field has Hermitian symmetry, so roughly
+            half of them are redundant, and tapering correlates neighbours.
+
             While `subgrid` is projected in eastings / northings (in metres),
             the wavenumber, \\( k \\), is returned in units of rad/km.
             This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
@@ -333,7 +365,13 @@ class CurieGrid(CurieParallel):
 
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Bouligand or Tanaka analysis
-        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, power)
+        k, Phi, sigma_Phi, counts = self._FFT_spectrum(
+            subgrid, vtaper, dk, kbins, power
+        )
+
+        if return_counts:
+            return k, Phi, sigma_Phi, counts
+        return k, Phi, sigma_Phi
 
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):

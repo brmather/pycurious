@@ -326,6 +326,9 @@ class CurieOptimiseBouligand(CurieGrid):
         subgrid = process_subgrid(subgrid)
 
         # compute radial spectrum
+        # return_counts would turn this into a 4-tuple; the Bouligand path
+        # has no use for the bin counts
+        kwargs.pop("return_counts", None)
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
         # minimise function
@@ -483,6 +486,9 @@ class CurieOptimiseBouligand(CurieGrid):
         subgrid = process_subgrid(subgrid)
 
         # compute radial spectrum
+        # return_counts would turn this into a 4-tuple; the Bouligand path
+        # has no use for the bin counts
+        kwargs.pop("return_counts", None)
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
         P0 = np.exp(-self.min_func(x0, k, Phi, sigma_Phi) / 1000)
@@ -592,6 +598,9 @@ class CurieOptimiseBouligand(CurieGrid):
         subgrid = process_subgrid(subgrid)
 
         # compute radial spectrum
+        # return_counts would turn this into a 4-tuple; the Bouligand path
+        # has no use for the bin counts
+        kwargs.pop("return_counts", None)
         k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, **kwargs)
 
         for sim in range(0, nsim):
