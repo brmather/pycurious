@@ -184,7 +184,8 @@ class CurieOptimiseTanaka(CurieGrid):
                 estimated source thickness in km. Without it the validity of
                 each approximation cannot be assessed, only the point counts.
             verbose : bool (default=True)
-                print a summary as well as returning it
+                print a summary. Set False to receive any problems as
+                `UserWarning` instead, for use in a script.
 
         Returns:
             diagnostics : dict
@@ -267,9 +268,11 @@ class CurieOptimiseTanaka(CurieGrid):
                 print("WARNING: {}".format(message))
             if not messages:
                 print("both bands look usable")
-
-        for message in messages:
-            warnings.warn(message, UserWarning, stacklevel=2)
+        else:
+            # when verbose the messages have already been printed; warning as
+            # well just prints everything twice
+            for message in messages:
+                warnings.warn(message, UserWarning, stacklevel=2)
 
         return diagnostics
 
