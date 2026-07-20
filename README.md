@@ -51,12 +51,11 @@ pycurious.install_documentation(path="Notebooks")
 
 ### Dependencies
 
-You will need **Python 2.7 or 3.5+**.
+You will need **Python 3.9 or newer**.
 Also, the following packages are required:
 
 - [`numpy`](http://numpy.org)
 - [`scipy`](https://scipy.org)
-- [`cython`](https://cython.org/)
 
 __Optional dependencies__ for mapping module and running the Notebooks:
 
@@ -64,17 +63,27 @@ __Optional dependencies__ for mapping module and running the Notebooks:
 - [`matplotlib`](https://matplotlib.org/)
 - [`pyproj`](https://github.com/jswhit/pyproj)
 - [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
+- [`netCDF4`](https://unidata.github.io/netcdf4-python/)
+- [`requests`](https://requests.readthedocs.io/)
 
 ### Installing using pip
 
 You can install `pycurious` using the
-[`pip package manager`](https://pypi.org/project/pip/) with either version of Python:
+[`pip package manager`](https://pypi.org/project/pip/):
 
 ```bash
-python2 -m pip install pycurious
 python3 -m pip install pycurious
 ```
-All the dependencies will be automatically installed by `pip`.
+All the required dependencies will be automatically installed by `pip`.
+
+The optional dependencies are grouped into extras, so you can install only
+what you need:
+
+```bash
+python3 -m pip install pycurious[download]   # requests
+python3 -m pip install pycurious[mapping]    # pyproj, netCDF4
+python3 -m pip install pycurious[examples]   # matplotlib, jupyter, cartopy
+```
 
 ### Installing with conda
 
@@ -82,13 +91,13 @@ You can install `pycurious` using the [conda package manager](https://conda.io).
 Its required dependencies can be easily installed with:
 
 ```bash
-conda install numpy scipy cython
+conda install numpy scipy
 ```
 
 And the full set of dependencies with:
 
 ```bash
-conda install numpy scipy cython matplotlib pyproj cartopy
+conda install numpy scipy matplotlib pyproj cartopy netcdf4 requests
 ```
 
 Then `pycurious` can be installed with `pip`:
@@ -148,10 +157,11 @@ docker run --name pycurious -p 127.0.0.1:8888:8888 brmather/pycurious:latest
 
 ## Usage
 
-PyCurious consists of 2 classes:
+PyCurious consists of 3 classes:
 
 - `CurieGrid`: base class that computes radial power spectrum, centroids for processing, decomposition of subgrids.
-- `CurieOptimise`: optimisation module for fitting the synthetic power spectrum (inherits CurieGrid).
+- `CurieOptimiseBouligand`: optimisation module for fitting the synthetic power spectrum of Bouligand *et al.* (2009) (inherits CurieGrid).
+- `CurieOptimiseTanaka`: optimisation module for the centroid method of Tanaka *et al.* (1999) (inherits CurieGrid).
 
 Also included is a `mapping` module for gridding scattered data points, and converting between coordinate reference systems (CRS).
 
@@ -160,8 +170,8 @@ Below is a simple workflow to calculate the radial power spectrum:
 ```python
 import pycurious
 
-# initialise CurieOptimise object with 2D magnetic anomaly
-grid = pycurious.CurieOptimise(mag_anomaly, xmin, xmax, ymin, ymax)
+# initialise CurieOptimiseBouligand object with 2D magnetic anomaly
+grid = pycurious.CurieOptimiseBouligand(mag_anomaly, xmin, xmax, ymin, ymax)
 
 # extract a square window of the magnetic anomaly
 subgrid = grid.subgrid(window_size, x, y)
