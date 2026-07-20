@@ -35,10 +35,13 @@ def test_optimisation(load_magnetic_anomaly):
     # dz 6.4-11.9 against a truth of 3.0, 0.305 and 10.0, so the spread across
     # nearby configurations is far larger than the tolerances below.
     #
+    # The optimiser itself is not at fault: on a synthetic wide enough to
+    # constrain the long wavelengths it recovers beta to +-0.1 and zt to +-0.07
+    # (see tests/test_recovery.py). This fixture is only 305 km across for a
+    # 10 km layer, so it cannot pin dz down.
+    #
     # This test therefore only demonstrates that the optimiser lands in the
-    # right region, not that it is accurate. Tightening it needs the fit itself
-    # conditioned better -- see docs/bouligand-findings.md, in particular that
-    # min_func ignores sigma_Phi and so fits the spectrum unweighted.
+    # right region. Accuracy is asserted in test_recovery.py instead.
     tol = np.array([0.4, 0.15, 4.0])
 
     parameters = ["beta", "zt", "dz"]
