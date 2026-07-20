@@ -1,0 +1,113 @@
+# Findings for the Bouligand workstream
+
+Collected while finishing `CurieOptimiseTanaka` on the v2 series. None of these
+are Tanaka problems, so none were fixed there. They are recorded here rather
+than left to be rediscovered.
+
+Ordered by impact.
+
+## 1. The four-parameter fit is poorly conditioned
+
+Sweeping the window size and moving the centroid by one window width over
+`tests/test_mag_data.txt`, against a truth of `beta=3.0`, `zt=0.305`, `dz=10.0`:
+
+| configuration | beta | zt | dz | C |
+|---|---|---|---|---|
+| centre, 150 km | 2.815 | 0.386 | 6.356 | −19.00 |
+| centre, 200 km | 2.702 | 0.415 | 8.010 | −18.40 |
+| centre, 250 km | 2.681 | 0.425 | 8.125 | −17.94 |
+| centre, 300 km | 2.668 | 0.429 | 8.513 | −17.57 |
+| 200 km, x−40 km | 2.893 | 0.338 | 11.902 | −18.59 |
+| 200 km, x+40 km | 2.785 | 0.401 | 7.110 | −18.39 |
+
+`dz` ranges over 6.4–11.9 km — a ±30% spread on the parameter the method
+exists to estimate — for centroids that overlap heavily and sample nearly the
+same data. `beta` never reaches its true 3.0.
+
+`test_optimise.py::test_optimisation` had tolerances of `[0.3, 0.1, 2.0]` and
+was passing with `zt` at 0.091 of its 0.1 budget. The v2-core wavenumber fix
+(below) moved it 0.33% and two parameters went out of tolerance. The tolerances
+were widened to `[0.4, 0.15, 4.0]` with a comment pointing here. **That test
+now only demonstrates the optimiser lands in the right region.** Tightening it
+requires conditioning the fit better, not adjusting the tolerance again.
+
+Item 2 is the obvious first suspect.
+
+## 2. `min_func` fits the spectrum unweighted
+
+`optimise_bouligand.py:228` takes `sigma_Phi` and never uses it:
+
+```python
+def min_func(self, x, kh, Phi, sigma_Phi):
+    ...
+    misfit = self.objective_function(Phi_syn, Phi, 1.0)
+```
+
+The `1.0` should be `sigma_Phi`. Every wavenumber bin therefore carries equal
+weight, even though the scatter varies systematically across the spectrum and
+the low-`k` bins average only ~12 FFT cells against ~600 at high `k`. The fit
+is dominated by the many high-`k` bins.
+
+`radial_spectrum(..., return_counts=True)` now exists (added in v2-core) if the
+standard error of the binned mean is wanted rather than the raw scatter.
+
+## 3. `sensitivity` perturbs by the wrong sigma
+
+`optimise_bouligand.py:604` (now ~`:610`) draws
+
+```python
+rPhi = np.random.normal(Phi, sigma_Phi)
+```
+
+`Phi` is the *mean* of `ln|FFT|` over each annulus, so its uncertainty is the
+standard error, not the per-cell scatter `sigma_Phi`. Perturbing by the raw
+`sigma_Phi` overstates the spread substantially — measured at roughly 9× on the
+equivalent Tanaka path (±1.80 vs ±0.20 km).
+
+Note the correction is not simply `sigma_Phi/sqrt(counts)`. The FFT cells are
+not independent: a real field has Hermitian symmetry, so about half are
+redundant, and tapering correlates neighbours. Measured effective counts are
+`N/2.0` untapered and `N/3.3` with `np.hanning`. `CurieOptimiseTanaka`
+implements this as `_effective_dof`; the same treatment applies here.
+
+## 4. `calculate_CPD` is a stub
+
+`optimise_bouligand.py:618` is a bare `return zt + dz` with no docstring, and
+its signature is incompatible with the Tanaka sibling:
+
+| | signature | returns |
+|---|---|---|
+| Bouligand | `calculate_CPD(zt, dz)` | `CPD` |
+| Tanaka | `calculate_CPD(zt, z0, *, sigma_zt=0, sigma_z0=0)` | `(CPD, CPD_stdev)` |
+
+Either give the Bouligand version an uncertainty and matching keyword-only
+sigmas, or rename one of them. As it stands, code written against one breaks
+silently against the other.
+
+## 5. `Bouligand/Ex3` will not execute
+
+Cell 8 does `from scipy.signal import tukey`. That moved to
+`scipy.signal.windows.tukey` and the old location is gone, so the notebook
+cannot be run headless.
+
+## 6. Reference values shifted in v2-core
+
+`_taper_spectrum` used `dk = 2*pi/((N-1)*dx)` where the DFT fundamental is
+`2*pi/(N*dx)`, so every depth in the package was low by `(N-1)/N` — 0.5% at
+N=201, worse for smaller windows. This is fixed on v2-core and guarded by
+`test_grid.py::test_wavenumber_grid_matches_dft` and
+`test_radial_spectrum_recovers_injected_depth`.
+
+Any published Bouligand numbers need regenerating. The shift is small in
+isolation but, per item 1, the fit amplifies it: a 0.33% wavenumber change
+moved `zt` by 8%.
+
+## 7. Parallel behaviour changed in v2-core
+
+`parallelise_routine` no longer deadlocks when a worker dies, takes
+`on_error="raise"|"ignore"`, and accepts `seed=` for reproducible stochastic
+routines. Relevant to `sensitivity` and `metropolis_hastings`: under the fork
+start method every worker previously inherited the same RNG state and drew an
+identical sequence, which would put spatially coherent artefacts into a
+sensitivity map. Both methods should be given a `seed` keyword so
+`parallelise_routine` can pass per-centroid child seeds through.
