@@ -34,17 +34,19 @@ pycurious.install_documentation(path="Notebooks")
 
 ### Tanaka
 
-- [Ex1-Plot-power-spectrum.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex1-Plot-power-spectrum.ipynb)
-- [Ex2-Compute-Curie-depth.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb)
-- [Ex3-Parameter-exploration.ipynb](pycurious/Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb)
+- [Ex1-Plot-amplitude-spectrum.ipynb](Examples/Notebooks/Tanaka/Ex1-Plot-amplitude-spectrum.ipynb)
+- [Ex2-Compute-Curie-depth.ipynb](Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb)
+- [Ex3-Parameter-exploration.ipynb](Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb)
+- [Ex4-Spatial-variation-of-Curie-depth.ipynb](Examples/Notebooks/Tanaka/Ex4-Spatial-variation-of-Curie-depth.ipynb)
+- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](Examples/Notebooks/Tanaka/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
 
 ### Bouligand
 
-- [Ex1-Plot-power-spectrum.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb)
-- [Ex2-Compute-Curie-depth.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb)
-- [Ex3-Posing-the-inverse-problem.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb)
-- [Ex4-Spatial-variation-of-Curie-depth.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
-- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](pycurious/Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
+- [Ex1-Plot-power-spectrum.ipynb](Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb)
+- [Ex2-Compute-Curie-depth.ipynb](Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb)
+- [Ex3-Posing-the-inverse-problem.ipynb](Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb)
+- [Ex4-Spatial-variation-of-Curie-depth.ipynb](Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb)
+- [Ex5-Mapping-Curie-depth-EMAG2.ipynb](Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb)
 
 
 ## Installation
