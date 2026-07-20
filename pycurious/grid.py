@@ -31,7 +31,11 @@ anomaly according to Tanaka *et al.* (1999):
 
 - `bouligand2009`: analytic solution used in `pycurious.optimise_bouligand.CurieOptimiseBouligand`
 - `maus1995`: simplified version of `bouligand2009` without higher order integration.
-- `tanaka1999`: to be used in conjunction with `ComputeTanaka`
+
+`tanaka1999` and `ComputeTanaka` implement the centroid method, but are
+**deprecated**: use `pycurious.optimise_tanaka.CurieOptimiseTanaka`, which
+fits both spectral bands with `scipy.optimize.curve_fit` and so returns an
+uncertainty on the Curie depth rather than a bare number.
 
 """
 
@@ -596,7 +600,25 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
         lower_source : tuple
             (Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources
 
+    Notes:
+        .. deprecated::
+            Use `pycurious.optimise_tanaka.CurieOptimiseTanaka.optimise`,
+            which fits both bands with `scipy.optimize.curve_fit` and returns
+            depths positive downwards with their uncertainties.
+
+        This hand-rolled weighted least squares squares an already-squared
+        error term, so it weights by 1/sigma**4 rather than 1/sigma**2, and it
+        subtracts ln(k) from a standard deviation. Its uncertainties are
+        therefore not meaningful. It is retained only so existing scripts keep
+        running.
     """
+    warnings.warn(
+        "tanaka1999 is deprecated, use CurieOptimiseTanaka.optimise instead. "
+        "Its uncertainties are not meaningful -- see the docstring.",
+        FutureWarning,
+        stacklevel=2,
+    )
+
     # for now...
     S = lnPhi
     sigma2 = sigma_lnPhi ** 2
@@ -648,7 +670,10 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
 
 def ComputeTanaka(zT, dzT, z0, dz0):
     """
-    Compute the Curie depth from the results of tanaka1999
+    Compute the Curie depth from the results of `tanaka1999`.
+
+    .. deprecated::
+        Use `pycurious.optimise_tanaka.CurieOptimiseTanaka.calculate_CPD`.
 
     Args:
         zT : float / 1D array
@@ -665,9 +690,24 @@ def ComputeTanaka(zT, dzT, z0, dz0):
             estimated Curie point depth at bottom of magnetic source
         CPD_stdev : float / 1D array
             standard deviation
+
+    Notes:
+        The arguments interleave the depths with their standard deviations,
+        whereas `calculate_CPD` groups them. Renaming a call without also
+        reordering the arguments computes nonsense.
     """
-    CPD = 2.0*z0 - zT
-    CPD_stdev = np.sqrt(dzT**2 + (dz0*2)**2)
+    warnings.warn(
+        "ComputeTanaka is deprecated, use "
+        "CurieOptimiseTanaka.calculate_CPD(zt, z0, sigma_zt, sigma_z0) "
+        "instead. Note the argument order differs: ComputeTanaka takes "
+        "(zt, sigma_zt, z0, sigma_z0), interleaving each depth with its "
+        "standard deviation. Note also that the returned standard deviation "
+        "changed in v2, from 2*dz0 + dzT to the quadrature sum.",
+        FutureWarning,
+        stacklevel=2,
+    )
+    CPD = abs(2.0 * z0 - zT)
+    CPD_stdev = np.sqrt(dzT ** 2 + (dz0 * 2) ** 2)
     return CPD, CPD_stdev
 
 

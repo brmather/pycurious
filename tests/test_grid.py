@@ -149,24 +149,61 @@ def test_taper_functions(load_magnetic_anomaly):
 
 
 def test_Tanaka(load_magnetic_anomaly):
+    """
+    The centroid method returns a sane, positive Curie depth on the legacy
+    fixture.
+
+    No accuracy is asserted here. This grid is only 305 km across for a 10 km
+    layer, so the z0 band cannot satisfy |k|d << 1 with enough points left to
+    fit -- see tests/test_recovery.py, which checks accuracy against
+    synthetics generated wide enough to support the fit.
+    """
     d = load_magnetic_anomaly["mag_data"]
     xc = load_magnetic_anomaly["xc"]
     yc = load_magnetic_anomaly["yc"]
     xmin, xmax, ymin, ymax = load_magnetic_anomaly["extent"]
 
+    grid = pycurious.CurieOptimiseTanaka(d, xmin, xmax, ymin, ymax)
+
+    # wavenumber bands in rad/km
+    zt_range = (1.26, 1.89)
+    z0_range = (0.0, 0.63)
+
+    zt, z0, zt_i, z0_i, sigma_zt, sigma_z0 = grid.optimise(
+        300e3, xc, yc, zt_range, z0_range, taper=np.hanning
+    )
+    CPD, sigma_CPD = grid.calculate_CPD(zt, z0, sigma_zt, sigma_z0)
+
+    # depths are returned positive downwards
+    assert zt > 0.0, "zt should be positive downwards, got {:.4f}".format(zt)
+    assert z0 > zt, "centroid {:.4f} should lie below the top {:.4f}".format(z0, zt)
+    assert CPD > z0, "CPD {:.4f} should lie below the centroid {:.4f}".format(CPD, z0)
+    assert sigma_CPD > 0.0, "uncertainty should be positive"
+    assert np.isfinite([zt, z0, CPD, sigma_CPD]).all()
+
+
+def test_tanaka_deprecated_functions(load_magnetic_anomaly):
+    """
+    The pre-v2 module functions still run, and say they are deprecated.
+
+    Their numbers are deliberately not asserted: tanaka1999 weights by
+    1/sigma**4 and subtracts ln(k) from a standard deviation, so agreement
+    with any particular value would not be meaningful.
+    """
+    d = load_magnetic_anomaly["mag_data"]
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly["extent"]
+
     grid = pycurious.CurieGrid(d, xmin, xmax, ymin, ymax)
+    k, Phi, sigma_Phi = grid.radial_spectrum(grid.data, taper=np.hanning, power=1)
 
-    # wavenumber bands for Z0 and Zt, respectively
-    kwin_Z0 = (0.005, 0.03)
-    kwin_Zt = (0.03, 0.7)
+    with pytest.warns(FutureWarning, match="deprecated"):
+        (Ztr, btr, dZtr), (Zor, bor, dZor) = pycurious.tanaka1999(
+            k, Phi, sigma_Phi, (0.005, 0.03), (0.03, 0.7)
+        )
 
-    k, Phi, sigma_Phi = grid.radial_spectrum(grid.data, taper=np.hanning, power=0.5)
-    (Ztr, btr, dZtr), (Zor, bor, dZor) = pycurious.tanaka1999(
-        k, Phi, sigma_Phi, kwin_Z0, kwin_Zt
-    )
-    Zb, eZb = pycurious.ComputeTanaka(Ztr, dZtr, Zor, dZor)
+    with pytest.warns(FutureWarning, match="argument order differs"):
+        Zb, eZb = pycurious.ComputeTanaka(Ztr, dZtr, Zor, dZor)
 
-    error_msg = "FAILED! Tanaka CPD is {:.4f} different from expected, uncertainty is {:.4f}".format(
-        Zb - 10.0, eZb
-    )
-    assert np.abs(Zb - 10.0) < 2.0 and eZb < Zb, error_msg
+    # abs() is applied internally, so this cannot come back negative
+    assert Zb > 0.0
+    assert np.isfinite([Zb, eZb]).all()

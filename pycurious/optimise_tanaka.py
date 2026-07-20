@@ -1,17 +1,163 @@
-# -*- coding: utf-8 -*-
-from .grid import CurieGrid
-import numpy as np
-import warnings
-from scipy.optimize import curve_fit
-from multiprocessing import Pool, Process, Queue, cpu_count
+# Copyright 2018-2019 Ben Mather, Robert Delhaye
+#
+# This file is part of PyCurious.
+#
+# PyCurious is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or any later version.
+#
+# PyCurious is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
-try:
-    range = xrange
-except:
-    pass
+"""
+The centroid method of Tanaka *et al.* (1999), with uncertainties.
+
+Tanaka's method assumes a randomly magnetised layer between depths
+\\( Z_t \\) and \\( Z_b \\), for which the radially averaged power spectrum is
+
+$$ \\Phi_{\\Delta T}(|k|) = A e^{-2 |k| Z_t} \\left( 1 - e^{-|k|(Z_b - Z_t)} \\right)^2 $$
+
+Two limits of this expression each give a straight line, fitted over a
+different band of wavenumbers.
+
+At wavelengths short compared with the source thickness the layer looks like a
+half space, and the log amplitude spectrum has slope \\( -Z_t \\):
+
+$$ \\ln \\Phi_{\\Delta T}^{1/2} = \\ln B - |k| Z_t $$
+
+At long wavelengths, writing \\( Z_0 \\) for the centroid depth and
+\\( d \\) for the half thickness, the bracket becomes
+\\( 2 \\sinh(|k| d) \\approx 2 |k| d \\), so dividing through by \\( |k| \\)
+leaves a line of slope \\( -Z_0 \\):
+
+$$ \\ln \\left( \\Phi_{\\Delta T}^{1/2} / |k| \\right) = \\ln D - |k| Z_0 $$
+
+The base of the magnetic source, taken to be the Curie point depth, then
+follows from the two:
+
+$$ Z_b = 2 Z_0 - Z_t $$
+
+## What this module adds
+
+The original method requires the user to pick both bands by eye and read the
+gradients off a plot, yielding a single number with no error bar. Here both
+bands are fitted with `scipy.optimize.curve_fit`, weighted by the measured
+scatter of the spectrum, so the fit covariance propagates into an uncertainty
+on the Curie depth.
+
+## Choosing the bands
+
+There are no default bands, deliberately. Each fit is only valid over the range
+of wavenumbers where its approximation holds, and that depends on the data:
+
+- the \\( Z_t \\) band needs wavelengths shorter than twice the source
+  thickness;
+- the \\( Z_0 \\) band needs \\( |k| d \\ll 1 \\).
+
+Violating the second is easy to do and biases \\( Z_0 \\) low, which is not
+obvious from the plot because the fit still looks straight. Use
+`CurieOptimiseTanaka.check_bands` to test a choice before relying on it.
+
+Bands are given in **rad/km**, the same units `radial_spectrum` returns.
+
+## Fractal magnetisation
+
+Tanaka assumes the magnetisation is spatially random. Real crust is better
+described as fractal, and a fractal source adds a term
+\\( -\\tfrac{1}{2}(\\beta - 1)\\ln|k| \\) to the log amplitude spectrum, which
+biases \\( Z_t \\) high by \\( (\\beta - 1) / 2\\bar{k} \\). Pass `beta` to
+remove it -- see `pycurious.grid.bouligand2009`, which fits \\( \\beta \\)
+directly.
+
+## References
+
+Tanaka, A., Okubo, Y., & Matsubayashi, O. (1999). Curie point depth based on
+spectrum analysis of the magnetic anomaly data in East and Southeast Asia.
+Tectonophysics, 306(3-4), 461-470. doi:10.1016/S0040-1951(99)00072-4
+"""
+
+import warnings
+from multiprocessing import cpu_count
+
+import numpy as np
+from scipy.optimize import curve_fit
+
+from .grid import CurieGrid
+
+
+# How much larger the scatter of the binned mean is than sigma_Phi/sqrt(N),
+# because the FFT cells in an annulus are not independent. A real field has
+# Hermitian symmetry, so about half of them are redundant -- that is the
+# factor of 2 seen with no taper, and it is exact. Tapering correlates
+# neighbouring cells and inflates it further.
+#
+# Measured by Monte Carlo over 150-250 realisations at n = 128, 256 and 512;
+# the factor is stable to about 10% across that range.
+_TAPER_DOF = {
+    None: 2.0,
+    "hanning": 3.3,
+    "hamming": 3.0,
+}
+
+# Hermitian redundancy alone. Conservative (i.e. it understates the
+# uncertainty least badly) for a taper that has not been calibrated.
+_DEFAULT_DOF = 2.0
+
+# A zt band fits the short-wavelength end of the spectrum, so its upper edge
+# sitting this far down the available range means the numbers are much more
+# likely to be cycles/km left over from before bands were given in rad/km.
+# Judged relative to the spectrum rather than absolutely, since the Nyquist
+# wavenumber depends on the grid spacing.
+_CYCLES_PER_KM_SUSPICION = 0.1
+
+
+def _linear_func(x, a, b):
+    """Straight line, fitted to each band."""
+    return a * x + b
+
+
+def _dof_factor(taper, dof_factor=None):
+    """Look up the effective-degrees-of-freedom deflation for a taper."""
+    if dof_factor is not None:
+        return float(dof_factor)
+    if taper is None:
+        return _TAPER_DOF[None]
+    return _TAPER_DOF.get(getattr(taper, "__name__", None), _DEFAULT_DOF)
 
 
 class CurieOptimiseTanaka(CurieGrid):
+    """
+    Extends `pycurious.grid.CurieGrid` with the centroid method of
+    Tanaka *et al.* (1999).
+
+    Two straight lines are fitted to separate bands of the radial amplitude
+    spectrum, giving the top and centroid depths of the magnetic source and,
+    from those, the Curie point depth with an uncertainty.
+
+    Args:
+        grid : 2D array
+            2D array of magnetic data
+        xmin, xmax : float
+            minimum/maximum x bounds of the grid
+        ymin, ymax : float
+            minimum/maximum y bounds of the grid
+        max_processors : int, optional
+            processors to use in `optimise_routine` (default=all)
+
+    Attributes:
+        max_processors : int
+            processors used by the parallel routines
+        (plus all attributes inherited from `pycurious.grid.CurieGrid`)
+
+    Notes:
+        The grid must be projected in eastings/northings (metres), not
+        degrees, since depths are computed in km.
+    """
 
     def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
 
@@ -19,80 +165,310 @@ class CurieOptimiseTanaka(CurieGrid):
 
         self.max_processors = kwargs.pop("max_processors", cpu_count())
 
-    def optimise(self, 
-        window, 
-        xc, 
-        yc, 
-        zt_range=(0.2,0.3), 
-        z0_range=(0,0.1), 
-        taper=np.hanning, 
-        process_subgrid=None):
+    def check_bands(self, k, zt_range, z0_range, thickness=None, verbose=True):
+        """
+        Report whether two fitting bands are usable, before relying on them.
 
-        def linear_func(x, a, b):
-            return a*x + b
+        Both of Tanaka's straight-line approximations hold only over part of
+        the spectrum. A band outside that range still produces a confident
+        looking fit, so this is worth checking explicitly.
 
+        Args:
+            k : 1D array
+                wavenumbers from `radial_spectrum`, in rad/km
+            zt_range : tuple
+                (min, max) wavenumber of the \\( Z_t \\) band, rad/km
+            z0_range : tuple
+                (min, max) wavenumber of the \\( Z_0 \\) band, rad/km
+            thickness : float, optional
+                estimated source thickness in km. Without it the validity of
+                each approximation cannot be assessed, only the point counts.
+            verbose : bool (default=True)
+                print a summary as well as returning it
+
+        Returns:
+            diagnostics : dict
+                `dk`, `n_zt`, `n_z0`, `lambda_zt`, `lambda_z0` and, if
+                `thickness` was given, `kd_max` and `lambda_zt_min_required`
+
+        Usage:
+            >>> k, Phi, sigma_Phi = grid.radial_spectrum(subgrid, power=1)
+            >>> grid.check_bands(k, (0.2, 0.6), (0.0, 0.05), thickness=20.0)
+        """
+        k = np.asarray(k)
+        _warn_if_cycles_per_km(zt_range, k)
+
+        mask_zt = np.logical_and(k >= zt_range[0], k <= zt_range[1])
+        mask_z0 = np.logical_and(k >= z0_range[0], k <= z0_range[1])
+
+        n_zt = int(np.count_nonzero(mask_zt))
+        n_z0 = int(np.count_nonzero(mask_z0))
+        dk = float(np.min(np.diff(k))) if k.size > 1 else np.nan
+
+        diagnostics = {
+            "dk": dk,
+            "n_zt": n_zt,
+            "n_z0": n_z0,
+            "lambda_zt": _wavelength_range(k[mask_zt]),
+            "lambda_z0": _wavelength_range(k[mask_z0]),
+        }
+
+        messages = []
+        for name, count in (("zt_range", n_zt), ("z0_range", n_z0)):
+            if count < 3:
+                messages.append(
+                    "{} holds {} points, need at least 3".format(name, count)
+                )
+            elif count < 8:
+                messages.append(
+                    "{} holds only {} points, so its gradient will be poorly "
+                    "determined. A wider window resolves the spectrum more "
+                    "finely.".format(name, count)
+                )
+
+        if thickness is not None:
+            half = 0.5 * float(thickness)
+            kd_max = float(k[mask_z0].max() * half) if n_z0 else np.nan
+            diagnostics["kd_max"] = kd_max
+            diagnostics["lambda_zt_min_required"] = 2.0 * float(thickness)
+
+            if n_z0 and kd_max > 1.0:
+                messages.append(
+                    "z0_range reaches |k|d = {:.2f}. The centroid fit assumes "
+                    "|k|d << 1, and exceeding it biases z0 low -- at |k|d = 3 "
+                    "the bias is several km. Lower the upper edge of z0_range, "
+                    "or use a wider window so there are enough points below "
+                    "it.".format(kd_max)
+                )
+            if n_zt and diagnostics["lambda_zt"][1] > 2.0 * thickness:
+                messages.append(
+                    "zt_range reaches a wavelength of {:.1f} km, longer than "
+                    "twice the source thickness ({:.1f} km). The half-space "
+                    "approximation does not hold there.".format(
+                        diagnostics["lambda_zt"][1], 2.0 * thickness
+                    )
+                )
+
+        if verbose:
+            print("spectral resolution dk = {:.4f} rad/km".format(dk))
+            print(
+                "zt band: {} points, wavelengths {:.1f}-{:.1f} km".format(
+                    n_zt, *diagnostics["lambda_zt"]
+                )
+            )
+            print(
+                "z0 band: {} points, wavelengths {:.1f}-{:.1f} km".format(
+                    n_z0, *diagnostics["lambda_z0"]
+                )
+            )
+            if thickness is not None:
+                print("z0 band reaches |k|d = {:.2f} (want << 1)".format(kd_max))
+            for message in messages:
+                print("WARNING: {}".format(message))
+            if not messages:
+                print("both bands look usable")
+
+        for message in messages:
+            warnings.warn(message, UserWarning, stacklevel=2)
+
+        return diagnostics
+
+    def _fit_band(self, k, Phi, sigma, band, absolute_sigma=True):
+        """
+        Fit a straight line over one band and return the depth it implies.
+
+        Returns `(depth, intercept, depth_stdev)`, where `depth` is the
+        negated gradient and so is positive downwards.
+        """
+        mask = np.logical_and(k >= band[0], k <= band[1])
+        mask &= np.isfinite(Phi) & np.isfinite(sigma) & (sigma > 0.0)
+
+        n = int(np.count_nonzero(mask))
+        if n < 3:
+            raise ValueError(
+                "only {} usable points in the band {}-{} rad/km, need at least "
+                "3. Widen the band, or use a larger window to resolve the "
+                "spectrum more finely.".format(n, band[0], band[1])
+            )
+
+        (gradient, intercept), covariance = curve_fit(
+            _linear_func,
+            k[mask],
+            Phi[mask],
+            sigma=sigma[mask],
+            absolute_sigma=absolute_sigma,
+        )
+
+        return -gradient, intercept, np.sqrt(np.diag(covariance))[0]
+
+    def _spectrum(self, window, xc, yc, taper, beta, process_subgrid, dof_factor,
+                  **kwargs):
+        """
+        Radial amplitude spectrum of one window, prepared for both fits.
+
+        Returns `(k, Phi, Phi_n, sigma)` where `Phi` is the log amplitude
+        spectrum, `Phi_n` is that divided by `|k|`, and `sigma` is the
+        uncertainty of the binned mean -- shared by both, since `ln|k|` is
+        deterministic and so does not alter it.
+        """
         if process_subgrid is None:
             # dummy function
             def process_subgrid(subgrid):
                 return subgrid
 
-        # get subgrid
         subgrid = self.subgrid(window, xc, yc)
         subgrid = process_subgrid(subgrid)
 
-        # calcualte spectra
-        k, Phi, sigma_Phi = self.radial_spectrum(subgrid, taper=taper, power=1)
-        Phi_n = np.log(np.exp(Phi)/k)
-        sigma_Phi_n = np.log(np.exp(sigma_Phi)/k)
+        # power=1 gives ln of the amplitude spectrum, Tanaka's ln(Phi^1/2)
+        kwargs.pop("return_counts", None)
+        k, Phi, sigma_Phi, counts = self.radial_spectrum(
+            subgrid, taper=taper, power=1, return_counts=True, **kwargs
+        )
 
-        z0_min, z0_max = z0_range
-        zt_min, zt_max = zt_range
+        if beta is not None:
+            # remove the fractal contribution -0.5*(beta-1)*ln|k|, matching the
+            # parameterisation of pycurious.grid.bouligand2009
+            Phi = Phi + 0.5 * (beta - 1.0) * np.log(k)
 
-        # divide everything by 2 pi
-        k_new = k/(2*np.pi)
-        Phi_new = Phi/(2*np.pi)
-        Phi_n_new = Phi_n/(2*np.pi)
+        # Phi is the mean over each annulus, so its uncertainty is the standard
+        # error, deflated because the cells are not independent
+        sigma = sigma_Phi / np.sqrt(counts / _dof_factor(taper, dof_factor))
 
-        sigma_Phi_new = sigma_Phi/(2*np.pi)
-        sigma_Phi_n_new = sigma_Phi_n/(2*np.pi)
+        # ln|k| is deterministic, so subtracting it leaves sigma untouched
+        Phi_n = Phi - np.log(k)
 
-        # mask zt range
-        mask_zt = np.logical_and(k_new >= zt_min, k_new <= zt_max)
-        k_zt = k_new[mask_zt]
-        Phi_zt = Phi_new[mask_zt]
-        sigma_Phi_zt = sigma_Phi_new[mask_zt]
+        return k, Phi, Phi_n, sigma
 
-        # mask z0 range
-        mask_z0 = np.logical_and(k_new >= z0_min, k_new <= z0_max)
-        k_z0 = k_new[mask_z0]
-        Phi_z0 = Phi_n_new[mask_z0] # weighted
-        sigma_Phi_z0 = sigma_Phi_n_new[mask_z0]
-
-        if np.count_nonzero(mask_zt) < 3:
-            raise ValueError("Not enough points inside zt_range, increase the range")
-        elif np.count_nonzero(mask_z0) < 3:
-            raise ValueError("Not enough points inside z0_range, increase the range") 
-
-        ## calcualte linear regression and return the residual (sum of squared errors (SSE))
-        (zt_slope, zt_intercept), zt_cov = curve_fit(linear_func, k_zt, Phi_zt, sigma=sigma_Phi_zt, absolute_sigma=True)
-        (z0_slope, z0_intercept), z0_cov = curve_fit(linear_func, k_z0, Phi_z0, sigma=sigma_Phi_z0, absolute_sigma=True)
-
-        # standard deviation is the square root of the covariance matrix
-        zt_slope_stdev = np.sqrt(np.diag(zt_cov))[0]
-        z0_slope_stdev = np.sqrt(np.diag(z0_cov))[0]
-
-        return (zt_slope, z0_slope, zt_intercept, z0_intercept, zt_slope_stdev, z0_slope_stdev)
-
-    def optimise_routine(self,
-        window, 
-        xc_list, 
-        yc_list, 
-        zt_range=(0.2,0.3), 
-        z0_range=(0,0.1), 
-        taper=np.hanning, 
+    def optimise(
+        self,
+        window,
+        xc,
+        yc,
+        zt_range,
+        z0_range,
+        taper=np.hanning,
+        beta=None,
         process_subgrid=None,
-        **kwargs):
+        absolute_sigma=True,
+        dof_factor=None,
+        **kwargs
+    ):
+        """
+        Estimate the top and centroid depths of the magnetic source for one
+        centroid, with their uncertainties.
 
+        Args:
+            window : float
+                size of the window in metres
+            xc, yc : float
+                centroid of the window
+            zt_range : tuple
+                (min, max) wavenumber in **rad/km** over which to fit
+                \\( Z_t \\). Should cover wavelengths shorter than twice the
+                source thickness.
+            z0_range : tuple
+                (min, max) wavenumber in **rad/km** over which to fit
+                \\( Z_0 \\). Must satisfy \\( |k| d \\ll 1 \\) -- check with
+                `check_bands`.
+            taper : function (default=np.hanning)
+                taper function, or None for no taper
+            beta : float, optional
+                fractal parameter of the magnetisation. If given, its
+                contribution is removed before fitting. Leave unset for the
+                method exactly as Tanaka published it; `beta=1` is equivalent.
+            process_subgrid : function, optional
+                applied to the subgrid before the spectrum is computed
+            absolute_sigma : bool (default=True)
+                treat the spectral uncertainties as absolute, so the reported
+                errors carry their units. Set False to rescale the covariance
+                by the reduced chi-squared instead.
+            dof_factor : float, optional
+                override the effective-degrees-of-freedom deflation applied to
+                the spectral uncertainties (see Notes)
+            kwargs : keyword arguments
+                passed to `radial_spectrum`
+
+        Returns:
+            zt : float
+                depth to the top of the magnetic source, km
+            z0 : float
+                centroid depth of the magnetic source, km
+            zt_intercept : float
+                intercept of the \\( Z_t \\) fit
+            z0_intercept : float
+                intercept of the \\( Z_0 \\) fit
+            sigma_zt : float
+                standard deviation of `zt`
+            sigma_z0 : float
+                standard deviation of `z0`
+
+        Usage:
+            >>> zt, z0, zt_i, z0_i, sigma_zt, sigma_z0 = grid.optimise(
+            ...     200e3, xc, yc, (0.2, 0.6), (0.0, 0.05))
+            >>> CPD, sigma_CPD = grid.calculate_CPD(
+            ...     zt, z0, sigma_zt=sigma_zt, sigma_z0=sigma_z0)
+
+        Notes:
+            Depths are returned positive downwards, i.e. the negated gradient
+            of each fit.
+
+            The reported uncertainties describe the scatter of the spectrum
+            only. They do not include the systematic error from the choice of
+            band, which is usually larger -- see `sensitivity`.
+
+            `radial_spectrum` returns the scatter of the FFT cells within each
+            annulus, whereas the fit needs the uncertainty of the annulus
+            mean. That is the standard error, except that the cells are not
+            independent: Hermitian symmetry makes about half of them
+            redundant, and tapering correlates neighbours. The correction is
+            calibrated per taper; `dof_factor` overrides it.
+        """
+        k, Phi, Phi_n, sigma = self._spectrum(
+            window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs
+        )
+
+        _warn_if_cycles_per_km(zt_range, k)
+
+        zt, zt_intercept, sigma_zt = self._fit_band(
+            k, Phi, sigma, zt_range, absolute_sigma
+        )
+        z0, z0_intercept, sigma_z0 = self._fit_band(
+            k, Phi_n, sigma, z0_range, absolute_sigma
+        )
+
+        return (zt, z0, zt_intercept, z0_intercept, sigma_zt, sigma_z0)
+
+    def optimise_routine(
+        self,
+        window,
+        xc_list,
+        yc_list,
+        zt_range,
+        z0_range,
+        taper=np.hanning,
+        beta=None,
+        process_subgrid=None,
+        absolute_sigma=True,
+        dof_factor=None,
+        **kwargs
+    ):
+        """
+        Iterate `optimise` over a list of centroids, in parallel.
+
+        Takes the same arguments as `optimise`, with lists of centroids in
+        place of a single one. See
+        `pycurious.parallel.CurieParallel.parallelise_routine` for the
+        `on_error` and `seed` keywords.
+
+        Returns:
+            zt, z0, zt_intercept, z0_intercept, sigma_zt, sigma_z0 :
+                1D arrays, one entry per centroid
+
+        Usage:
+            >>> xc_list, yc_list = grid.create_centroid_list(window, 10e3, 10e3)
+            >>> zt, z0, zt_i, z0_i, sigma_zt, sigma_z0 = grid.optimise_routine(
+            ...     window, xc_list, yc_list, (0.2, 0.6), (0.0, 0.05))
+        """
         return self.parallelise_routine(
             window,
             xc_list,
@@ -101,17 +477,133 @@ class CurieOptimiseTanaka(CurieGrid):
             zt_range,
             z0_range,
             taper,
+            beta,
             process_subgrid,
+            absolute_sigma,
+            dof_factor,
             **kwargs
         )
 
+    def sensitivity(
+        self,
+        window,
+        xc,
+        yc,
+        nsim,
+        zt_range,
+        z0_range,
+        taper=np.hanning,
+        beta=None,
+        band_scale=0.1,
+        process_subgrid=None,
+        absolute_sigma=True,
+        dof_factor=None,
+        seed=None,
+        **kwargs
+    ):
+        """
+        Sample the uncertainty of the Curie depth by perturbing both the
+        spectrum and the fitting bands.
+
+        The fit covariance alone understates the uncertainty, because where
+        the band edges are placed usually matters more than the scatter of the
+        spectrum. Each simulation therefore redraws the spectrum within its
+        uncertainty *and* jitters both band edges.
+
+        Args:
+            window : float
+                size of the window in metres
+            xc, yc : float
+                centroid of the window
+            nsim : int
+                number of simulations
+            zt_range, z0_range : tuple
+                as `optimise`, in rad/km. These are the centres about which
+                the band edges are jittered.
+            band_scale : float (default=0.1)
+                standard deviation of the jitter applied to each band edge, as
+                a fraction of that band's width. Set to 0 to perturb only the
+                spectrum, which recovers the analytic covariance.
+            seed : int, optional
+                seed for reproducibility
+            (remaining arguments as `optimise`)
+
+        Returns:
+            zt : 1D array shape (nsim,)
+                sampled top depths
+            z0 : 1D array shape (nsim,)
+                sampled centroid depths
+            CPD : 1D array shape (nsim,)
+                sampled Curie point depths
+
+        Usage:
+            >>> zt, z0, CPD = grid.sensitivity(
+            ...     200e3, xc, yc, 500, (0.2, 0.6), (0.0, 0.05))
+            >>> print(CPD.mean(), CPD.std())
+
+        Notes:
+            This samples the statistical uncertainty and the sensitivity to
+            band placement. It does not capture the systematic error from
+            fitting outside the range where each approximation holds, nor from
+            unmodelled fractal magnetisation -- both bias the two fits
+            coherently rather than scattering them. Use `check_bands` and
+            `beta` for those.
+        """
+        rng = np.random.default_rng(seed)
+
+        # the spectrum is computed once and resampled, as in
+        # CurieOptimiseBouligand.sensitivity
+        k, Phi, Phi_n, sigma = self._spectrum(
+            window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs
+        )
+
+        _warn_if_cycles_per_km(zt_range, k)
+
+        zt_width = zt_range[1] - zt_range[0]
+        z0_width = z0_range[1] - z0_range[0]
+
+        zt_samples = np.empty(nsim)
+        z0_samples = np.empty(nsim)
+
+        i = 0
+        attempts = 0
+        max_attempts = 100 * nsim
+        while i < nsim:
+            attempts += 1
+            if attempts > max_attempts:
+                raise RuntimeError(
+                    "only {} of {} simulations produced a usable fit. The "
+                    "bands are probably too narrow to survive jittering -- "
+                    "widen them or lower band_scale.".format(i, nsim)
+                )
+
+            rPhi = rng.normal(Phi, sigma)
+            rPhi_n = rPhi - np.log(k)
+
+            zt_band = _jitter(zt_range, band_scale * zt_width, rng)
+            z0_band = _jitter(z0_range, band_scale * z0_width, rng)
+
+            try:
+                zt, _, _ = self._fit_band(k, rPhi, sigma, zt_band, absolute_sigma)
+                z0, _, _ = self._fit_band(k, rPhi_n, sigma, z0_band, absolute_sigma)
+            except (ValueError, RuntimeError):
+                # a jittered band can fall off the end of the spectrum
+                continue
+
+            zt_samples[i] = zt
+            z0_samples[i] = z0
+            i += 1
+
+        CPD, _ = self.calculate_CPD(zt_samples, z0_samples)
+        return [zt_samples, z0_samples, CPD]
+
     def calculate_CPD(self, zt, z0, sigma_zt=0.0, sigma_z0=0.0):
         """
-        Compute the Curie depth from the results of tanaka1999
+        Compute the Curie depth from the results of `optimise`.
 
         Args:
             zt : float / 1D array
-                top of the magnetic source
+                depth to the top of the magnetic source
             z0 : float / 1D array
                 centroid depth of the magnetic source
             sigma_zt : float / 1D array
@@ -121,10 +613,65 @@ class CurieOptimiseTanaka(CurieGrid):
 
         Returns:
             CPD : float / 1D array
-                estimated Curie point depth at bottom of magnetic source
+                estimated Curie point depth at the base of the magnetic source
             CPD_stdev : float / 1D array
-                standard deviation
+                standard deviation of `CPD`
+
+        Notes:
+            \\( Z_b = 2 Z_0 - Z_t \\), so the uncertainties combine as
+            \\( \\sqrt{\\sigma_{Z_t}^2 + 4\\sigma_{Z_0}^2} \\). This assumes
+            the two fits are independent, which holds well enough in practice
+            -- they use disjoint bands, and the measured correlation between
+            them is about 0.05.
+
+            `zt` and `z0` are expected positive downwards, as returned by
+            `optimise`.
         """
-        CPD = 2.0*np.abs(z0) - np.abs(zt)
-        CPD_stdev = np.sqrt(sigma_zt**2 + (sigma_z0*2)**2)
+        CPD = 2.0 * z0 - zt
+        CPD_stdev = np.sqrt(np.asarray(sigma_zt) ** 2 + (2.0 * np.asarray(sigma_z0)) ** 2)
         return (CPD, CPD_stdev)
+
+
+def _jitter(band, scale, rng):
+    """Perturb both edges of a band, keeping it ordered and non-negative."""
+    lo, hi = rng.normal(band[0], scale), rng.normal(band[1], scale)
+    lo, hi = min(lo, hi), max(lo, hi)
+    return (max(0.0, lo), hi)
+
+
+def _wavelength_range(k):
+    """Wavelengths spanned by a set of wavenumbers, shortest first."""
+    if k.size == 0:
+        return (np.nan, np.nan)
+    kmax = k.max()
+    kmin = k[k > 0].min() if np.any(k > 0) else np.nan
+    return (2.0 * np.pi / kmax, 2.0 * np.pi / kmin if kmin == kmin else np.inf)
+
+
+def _warn_if_cycles_per_km(zt_range, k):
+    """
+    Catch bands left over from when they were specified in cycles/km.
+
+    Such a call still runs, and at a large enough window returns a plausible
+    looking number rather than raising, so it is worth flagging. A cycles/km
+    value is 2*pi too small, which drags a zt band -- which should sit at the
+    short-wavelength end -- down to the bottom of the spectrum.
+    """
+    kmax = np.max(k)
+    upper = np.max(zt_range)
+
+    # only complain if reading them as rad/km puts the band implausibly low
+    # *and* the cycles/km reading would land somewhere sensible
+    if upper < _CYCLES_PER_KM_SUSPICION * kmax and upper * 2.0 * np.pi <= kmax:
+        warnings.warn(
+            "zt_range={} may be in cycles/km. Bands are specified in rad/km, "
+            "and this one covers only the lowest {:.0%} of the spectrum, which "
+            "is unusual for a zt fit. Multiplying by 2*pi would give "
+            "{}.".format(
+                tuple(zt_range),
+                upper / kmax,
+                tuple(np.round(np.asarray(zt_range) * 2.0 * np.pi, 3)),
+            ),
+            UserWarning,
+            stacklevel=3,
+        )
