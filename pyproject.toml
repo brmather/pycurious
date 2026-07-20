@@ -41,8 +41,13 @@ Repository = "https://github.com/brmather/pycurious"
 [project.optional-dependencies]
 # pycurious.download.download_file and friends
 download = ["requests"]
-# pycurious.mapping: projections, netCDF and GeoTIFF I/O
+# pycurious.mapping: projections and netCDF I/O
 mapping = ["pyproj", "netCDF4"]
+# pycurious.mapping.export_geotiff / import_geotiff. Kept out of `mapping`
+# because the GDAL bindings need a matching libgdal already on the system,
+# so requiring them would make `pip install pycurious[mapping]` fail for
+# most users. Conda installs this more easily than pip.
+geotiff = ["gdal"]
 # running the example notebooks
 examples = ["matplotlib", "jupyter", "cartopy", "pyproj"]
 test = ["pytest"]
