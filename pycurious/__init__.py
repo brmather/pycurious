@@ -38,29 +38,32 @@ along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
 ### Dependencies
 
-You will need **Python 2.7 or 3.5+**.
+You will need **Python 3.9 or newer**.
 Also, the following packages are required:
 
 - [`numpy`](http://numpy.org)
 - [`scipy`](https://scipy.org)
-- [`cython`](https://cython.org/)
 
 __Optional dependencies__ for mapping module and running the Notebooks:
 
 - [`matplotlib`](https://matplotlib.org/)
 - [`pyproj`](https://github.com/jswhit/pyproj)
 - [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/)
+- [`netCDF4`](https://unidata.github.io/netcdf4-python/)
+- [`requests`](https://requests.readthedocs.io/)
 
 ### Installing using pip
 
 You can install `pycurious` using the
-[`pip package manager`](https://pypi.org/project/pip/) with either
-version of Python:
+[`pip package manager`](https://pypi.org/project/pip/):
 
->>> python2 -m pip install pycurious
 >>> python3 -m pip install pycurious
 
-All the dependencies will be automatically installed by `pip`.
+All the required dependencies will be automatically installed by `pip`.
+The optional dependencies are grouped into the `download`, `mapping` and
+`examples` extras, e.g.
+
+>>> python3 -m pip install pycurious[mapping]
 
 ### Installing using Docker
 
@@ -127,7 +130,7 @@ relevant details.
 We use [`pytest`](https://pypi.org/project/pytest/) for the unit testing
 framework in `pycurious`. In the source directory this means running:
 
->>> python setup.py test
+>>> python -m pytest tests/
 
 The existing tests should be passing before you start coding (help us out with
 an issue if that is not the case !) and when you have finished. Any new

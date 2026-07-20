@@ -47,6 +47,38 @@ except:
     pass
 
 
+def _prior_loc_scale(pdf):
+    """
+    Return `[loc, scale]` of a frozen `scipy.stats` distribution, however it was
+    constructed.
+
+    `objective_function` takes the prior as `(x0, sigma_x0)`, so a prior is only
+    ever stored as its centre and width. Reading `pdf.args` alone is not enough:
+    a distribution built with keywords -- `stats.norm(loc=p, scale=s)` -- has an
+    empty `args` and carries the values in `kwds` instead.
+    """
+
+    loc = pdf.kwds.get("loc")
+    scale = pdf.kwds.get("scale")
+
+    if loc is None or scale is None:
+        # scipy orders positional arguments as (*shapes, loc, scale)
+        nshapes = len(pdf.dist.shapes.split(",")) if pdf.dist.shapes else 0
+        positional = pdf.args[nshapes:]
+        if loc is None and len(positional) > 0:
+            loc = positional[0]
+        if scale is None and len(positional) > 1:
+            scale = positional[1]
+
+    # fall back to the scipy defaults for a standard distribution
+    if loc is None:
+        loc = 0.0
+    if scale is None:
+        scale = 1.0
+
+    return [loc, scale]
+
+
 class CurieOptimiseBouligand(CurieGrid):
     """
     Extends the `pycurious.grid.CurieGrid` class to include
@@ -134,17 +166,17 @@ class CurieOptimiseBouligand(CurieGrid):
         for key in kwargs:
             if key in self.prior:
                 prior = kwargs[key]
-                if type(prior) == tuple:
+                if isinstance(prior, tuple):
                     p, sigma_p = prior
                     pdf = stats.norm(p, sigma_p)
-                elif type(prior) == stats._distn_infrastructure.rv_frozen:
+                elif isinstance(prior, stats.distributions.rv_frozen):
                     pdf = prior
                 else:
                     raise ValueError("Use a distribution from scipy.stats module")
 
                 # add prior PDF to dictionary
                 self.prior_pdf[key] = pdf
-                self.prior[key] = list(pdf.args)
+                self.prior[key] = _prior_loc_scale(pdf)
 
             else:
                 raise ValueError("prior must be one of {}".format(self.prior.keys()))
@@ -578,7 +610,7 @@ class CurieOptimiseBouligand(CurieGrid):
         # restore priors
         for key in use_keys:
             prior_pdf = self.prior_pdf[key]
-            self.prior[key] = list(prior_pdf.args)
+            self.prior[key] = _prior_loc_scale(prior_pdf)
 
         return list(samples.T)
 

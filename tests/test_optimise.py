@@ -14,7 +14,7 @@ def test_optimisation(load_magnetic_anomaly):
     xmin, xmax, ymin, ymax = load_magnetic_anomaly["extent"]
     max_window = load_magnetic_anomaly["max_window"]
 
-    grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
+    grid = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
     beta, zt, dz, C = grid.optimise(max_window, xc, yc, taper=np.hanning)
 
     x_opt = np.array([beta, zt, dz])
@@ -49,7 +49,7 @@ def test_priors(load_magnetic_anomaly):
     xmin, xmax, ymin, ymax = load_magnetic_anomaly["extent"]
     max_window = load_magnetic_anomaly["max_window"]
 
-    grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
+    grid = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
     beta0, zt0, dz0, C0 = grid.optimise(max_window, xc, yc)
 
     grid.add_prior(beta=(1.0, 0.1))
@@ -178,7 +178,7 @@ def test_valid_numbers(load_magnetic_anomaly):
 
     sigma_S = np.ones_like(S)
 
-    grid = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
+    grid = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
 
     beta0 = 3.0
     zt0 = 1.0

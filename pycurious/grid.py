@@ -29,7 +29,7 @@ of the radial power spectrum, \\( \\Phi \\) according to Bouligand *et al.* (200
 Maus and Dimri (1995), and the decomposition of \\( \\Phi \\) from the magnetic
 anomaly according to Tanaka *et al.* (1999):
 
-- `bouligand2009`: analytic solution used in `pycurious.optimise.CurieOptimise`
+- `bouligand2009`: analytic solution used in `pycurious.optimise_bouligand.CurieOptimiseBouligand`
 - `maus1995`: simplified version of `bouligand2009` without higher order integration.
 - `tanaka1999`: to be used in conjunction with `ComputeTanaka`
 
@@ -220,11 +220,7 @@ class CurieGrid(CurieParallel):
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """
-        Template for tapering the power spectrum used in:
-
-        - `radial_spectrum`
-        - `radial_spectrum_log`
-        - `azimuthal_spectrum`
+        Template for tapering the power spectrum used in `radial_spectrum`.
         """
         data = subgrid
         nr, nc = data.shape
@@ -250,10 +246,8 @@ class CurieGrid(CurieParallel):
 
     def _FFT_spectrum(self, subgrid, vtaper, dk, kbins, const):
         """
-        Template for computing the (fast) Fourier transform used in:
-
-        - `radial_spectrum`
-        - `radial_spectrum_log`
+        Template for computing the (fast) Fourier transform used in
+        `radial_spectrum`.
 
         A constant `const` should be applied to the FFT of the magnetic anomaly
         to convert `S` and `sigma` to specific units for further analysis.

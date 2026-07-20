@@ -386,12 +386,12 @@ def export_netcdf4(file_path, array, extent):
     with netCDF4.Dataset(str(file_path), 'w') as cdf:
         cdf.createDimension('x', nx)
         cdf.createDimension('y', ny)
-        cdf_x = cdf.createVariable('x', np.float, ('x',), zlib=True)
-        cdf_y = cdf.createVariable('y', np.float, ('y',), zlib=True)
+        cdf_x = cdf.createVariable('x', np.float64, ('x',), zlib=True)
+        cdf_y = cdf.createVariable('y', np.float64, ('y',), zlib=True)
         cdf_x[:] = np.linspace(xmin, xmax, nx)
         cdf_y[:] = np.linspace(ymin, ymax, ny)
 
-        cdf_data = cdf.createVariable('z', np.float, ('y','x'), zlib=True)
+        cdf_data = cdf.createVariable('z', np.float64, ('y','x'), zlib=True)
         cdf_data[:,:]  = array
 
 

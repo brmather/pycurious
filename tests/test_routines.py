@@ -33,19 +33,18 @@ def test_CurieGrid_routines(load_magnetic_anomaly):
     assert time_routine(cpd.create_centroid_list, 0.1 * max_window)
     assert time_routine(cpd.remove_trend_linear, cpd.data)
     assert time_routine(cpd.radial_spectrum, cpd.data)
-    assert time_routine(cpd.azimuthal_spectrum, cpd.data)
     assert time_routine(cpd.reduce_to_pole, cpd.data, 30.0, 30.0)
     assert time_routine(cpd.upward_continuation, cpd.data, 10e3)
 
 
-def test_CurieOptimise_routines(load_magnetic_anomaly):
+def test_CurieOptimiseBouligand_routines(load_magnetic_anomaly):
     d = load_magnetic_anomaly["mag_data"]
     xc = load_magnetic_anomaly["xc"]
     yc = load_magnetic_anomaly["yc"]
     xmin, xmax, ymin, ymax = load_magnetic_anomaly["extent"]
     max_window = load_magnetic_anomaly["max_window"]
 
-    cpd = pycurious.CurieOptimise(d, xmin, xmax, ymin, ymax)
+    cpd = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
     xc_list, yc_list = cpd.create_centroid_list(
         0.5 * max_window, spacingX=5e3, spacingY=5e3
     )
