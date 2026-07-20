@@ -41,7 +41,7 @@ RUN apk add --update --no-cache \
 RUN ln -s /usr/include/locale.h /usr/include/xlocale.h
 RUN python3 -m pip install --no-cache-dir --upgrade pip && \
     python3 -m pip install --no-cache-dir --upgrade --force-reinstall numpy scipy && \
-    python3 -m pip install --no-cache-dir setuptools wheel Cython && \
+    python3 -m pip install --no-cache-dir setuptools wheel && \
     python3 -m pip install --no-cache-dir \
     packaging \
     gdal \

@@ -22,7 +22,7 @@ matrix:
       language: generic
 
 install:
-  - python3 -m pip install Cython numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
+  - python3 -m pip install numpy scipy pytest git+https://github.com/lmoresi/pdoc.git
   - python3 -m pip install -e .
 
 script:

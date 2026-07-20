@@ -1,8 +1,10 @@
-pycurious-src/pycurious/Examples/Notebooks/Bouligand/.ipynb_checkpoints/*
-pycurious-src/pycurious/Examples/Notebooks/Tanaka/.ipynb_checkpoints/*
-pycurious-src/pycurious/Examples/.ipynb_checkpoints/*
+.ipynb_checkpoints/
 *.pyc
+__pycache__/
 .eggs
 build
+dist
 *.egg-info
 *.so
+.pytest_cache/
+.DS_Store
