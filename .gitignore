@@ -1,10 +1,29 @@
-.ipynb_checkpoints/
+# Python
 *.pyc
 __pycache__/
+*.so
 .eggs
+*.egg-info
 build
 dist
-*.egg-info
-*.so
 .pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
 .DS_Store
+
+# Datasets fetched by pycurious.download at notebook runtime. These are
+# hundreds of megabytes and are reproducible from their URL and checksum, so
+# they are cached locally rather than committed. Everything in Examples/data
+# is ignored except the small synthetic anomaly the tests rely on.
+Examples/data/*
+!Examples/data/test_mag_data.txt
+
+# Rasters and grids written by the notebooks themselves, e.g. the GeoTIFF
+# exported at the end of Ex5.
+*.tif
+*.tiff
+*.npz
+!tests/*.npz
