@@ -177,11 +177,32 @@ these, with LaTeX escaped as `\\( ... \\)`). Google-style docstrings with
 docstrings are measured — if you change the method, re-measure rather than
 adjusting the prose.
 
+## Packaging
+
+`MANIFEST.in` lists the eleven notebooks individually rather than globbing them.
+It does not consult `.gitignore`, so a `recursive-include` shipped whatever was
+in the working tree — an sdist once carried 35 notebooks, 20 of them untracked.
+Adding a notebook means adding a line there.
+
+To check what an sdist would contain:
+
+```bash
+rm -rf pycurious.egg-info          # stale SOURCES.txt is reused otherwise,
+python -m build --sdist            # silently reinstating files you excluded
+tar tzf dist/pycurious-*.tar.gz | grep ipynb
+```
+
+The `rm` matters. `SOURCES.txt` is regenerated from the *old* manifest if it is
+left in place, which makes a correct `MANIFEST.in` look broken.
+
 ## Known defects
 
-- `MANIFEST.in` uses `recursive-include Examples *.ipynb`, which ignores
-  `.gitignore`, so an sdist built from a working tree sweeps up untracked
-  notebooks.
+- **`install_documentation()` fails for an installed package.** It is advertised
+  in the README and the package docstring, but `[tool.setuptools] packages =
+  ["pycurious"]` installs only the package directory, and `Examples/` sits at the
+  repository root. `_find_examples` looks inside the package and one level above
+  it, and in a wheel neither exists. Works from a source checkout only.
+  Pre-dates the v2 restructure that moved `Examples/` out of the package.
 
 `docs/bouligand-findings.md` records seven findings from the Tanaka work and how
 each was resolved — including two whose prescribed fix turned out to be wrong on

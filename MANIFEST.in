@@ -7,4 +7,26 @@ include pyproject.toml
 recursive-include pycurious *.py
 include tests/*.py
 include Examples/data/test_mag_data.txt
-recursive-include Examples *.ipynb
+
+# Notebooks are listed one by one rather than globbed. MANIFEST.in does not
+# consult .gitignore, so `recursive-include Examples *.ipynb` shipped whatever
+# happened to be sitting in the working tree: Jupyter checkpoints, scratch
+# analyses, collaborator data. Adding a notebook here is a deliberate act.
+include Examples/0-StartHere.ipynb
+
+include Examples/Notebooks/Bouligand/Ex1-Plot-power-spectrum.ipynb
+include Examples/Notebooks/Bouligand/Ex2-Compute-Curie-depth.ipynb
+include Examples/Notebooks/Bouligand/Ex3-Posing-the-inverse-problem.ipynb
+include Examples/Notebooks/Bouligand/Ex4-Spatial-variation-of-Curie-depth.ipynb
+include Examples/Notebooks/Bouligand/Ex5-Mapping-Curie-depth-EMAG2.ipynb
+
+include Examples/Notebooks/Tanaka/Ex1-Plot-amplitude-spectrum.ipynb
+include Examples/Notebooks/Tanaka/Ex2-Compute-Curie-depth.ipynb
+include Examples/Notebooks/Tanaka/Ex3-Parameter-exploration.ipynb
+include Examples/Notebooks/Tanaka/Ex4-Spatial-variation-of-Curie-depth.ipynb
+include Examples/Notebooks/Tanaka/Ex5-Mapping-Curie-depth-EMAG2.ipynb
+
+# Belt and braces for the globs above, and for anything setuptools pulls in of
+# its own accord.
+global-exclude *-checkpoint.ipynb
+global-exclude .DS_Store
