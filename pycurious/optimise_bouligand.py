@@ -41,15 +41,27 @@ from scipy.optimize import minimize, brentq
 from scipy import stats
 from multiprocessing import cpu_count
 
-# Stand-in for a residual that came back non-finite, which happens because
-# bouligand2009 overflows cosh for large |k|*dz. One such residual contributes
-# its square to the misfit, so this is a penalty of 1e6 per unusable bin --
-# large enough to dominate any real misfit, small enough that the prior terms
-# added alongside it remain representable. A flat 1e99 would not be: the ULP
-# there is ~2e82, so adding anything to it is a no-op.
+# bouligand2009 evaluates cosh(|k| dz), which overflows a float64 above about
+# |k| dz = 710. `dz` is bounded just inside that, at `_max_thickness`, so the
+# optimiser and the sampler cannot wander into the region where the forward
+# model stops returning a number.
 #
-# The penalty is per bin rather than a single sentinel, so the misfit still
-# falls as the model moves back towards the region where it can be evaluated.
+# This is a numerical guard, not a physical prior, and the distinction matters.
+# A Curie depth on Earth sits in the mid crust, so anything past a few tens of
+# km is already meaningless -- but bounding it *there* would clip the upper
+# tail of a genuinely skewed posterior and pile probability against the wall,
+# which misrepresents the distribution rather than reporting it. The bound is
+# therefore set far beyond any physical value, where it never binds on data
+# that constrain the base at all. A fit that does reach it is not a deep
+# source; it is a window too small to see one, and `_warn_on_bounds` says so.
+_COSH_OVERFLOW = 700.0
+
+# Stand-in for a residual that came back non-finite. Inside the bound above
+# that cannot arise from the forward model, so this is a backstop for anyone
+# calling `residuals` directly rather than something the fit relies on. One
+# such residual contributes its square to the misfit, a penalty of 1e6 per
+# unusable bin: big enough to dominate, small enough that prior terms added
+# alongside it stay representable, which a flat 1e99 would not be.
 _OVERFLOW_RESIDUAL = 1.0e3
 
 # Parameters of bouligand2009, in the order the optimiser sees them.
@@ -71,12 +83,6 @@ _PROFILE_XTOL = 1.0e-3
 # `profile` can also work on the Curie depth, which is not a parameter of the
 # forward model but a sum of two of them.
 _CPD = "CPD"
-
-# bouligand2009 evaluates cosh(|k| dz), which overflows a float64 above about
-# 710. A profile scan is the one place that reaches such depths, so it is
-# capped just inside that -- past it every residual is the overflow penalty and
-# the misfit carries no information anyway.
-_COSH_OVERFLOW = 700.0
 
 
 def _prior_loc_scale(pdf):
@@ -132,7 +138,14 @@ class CurieOptimiseBouligand(CurieGrid):
     
     Attributes:
         bounds : list of tuples
-            lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\)
+            lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\).
+            \\( \\Delta z \\) is capped where the forward model stops
+            evaluating, which depends on the grid spacing and is hundreds of km
+            -- far beyond any Curie depth on Earth, so it never binds on data
+            that constrain the base. Reassign this attribute to impose a
+            tighter one, bearing in mind that a bound near the physical range
+            will truncate the upper tail of a skewed posterior rather than
+            report it.
         prior : dict
             dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
         grid : 2D numpy array
@@ -171,12 +184,25 @@ class CurieOptimiseBouligand(CurieGrid):
         # initialise prior dictionary
         self.reset_priors()
 
-        # lower / upper bounds
-        # [beta, zt, dz, C]
+        # lower / upper bounds for [beta, zt, dz, C]. Only the thickness gets
+        # a ceiling: it is the one the data routinely fail to constrain, and
+        # the one that can therefore run away far enough to stop the forward
+        # model evaluating. beta and zt are pinned by the bulk of the spectrum.
         lb = [0.0, 0.0, 0.0, None]
-        ub = [None] * len(lb)
-        bounds = list(zip(lb, ub))
-        self.bounds = bounds
+        ub = [None, None, self._max_thickness(), None]
+        self.bounds = list(zip(lb, ub))
+
+    def _max_thickness(self):
+        """
+        Largest `dz` this grid can evaluate, in km.
+
+        The radial spectrum reaches the Nyquist wavenumber,
+        \\( \\pi/\\Delta x \\) in rad/km, whatever the window size, so the depth at which
+        `pycurious.grid.bouligand2009` overflows is fixed by the grid spacing
+        alone: 446 km at 2 km spacing, 111 km at 500 m. Both are far beyond any
+        Curie depth on Earth, which is the point -- see `_COSH_OVERFLOW`.
+        """
+        return _COSH_OVERFLOW * (self.dx * 1.0e-3) / np.pi
 
         self.max_processors = kwargs.pop("max_processors", cpu_count())
 
@@ -820,12 +846,11 @@ class CurieOptimiseBouligand(CurieGrid):
 
         lo, hi = centre - 5.0 * width, centre + 12.0 * width
 
-        # depths are positive, and beyond the cosh overflow the misfit is all
-        # penalty and carries no information
-        if target in ("zt", "dz", _CPD):
-            lo = max(lo, 0.0)
-            hi = min(hi, _COSH_OVERFLOW / np.max(args[0]))
-        elif target == "beta":
+        # depths are positive, and the scan must stay inside the range the
+        # forward model can be evaluated over
+        if target in ("dz", _CPD):
+            lo, hi = max(lo, 0.0), min(hi, self._max_thickness())
+        elif target in ("zt", "beta"):
             lo = max(lo, 0.0)
 
         return lo, hi

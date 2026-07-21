@@ -305,12 +305,13 @@ def test_warns_when_a_parameter_hits_a_bound(bouligand):
     """
     grid, xc, yc = bouligand
     grid.reset_priors()
+    original = list(grid.bounds)
     try:
         grid.bounds = [(0.0, None), (0.0, 0.0), (0.0, None), (None, None)]
         with pytest.warns(RuntimeWarning, match="bound"):
             grid.optimise(WINDOW, xc, yc, taper=np.hanning)
     finally:
-        grid.bounds = list(zip([0.0, 0.0, 0.0, None], [None] * 4))
+        grid.bounds = original
 
 
 def test_taper_none_rejects_unknown_keywords(bouligand):
@@ -525,3 +526,39 @@ def test_metropolis_hastings_default_return_shape_is_unchanged(bouligand):
         WINDOW, xc, yc, 60, 10, taper=np.hanning, seed=1, return_diagnostics=True
     )
     assert set(info) == {"acceptance", "burnin_acceptance", "x_scale"}
+
+
+def test_thickness_is_bounded_below_the_overflow(bouligand):
+    """
+    dz is bounded where the forward model stops evaluating, not where physics
+    stops being plausible.
+
+    bouligand2009 overflows around |k|dz = 710, and |k| reaches the Nyquist
+    wavenumber whatever the window, so the ceiling follows from the grid
+    spacing: 446 km at 2 km spacing. That is far past any Curie depth on Earth,
+    which is deliberate -- a bound placed near the physical range would clip
+    the upper tail of a skewed posterior and pile probability against the wall
+    instead of reporting the shape. Reaching this one means the window cannot
+    constrain the base at all.
+    """
+    from pycurious.optimise_bouligand import _COSH_OVERFLOW
+
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+
+    ceiling = grid.bounds[2][1]
+    assert ceiling == pytest.approx(_COSH_OVERFLOW * grid.dx * 1e-3 / np.pi)
+    # far beyond anything physical, so it never binds on usable data
+    assert ceiling > 300.0
+    # the parameters the spectrum does pin down are left free
+    assert grid.bounds[0][1] is None and grid.bounds[1][1] is None
+
+    # the model still evaluates at the bound, which is the whole point
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    assert np.isfinite(grid.min_func([3.0, 1.0, ceiling, 15.0], k, Phi, sigma))
+
+    # and a chain on an under-constrained window stays inside it
+    chain = np.array(
+        grid.metropolis_hastings(300e3, xc, yc, 400, 200, taper=np.hanning, seed=1)
+    )
+    assert chain[2].max() <= ceiling
