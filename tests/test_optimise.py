@@ -7,7 +7,25 @@ from scipy.optimize import minimize
 from conftest import load_magnetic_anomaly
 
 
-def test_optimisation(load_magnetic_anomaly):
+def test_optimisation_smoke(load_magnetic_anomaly):
+    """
+    The optimiser lands in a physically sensible region on the legacy fixture.
+
+    This deliberately asserts no accuracy. `tests/test_mag_data.txt` is 305 km
+    across for a 10 km layer, so it has too few low-wavenumber bins to pin dz
+    down: sweeping the window size and moving the centroid by one window width
+    moves dz over 6.4-11.9 km against a truth of 10.0. A tolerance tight enough
+    to be meaningful would break on any legitimate change, and a tolerance
+    loose enough to pass says nothing. Accuracy is asserted against generated
+    synthetics in tests/test_recovery.py instead.
+
+    Measured here for reference, hanning taper, whole grid as one window:
+
+        beta 2.7688 +/- 0.0985   (truth 3.0)
+        zt   0.3813 +/- 0.0304   (truth 0.305)
+        dz   9.0703 +/- 1.9921   (truth 10.0)
+        C  -17.6561 +/- 0.0551
+    """
     d = load_magnetic_anomaly["mag_data"]
     xc = load_magnetic_anomaly["xc"]
     yc = load_magnetic_anomaly["yc"]
@@ -15,48 +33,25 @@ def test_optimisation(load_magnetic_anomaly):
     max_window = load_magnetic_anomaly["max_window"]
 
     grid = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
-    beta, zt, dz, C = grid.optimise(max_window, xc, yc, taper=np.hanning)
+    beta, zt, dz, C, s_beta, s_zt, s_dz, s_C = grid.optimise(
+        max_window, xc, yc, taper=np.hanning
+    )
 
-    x_opt = np.array([beta, zt, dz])
+    for name, value in [("beta", beta), ("zt", zt), ("dz", dz), ("C", C)]:
+        assert np.isfinite(value), "{} = {} is not finite".format(name, value)
+    for name, value in [("sigma_beta", s_beta), ("sigma_zt", s_zt),
+                        ("sigma_dz", s_dz), ("sigma_C", s_C)]:
+        assert np.isfinite(value) and value > 0.0, "{} = {}".format(name, value)
 
-    # hard-coded parameters used to generate the magnetic anomaly
-    zt0 = 0.305
-    dz0 = 10.0 + zt0
-    beta0 = 3.0
-
-    x0 = np.array([beta0, zt0, dz0])
-
-    # Compare if they are close or not; some parameters should be more similar
-    # than others.
-    #
-    # These tolerances are loose because the four-parameter Bouligand fit is
-    # poorly conditioned on this synthetic. Sweeping the window size and moving
-    # the centroid by one window width gives beta 2.67-2.89, zt 0.34-0.43 and
-    # dz 6.4-11.9 against a truth of 3.0, 0.305 and 10.0, so the spread across
-    # nearby configurations is far larger than the tolerances below.
-    #
-    # The optimiser itself is not at fault: on a synthetic wide enough to
-    # constrain the long wavelengths it recovers beta to +-0.1 and zt to +-0.07
-    # (see tests/test_recovery.py). This fixture is only 305 km across for a
-    # 10 km layer, so it cannot pin dz down.
-    #
-    # This test therefore only demonstrates that the optimiser lands in the
-    # right region. Accuracy is asserted in test_recovery.py instead.
-    tol = np.array([0.4, 0.15, 4.0])
-
-    parameters = ["beta", "zt", "dz"]
-    err_msg = "FAILED! {} = {:.4f} is not within an acceptable tolerance of {}"
-
-    for i in range(x0.size):
-        npt.assert_allclose(
-            x_opt[i],
-            x0[i],
-            atol=tol[i],
-            err_msg=err_msg.format(parameters[i], x_opt[i], tol[i]),
-        )
+    # a magnetic layer with a positive thickness, below the surface, and a
+    # fractal parameter in the range reported for continental crust
+    assert zt >= 0.0
+    assert dz > 0.0
+    assert 1.0 < beta < 5.0
 
 
 def test_priors(load_magnetic_anomaly):
+    """A prior pulls the parameter it constrains towards its centre."""
     d = load_magnetic_anomaly["mag_data"]
     xc = load_magnetic_anomaly["xc"]
     yc = load_magnetic_anomaly["yc"]
@@ -64,14 +59,16 @@ def test_priors(load_magnetic_anomaly):
     max_window = load_magnetic_anomaly["max_window"]
 
     grid = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
-    beta0, zt0, dz0, C0 = grid.optimise(max_window, xc, yc)
+    beta0 = grid.optimise(max_window, xc, yc)[0]
 
     grid.add_prior(beta=(1.0, 0.1))
-    beta1, zt1, dz1, C1 = grid.optimise(max_window, xc, yc)
+    beta1 = grid.optimise(max_window, xc, yc)[0]
 
-    assert abs(beta1 - 1.0) < abs(
-        beta0 - 1.0
-    ), "FAILED! Optimisation with priors failed"
+    assert abs(beta1 - 1.0) < abs(beta0 - 1.0), "the prior did not pull beta"
+    # quantitative, so the test cannot pass on a negligible shift. Measured
+    # 2.7688 -> 2.3295 once the fit is weighted; it was 2.668 -> 1.228 when the
+    # fit was unweighted and the data barely competed with the prior.
+    assert beta0 - beta1 > 0.3, "beta moved only {:.3f}".format(beta0 - beta1)
 
 
 def test_valid_numbers(load_magnetic_anomaly):

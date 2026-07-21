@@ -20,6 +20,8 @@ which can be initialised with a magnetic grid of equal spacing in the x and y di
 It contains methods for the following functionality:
 
 - Decomposition of subgrids for processing square windows of the magnetic anomaly
+- Radially averaged spectra, either raw (`radial_spectrum`) or weighted ready
+  for fitting (`window_spectrum`)
 - Removing linear trends from the magnetic anomaly
 - Upward continuation
 - Reduction to the pole
@@ -45,10 +47,57 @@ import numpy as np
 from scipy.special import gamma, kv
 import warnings
 
-try:
-    range = xrange
-except:
-    pass
+
+# How much larger the scatter of the binned mean is than sigma_Phi/sqrt(N),
+# because the FFT cells in an annulus are not independent. There are two
+# effects, and the deflation is stored as (dof_inf, lost):
+#
+#     dof(N) = dof_inf * N / max(N - lost, 1)
+#
+# `dof_inf` is the asymptotic redundancy. A real field has Hermitian symmetry,
+# so about half of its cells repeat -- the factor of 2 with no taper, which is
+# exact -- and tapering correlates neighbours further.
+#
+# `lost` is a fixed number of cells given up to correlation however many the
+# annulus holds, so it only matters for the innermost bins. It matters a lot
+# there: at N = 8 it costs another factor of 2.6 under np.hanning, and those
+# are the bins a centroid depth leans on hardest.
+#
+# Measured by Monte Carlo over 400 realisations at n = 128, 256 and 512.
+# Both terms are stable to about 6% across that range, and depend on the bin
+# count rather than on the grid size.
+_TAPER_DOF = {
+    None: (2.0, 3.4),
+    "hanning": (3.3, 4.9),
+    "hamming": (3.0, 4.8),
+}
+
+# Hermitian redundancy alone. Conservative (i.e. it understates the
+# uncertainty least badly) for a taper that has not been calibrated, since it
+# is the part that holds exactly whatever the taper does.
+_DEFAULT_DOF = (2.0, 3.4)
+
+
+def _dof_factor(taper, counts=None, dof_factor=None):
+    """
+    Effective-degrees-of-freedom deflation for a taper.
+
+    Returns the asymptotic scalar when `counts` is None, and the per-bin
+    factor otherwise. An explicit `dof_factor` overrides both.
+    """
+    if dof_factor is not None:
+        return float(dof_factor)
+
+    if taper is None:
+        dof_inf, lost = _TAPER_DOF[None]
+    else:
+        dof_inf, lost = _TAPER_DOF.get(getattr(taper, "__name__", None), _DEFAULT_DOF)
+
+    if counts is None:
+        return dof_inf
+
+    counts = np.asarray(counts, dtype=float)
+    return dof_inf * counts / np.maximum(counts - lost, 1.0)
 
 
 class CurieGrid(CurieParallel):
@@ -234,6 +283,16 @@ class CurieGrid(CurieParallel):
 
         # control taper
         if taper is None:
+            # nothing downstream consumes kwargs once there is no taper to pass
+            # them to, so an unrecognised one would be silently ignored rather
+            # than raising as it does when a taper is present
+            if kwargs:
+                raise TypeError(
+                    "unexpected keyword argument(s) {} -- with taper=None there "
+                    "is no taper function to pass them to".format(
+                        ", ".join(repr(key) for key in sorted(kwargs))
+                    )
+                )
             vtaper = 1.0
         else:
             rt = taper(nr, **kwargs)
@@ -377,6 +436,85 @@ class CurieGrid(CurieParallel):
             return k, Phi, sigma_Phi, counts
         return k, Phi, sigma_Phi
 
+    def window_spectrum(
+        self,
+        window,
+        xc,
+        yc,
+        taper=np.hanning,
+        power=2.0,
+        process_subgrid=None,
+        dof_factor=None,
+        **kwargs
+    ):
+        """
+        Radial spectrum of one window, weighted ready for fitting.
+
+        Extracts the subgrid, computes its radial spectrum, and converts the
+        within-annulus scatter into the uncertainty of the annulus *mean*,
+        which is what a fit needs. Both `pycurious.optimise_bouligand` and
+        `pycurious.optimise_tanaka` build on this.
+
+        Args:
+            window : float
+                size of the window in metres
+            xc, yc : float
+                centroid of the window
+            taper : function (default=np.hanning)
+                taper function, or None for no taper
+            power : float
+                raise the FFT of the anomaly to this power -- 2.0 for the log
+                power spectrum that Bouligand *et al.* (2009) fit, 1.0 for the
+                log amplitude spectrum of Tanaka *et al.* (1999)
+            process_subgrid : function, optional
+                applied to the subgrid before the spectrum is computed
+            dof_factor : float, optional
+                override the effective-degrees-of-freedom deflation (see Notes)
+            kwargs : keyword arguments
+                passed to `taper`
+
+        Returns:
+            k : 1D array
+                wavenumber in rad/km
+            Phi : 1D array
+                log spectrum, raised to `power`
+            sigma : 1D array
+                uncertainty of the binned mean
+
+        Usage:
+            >>> k, Phi, sigma = grid.window_spectrum(200e3, xc, yc, power=2)
+
+        Notes:
+            `radial_spectrum` returns the scatter of the FFT cells within each
+            annulus, whereas a fit needs the uncertainty of the annulus mean.
+            That is the standard error, except that the cells are not
+            independent: Hermitian symmetry makes about half of them redundant,
+            and tapering correlates neighbours. The correction is calibrated
+            per taper and varies with the number of cells in the bin, since a
+            fixed number of them is lost to correlation however few there are.
+            `dof_factor` overrides it with a constant.
+
+            The cells of *neighbouring* annuli are correlated too, which this
+            does not address -- it inflates the uncertainty of a fitted
+            parameter rather than of any individual bin. See
+            `pycurious.optimise_bouligand.CurieOptimiseBouligand.optimise`.
+        """
+        if process_subgrid is None:
+            # dummy function
+            def process_subgrid(subgrid):
+                return subgrid
+
+        subgrid = self.subgrid(window, xc, yc)
+        subgrid = process_subgrid(subgrid)
+
+        kwargs.pop("return_counts", None)
+        k, Phi, sigma_Phi, counts = self.radial_spectrum(
+            subgrid, taper=taper, power=power, return_counts=True, **kwargs
+        )
+
+        sigma = sigma_Phi / np.sqrt(counts / _dof_factor(taper, counts, dof_factor))
+
+        return k, Phi, sigma
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
         """

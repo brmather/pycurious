@@ -57,3 +57,9 @@ packages = ["pycurious"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    # calibrating a reported uncertainty means fitting a few hundred
+    # independent realisations, which is minutes rather than seconds.
+    # Run the rest with -m "not slow".
+    "slow: takes minutes, not seconds",
+]

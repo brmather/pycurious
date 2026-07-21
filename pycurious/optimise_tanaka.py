@@ -87,26 +87,10 @@ from multiprocessing import cpu_count
 import numpy as np
 from scipy.optimize import curve_fit
 
-from .grid import CurieGrid
+from .grid import CurieGrid, _TAPER_DOF, _DEFAULT_DOF, _dof_factor
 
-
-# How much larger the scatter of the binned mean is than sigma_Phi/sqrt(N),
-# because the FFT cells in an annulus are not independent. A real field has
-# Hermitian symmetry, so about half of them are redundant -- that is the
-# factor of 2 seen with no taper, and it is exact. Tapering correlates
-# neighbouring cells and inflates it further.
-#
-# Measured by Monte Carlo over 150-250 realisations at n = 128, 256 and 512;
-# the factor is stable to about 10% across that range.
-_TAPER_DOF = {
-    None: 2.0,
-    "hanning": 3.3,
-    "hamming": 3.0,
-}
-
-# Hermitian redundancy alone. Conservative (i.e. it understates the
-# uncertainty least badly) for a taper that has not been calibrated.
-_DEFAULT_DOF = 2.0
+# re-exported from pycurious.grid, where both optimisers now share them
+__all__ = ["CurieOptimiseTanaka"]
 
 # A zt band fits the short-wavelength end of the spectrum, so its upper edge
 # sitting this far down the available range means the numbers are much more
@@ -119,15 +103,6 @@ _CYCLES_PER_KM_SUSPICION = 0.1
 def _linear_func(x, a, b):
     """Straight line, fitted to each band."""
     return a * x + b
-
-
-def _dof_factor(taper, dof_factor=None):
-    """Look up the effective-degrees-of-freedom deflation for a taper."""
-    if dof_factor is not None:
-        return float(dof_factor)
-    if taper is None:
-        return _TAPER_DOF[None]
-    return _TAPER_DOF.get(getattr(taper, "__name__", None), _DEFAULT_DOF)
 
 
 class CurieOptimiseTanaka(CurieGrid):
@@ -314,28 +289,22 @@ class CurieOptimiseTanaka(CurieGrid):
         uncertainty of the binned mean -- shared by both, since `ln|k|` is
         deterministic and so does not alter it.
         """
-        if process_subgrid is None:
-            # dummy function
-            def process_subgrid(subgrid):
-                return subgrid
-
-        subgrid = self.subgrid(window, xc, yc)
-        subgrid = process_subgrid(subgrid)
-
         # power=1 gives ln of the amplitude spectrum, Tanaka's ln(Phi^1/2)
-        kwargs.pop("return_counts", None)
-        k, Phi, sigma_Phi, counts = self.radial_spectrum(
-            subgrid, taper=taper, power=1, return_counts=True, **kwargs
+        k, Phi, sigma = self.window_spectrum(
+            window,
+            xc,
+            yc,
+            taper=taper,
+            power=1,
+            process_subgrid=process_subgrid,
+            dof_factor=dof_factor,
+            **kwargs
         )
 
         if beta is not None:
             # remove the fractal contribution -0.5*(beta-1)*ln|k|, matching the
             # parameterisation of pycurious.grid.bouligand2009
             Phi = Phi + 0.5 * (beta - 1.0) * np.log(k)
-
-        # Phi is the mean over each annulus, so its uncertainty is the standard
-        # error, deflated because the cells are not independent
-        sigma = sigma_Phi / np.sqrt(counts / _dof_factor(taper, dof_factor))
 
         # ln|k| is deterministic, so subtracting it leaves sigma untouched
         Phi_n = Phi - np.log(k)

@@ -1,0 +1,382 @@
+"""
+Behaviour of CurieOptimiseBouligand, and guards against defects fixed in v2.
+
+Each test names the defect it protects, because several of them are the kind
+that leave the code producing plausible numbers rather than failing.
+"""
+
+import copy
+import warnings
+
+import numpy as np
+import pytest
+
+import pycurious
+from pycurious.grid import _dof_factor
+
+from synthetic import fractal_anomaly
+
+TRUTH = dict(beta=3.0, zt=1.0, dz=20.0, C=5.0)
+WINDOW = 1000e3
+
+
+def _grid(n=512, dx=2.0, seed=1, **truth):
+    values = dict(TRUTH)
+    values.update(truth)
+    data, extent = fractal_anomaly(n=n, dx=dx, seed=seed, **values)
+    grid = pycurious.CurieOptimiseBouligand(data, *extent)
+    xc = 0.5 * (extent[0] + extent[1])
+    yc = 0.5 * (extent[2] + extent[3])
+    return grid, xc, yc
+
+
+@pytest.fixture(scope="module")
+def bouligand():
+    return _grid()
+
+
+def test_min_func_is_weighted(bouligand):
+    """
+    min_func must divide by sigma_Phi.
+
+    Before v2 it passed a literal 1.0, so every bin carried equal weight
+    however well determined it was. Doubling every uncertainty must quarter
+    the misfit; if the weighting is dropped again the ratio goes to 1.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    x = np.array([3.0, 1.0, 20.0, 15.0])
+
+    ratio = grid.min_func(x, k, Phi, 2.0 * sigma) / grid.min_func(x, k, Phi, sigma)
+    assert ratio == pytest.approx(0.25)
+
+
+def test_reduced_chi_squared_is_about_one(bouligand):
+    """
+    The weights must be the uncertainty of the binned *mean*.
+
+    This is the strongest single guard in the suite. Weighting by the raw
+    within-annulus scatter gives 0.01, dropping the per-bin degrees-of-freedom
+    deflation gives 1.9, and not weighting at all is not on this scale.
+
+    The taper is pinned because the guard only separates those cases with one:
+    untapered, every plausible deflation lands inside the window.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    x = grid.optimise(WINDOW, xc, yc, taper=np.hanning)[:4]
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+
+    chi2_red = 2.0 * grid.min_func(x, k, Phi, sigma) / (k.size - len(x))
+    assert 0.7 < chi2_red < 1.6, "chi2_red = {:.3f}".format(chi2_red)
+
+
+def test_optimise_returns_uncertainties(bouligand):
+    """optimise reports a sigma per parameter, not just the parameters."""
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    out = grid.optimise(WINDOW, xc, yc, taper=np.hanning)
+
+    assert len(out) == 8
+    beta, zt, dz, C, s_beta, s_zt, s_dz, s_C = out
+    assert np.abs(beta - TRUTH["beta"]) < 0.2
+    assert np.abs(zt - TRUTH["zt"]) < 0.25
+    for sigma in (s_beta, s_zt, s_dz, s_C):
+        assert np.isfinite(sigma) and sigma > 0.0
+
+
+def test_covariance_is_opt_in(bouligand):
+    """
+    The covariance must not ride in the default return tuple.
+
+    parallel._collect dispatches on the dimensionality of the result, so an
+    8-tuple of floats plus a 4x4 array raises "inhomogeneous shape" the moment
+    optimise_routine is used.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    out = grid.optimise(WINDOW, xc, yc, taper=np.hanning, return_cov=True)
+
+    assert len(out) == 9
+    cov = out[8]
+    assert cov.shape == (4, 4)
+    np.testing.assert_allclose(cov, cov.T, rtol=1e-8)
+    # the sigmas reported alongside it are its diagonal
+    np.testing.assert_allclose(np.array(out[4:8]), np.sqrt(np.diag(cov)), rtol=1e-10)
+
+
+def test_correlation_between_bins_inflates_sigma(bouligand):
+    """
+    Neighbouring radial bins are correlated, and ignoring it understates every
+    uncertainty by about 35% under a hanning taper.
+
+    The covariance therefore has to be generalised least squares. Compare it
+    against what the naive inv(J^T J) would report.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    x = np.array(grid.optimise(WINDOW, xc, yc, taper=np.hanning)[:4])
+
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    gls = np.sqrt(np.diag(grid._covariance(x, k, Phi, sigma)))
+
+    J = grid._jacobian(x, (k, Phi, sigma, None))
+    iid = np.sqrt(np.diag(np.linalg.inv(J.T.dot(J))))
+
+    assert np.all(gls > iid), "GLS must widen the interval, not narrow it"
+    ratio = (gls / iid)[[0, 1, 3]]     # beta, zt, C
+    assert np.all(ratio > 1.15) and np.all(ratio < 1.6), ratio
+
+    # With no taper there is nothing to correlate the bins, so the two agree.
+    # Refit first: evaluating the hanning solution against untapered data
+    # leaves residuals dominated by smooth model mismatch, which the estimator
+    # would correctly read as correlated.
+    x = np.array(grid.optimise(WINDOW, xc, yc, taper=None)[:4])
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=None, power=2.0)
+    gls = np.sqrt(np.diag(grid._covariance(x, k, Phi, sigma)))
+    J = grid._jacobian(x, (k, Phi, sigma, None))
+    iid = np.sqrt(np.diag(np.linalg.inv(J.T.dot(J))))
+    np.testing.assert_allclose((gls / iid)[[0, 1, 3]], 1.0, rtol=0.15)
+
+
+def test_dof_factor_deflates_counts():
+    """
+    The uncertainty of the binned mean is not sigma/sqrt(N): the FFT cells are
+    not independent. Hermitian symmetry alone makes half of them redundant, and
+    a fixed number more is lost to correlation however few the annulus holds --
+    which is why the deflation depends on the count.
+    """
+    assert _dof_factor(None) == 2.0
+    assert _dof_factor(np.hanning) > 2.0
+    assert _dof_factor(np.hamming) > 2.0
+    # an uncalibrated taper falls back to the exact Hermitian factor
+    assert _dof_factor(np.bartlett) == 2.0
+    # and an explicit override wins
+    assert _dof_factor(np.hanning, dof_factor=1.0) == 1.0
+
+    counts = np.array([8, 16, 64, 1024])
+    per_bin = _dof_factor(np.hanning, counts)
+    assert per_bin.shape == counts.shape
+    # sparse bins are deflated hardest, and a full one tends to the asymptote
+    assert np.all(np.diff(per_bin) < 0.0)
+    assert per_bin[0] > 2.0 * per_bin[-1]
+    assert per_bin[-1] == pytest.approx(3.3, rel=0.02)
+
+
+def test_profile_is_asymmetric_for_dz(bouligand):
+    """
+    dz has a long upper tail (Mather & Fullea, 2019), so a symmetric sigma is
+    the wrong shape for it. The profile interval must show that.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    values, deviance, lower, upper = grid.profile(
+        WINDOW, xc, yc, "dz", taper=np.hanning
+    )
+
+    centre = values[np.argmin(deviance)]
+    assert lower < centre < upper
+    assert lower <= TRUTH["dz"] <= upper, "truth outside [{:.2f}, {:.2f}]".format(
+        lower, upper
+    )
+    assert (upper - centre) > 1.2 * (centre - lower), "interval is not skewed"
+
+
+def test_profile_of_curie_depth(bouligand):
+    """CPD is profiled directly, not propagated from a symmetric sigma_dz."""
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    values, deviance, lower, upper = grid.profile(
+        WINDOW, xc, yc, "CPD", taper=np.hanning
+    )
+    truth = TRUTH["zt"] + TRUTH["dz"]
+    assert lower <= truth <= upper, "truth outside [{:.2f}, {:.2f}]".format(lower, upper)
+
+
+def test_profile_result_does_not_depend_on_the_bracket(bouligand):
+    """
+    A coarse or badly placed bracket used to step over the minimum entirely,
+    collapsing the interval onto a single node without saying so. The fitted
+    value is now always carried as a node.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    _, _, lo_default, hi_default = grid.profile(WINDOW, xc, yc, "dz", taper=np.hanning)
+    _, _, lo_coarse, hi_coarse = grid.profile(
+        WINDOW, xc, yc, "dz", bracket=(1.0, 900.0), npoints=15, taper=np.hanning
+    )
+    assert lo_coarse == pytest.approx(lo_default, rel=0.02)
+    assert hi_coarse == pytest.approx(hi_default, rel=0.02)
+
+
+def test_profile_survives_the_overflow_region(bouligand):
+    """
+    bouligand2009 overflows cosh past |k|dz ~ 710. A scan that reaches there
+    must return a finite deviance rather than raising.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        values, deviance, _, _ = grid.profile(
+            WINDOW, xc, yc, "dz", bracket=(1.0, 2000.0), npoints=11, taper=np.hanning
+        )
+    assert np.isfinite(deviance).all()
+
+
+def test_profile_unbounded_returns_inf():
+    """
+    A window too small to constrain dz has no upper bound. That must come back
+    as inf with a warning, not as the edge of the scan dressed up as an answer.
+    """
+    grid, xc, yc = _grid(n=256)
+    grid.reset_priors()
+    with pytest.warns(RuntimeWarning, match="unbounded"):
+        _, _, lower, upper = grid.profile(60e3, xc, yc, "dz", taper=np.hanning)
+    assert np.isinf(upper)
+    assert np.isfinite(lower)
+
+
+def test_profile_rejects_unknown_target(bouligand):
+    grid, xc, yc = bouligand
+    with pytest.raises(ValueError, match="target must be one of"):
+        grid.profile(WINDOW, xc, yc, "curie_depth")
+
+
+def test_sensitivity_does_not_disturb_priors(bouligand):
+    """
+    sensitivity used to redraw each prior centre by mutating self.prior in
+    place and restoring it afterwards, which left the instance corrupted if
+    anything raised in between.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    grid.add_prior(beta=(3.0, 0.1), zt=(1.0, 0.2))
+    before = copy.deepcopy(grid.prior)
+
+    grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
+    assert grid.prior == before
+
+    # and still intact when a simulation blows up part way through
+    calls = {"n": 0}
+    original = grid.min_func
+
+    def exploding(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] > 5:
+            raise RuntimeError("boom")
+        return original(*args, **kwargs)
+
+    grid.min_func = exploding
+    try:
+        with pytest.raises(RuntimeError, match="boom"):
+            grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
+    finally:
+        del grid.min_func
+    assert grid.prior == before
+
+    grid.reset_priors()
+
+
+def test_sensitivity_is_reproducible(bouligand):
+    """
+    Seeded so a parallel sensitivity map cannot inherit one RNG state across
+    workers, which under fork would have drawn the same sequence at every
+    centroid and painted coherent artefacts across the map.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    kwargs = dict(taper=np.hanning)
+    a = grid.sensitivity(300e3, xc, yc, 6, seed=7, **kwargs)[2]
+    b = grid.sensitivity(300e3, xc, yc, 6, seed=7, **kwargs)[2]
+    c = grid.sensitivity(300e3, xc, yc, 6, seed=8, **kwargs)[2]
+    np.testing.assert_allclose(a, b)
+    assert not np.allclose(a, c)
+
+
+def test_prior_values_are_immutable(bouligand):
+    """Stored as tuples, so a caller cannot perturb a prior in place."""
+    grid, _, _ = bouligand
+    grid.reset_priors()
+    grid.add_prior(beta=(3.0, 0.1))
+    with pytest.raises(TypeError):
+        grid.prior["beta"][0] = 99.0
+    grid.reset_priors()
+
+
+def test_min_func_accepts_an_explicit_prior(bouligand):
+    """
+    Passing a prior through rather than reaching for self.prior is what lets
+    sensitivity resample prior centres without touching the instance.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    x = np.array([3.0, 1.0, 20.0, 15.0])
+
+    flat = grid.min_func(x, k, Phi, sigma)
+    tight = grid.min_func(x, k, Phi, sigma, {"beta": (1.0, 0.01), "zt": None,
+                                             "dz": None, "C": None})
+    assert tight > flat
+    assert grid.prior["beta"] is None, "self.prior must be untouched"
+
+
+def test_warns_when_a_parameter_hits_a_bound(bouligand):
+    """
+    The covariance describes the curvature of an interior minimum, so on an
+    active bound the uncertainty it reports is meaningless.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    try:
+        grid.bounds = [(0.0, None), (0.0, 0.0), (0.0, None), (None, None)]
+        with pytest.warns(RuntimeWarning, match="bound"):
+            grid.optimise(WINDOW, xc, yc, taper=np.hanning)
+    finally:
+        grid.bounds = list(zip([0.0, 0.0, 0.0, None], [None] * 4))
+
+
+def test_taper_none_rejects_unknown_keywords(bouligand):
+    """
+    With a taper present an unrecognised keyword raises from inside the taper.
+    With taper=None it used to be swallowed, which is how a seed= silently
+    failed to reach anything on the notebooks that pass taper=None.
+    """
+    grid, xc, yc = bouligand
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        grid.window_spectrum(300e3, xc, yc, taper=None, bogus=7)
+
+
+@pytest.mark.slow
+def test_reported_sigma_matches_the_spread_over_realisations():
+    """
+    The calibration that matters, and the only one that can catch a wrong
+    covariance.
+
+    sensitivity resamples each bin independently and metropolis_hastings uses
+    the same diagonal weighting, so both share the assumption the covariance
+    makes. They agree with it to within 10% whether or not it is right. Only an
+    ensemble over independent realisations of the field is an outside check.
+
+    Measured over 200 seeds: 0.997, 0.989 and 0.991 for beta, zt and C. dz sits
+    near 1.44 because its likelihood is skewed, which no symmetric sigma can
+    fix -- that is what profile() is for.
+    """
+    fits, reported = [], []
+    for seed in range(60):
+        grid, xc, yc = _grid(seed=2000 + seed)
+        out = grid.optimise(WINDOW, xc, yc, taper=np.hanning)
+        fits.append(out[:4])
+        reported.append(out[4:])
+
+    spread = np.array(fits).std(axis=0, ddof=1)
+    mean_sigma = np.array(reported).mean(axis=0)
+    ratio = spread / mean_sigma
+
+    for i, name in enumerate(("beta", "zt", "C")):
+        j = i if i < 2 else 3
+        assert 0.8 < ratio[j] < 1.2, "{} ratio {:.3f}".format(name, ratio[j])
+
+    # dz is understated, and knowingly so
+    assert ratio[2] > 1.15, "dz ratio {:.3f}".format(ratio[2])
