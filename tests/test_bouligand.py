@@ -7,6 +7,7 @@ that leave the code producing plausible numbers rather than failing.
 
 import copy
 import warnings
+from multiprocessing import cpu_count
 
 import numpy as np
 import pytest
@@ -562,3 +563,30 @@ def test_thickness_is_bounded_below_the_overflow(bouligand):
         grid.metropolis_hastings(300e3, xc, yc, 400, 200, taper=np.hanning, seed=1)
     )
     assert chain[2].max() <= ceiling
+
+
+def test_max_processors_is_honoured():
+    """
+    The constructor keyword must reach CurieParallel.
+
+    It previously did not: the assignment sat after the return in
+    _max_thickness, where it was unreachable, so the argument was silently
+    ignored and every routine used cpu_count() regardless. Nothing caught it
+    because parallelise_routine still works -- just not serially when asked.
+    """
+    data = np.zeros((9, 9))
+    extent = (0.0, 8e3, 0.0, 8e3)
+
+    assert pycurious.CurieOptimiseBouligand(*(data,) + extent,
+                                            max_processors=1).max_processors == 1
+    assert pycurious.CurieOptimiseBouligand(*(data,) + extent,
+                                            max_processors=3).max_processors == 3
+
+    # and the two optimisers agree, as they did not before
+    assert (
+        pycurious.CurieOptimiseBouligand(*(data,) + extent, max_processors=2).max_processors
+        == pycurious.CurieOptimiseTanaka(*(data,) + extent, max_processors=2).max_processors
+    )
+
+    # the default is still every core
+    assert pycurious.CurieOptimiseBouligand(*(data,) + extent).max_processors == cpu_count()

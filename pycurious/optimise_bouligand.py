@@ -192,6 +192,8 @@ class CurieOptimiseBouligand(CurieGrid):
         ub = [None, None, self._max_thickness(), None]
         self.bounds = list(zip(lb, ub))
 
+        self.max_processors = kwargs.pop("max_processors", cpu_count())
+
     def _max_thickness(self):
         """
         Largest `dz` this grid can evaluate, in km.
@@ -203,10 +205,6 @@ class CurieOptimiseBouligand(CurieGrid):
         Curie depth on Earth, which is the point -- see `_COSH_OVERFLOW`.
         """
         return _COSH_OVERFLOW * (self.dx * 1.0e-3) / np.pi
-
-        self.max_processors = kwargs.pop("max_processors", cpu_count())
-
-        return
 
     def add_prior(self, **kwargs):
         """

@@ -179,12 +179,6 @@ adjusting the prose.
 
 ## Known defects
 
-- `optimise_bouligand.py` `_max_thickness` has unreachable code after its
-  `return`: the line assigning `self.max_processors` was meant to be in
-  `__init__`. So `CurieOptimiseBouligand(..., max_processors=N)` is **silently
-  ignored** and always uses `cpu_count()`. The Tanaka sibling is unaffected.
-- `Bouligand/Ex3` historically imported `scipy.signal.tukey`, which has moved to
-  `scipy.signal.windows.tukey`.
 - `MANIFEST.in` uses `recursive-include Examples *.ipynb`, which ignores
   `.gitignore`, so an sdist built from a working tree sweeps up untracked
   notebooks.
