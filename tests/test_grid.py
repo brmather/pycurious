@@ -1,5 +1,6 @@
 import pytest
 import pycurious
+from pycurious.grid import _dof_factor
 import numpy as np
 
 from conftest import load_magnetic_anomaly
@@ -207,3 +208,27 @@ def test_tanaka_deprecated_functions(load_magnetic_anomaly):
     # abs() is applied internally, so this cannot come back negative
     assert Zb > 0.0
     assert np.isfinite([Zb, eZb]).all()
+
+
+def test_dof_factor_deflates_counts():
+    """
+    The uncertainty of the binned mean is not sigma/sqrt(N): the FFT cells are
+    not independent. Hermitian symmetry alone makes half of them redundant, and
+    a fixed number more is lost to correlation however few the annulus holds --
+    which is why the deflation depends on the count.
+    """
+    assert _dof_factor(None) == 2.0
+    assert _dof_factor(np.hanning) > 2.0
+    assert _dof_factor(np.hamming) > 2.0
+    # an uncalibrated taper falls back to the exact Hermitian factor
+    assert _dof_factor(np.bartlett) == 2.0
+    # and an explicit override wins
+    assert _dof_factor(np.hanning, dof_factor=1.0) == 1.0
+
+    counts = np.array([8, 16, 64, 1024])
+    per_bin = _dof_factor(np.hanning, counts)
+    assert per_bin.shape == counts.shape
+    # sparse bins are deflated hardest, and a full one tends to the asymptote
+    assert np.all(np.diff(per_bin) < 0.0)
+    assert per_bin[0] > 2.0 * per_bin[-1]
+    assert per_bin[-1] == pytest.approx(3.3, rel=0.02)

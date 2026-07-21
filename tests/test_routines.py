@@ -45,8 +45,11 @@ def test_CurieOptimiseBouligand_routines(load_magnetic_anomaly):
     max_window = load_magnetic_anomaly["max_window"]
 
     cpd = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
+    # 15 km spacing rather than 5 gives 121 centroids instead of 961. This is a
+    # smoke test of the parallel collection path, and 961 windows overlapping
+    # by 97% exercise nothing 121 do not -- they just cost eight seconds.
     xc_list, yc_list = cpd.create_centroid_list(
-        0.5 * max_window, spacingX=5e3, spacingY=5e3
+        0.5 * max_window, spacingX=15e3, spacingY=15e3
     )
     xc = xc_list[0]
     yc = yc_list[0]

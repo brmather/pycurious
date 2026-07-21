@@ -12,21 +12,17 @@ import pytest
 
 import pycurious
 
-from pycurious import fractal_anomaly
+from conftest import synthetic_grid
 
 # (beta, zt, dz) -- a shallow thick layer and a deeper thinner one
 CASES = [(3.0, 1.0, 20.0), (2.0, 5.0, 15.0)]
 SEEDS = [1, 2]
 
 
-def _bouligand(beta, zt, dz, seed, n=512, dx=2.0):
-    data, extent = fractal_anomaly(
-        n=n, dx=dx, beta=beta, zt=zt, dz=dz, C=5.0, seed=seed
-    )
-    grid = pycurious.CurieOptimiseBouligand(data, *extent)
-    xc = 0.5 * (extent[0] + extent[1])
-    yc = 0.5 * (extent[2] + extent[3])
-    return grid, xc, yc
+def _bouligand(beta, zt, dz, seed):
+    return synthetic_grid(
+        pycurious.CurieOptimiseBouligand, beta=beta, zt=zt, dz=dz, seed=seed
+    )[:3]
 
 
 @pytest.mark.parametrize("beta,zt,dz", CASES)
@@ -89,13 +85,11 @@ def test_bouligand_dz_is_recovered_in_the_mean(beta, zt, dz):
     )
 
 
-def _tanaka_grid(beta=3.0, zt=1.0, dz=20.0, n=1024, dx=4.0, seed=1):
+def _tanaka_grid(beta=3.0, zt=1.0, dz=20.0):
     """A grid wide enough for the centroid band to satisfy |k|d << 1."""
-    data, extent = fractal_anomaly(n=n, dx=dx, beta=beta, zt=zt, dz=dz, C=5.0, seed=seed)
-    grid = pycurious.CurieOptimiseTanaka(data, *extent)
-    xc = 0.5 * (extent[0] + extent[1])
-    yc = 0.5 * (extent[2] + extent[3])
-    return grid, xc, yc, (n - 1) * dx * 1e3
+    return synthetic_grid(
+        pycurious.CurieOptimiseTanaka, beta=beta, zt=zt, dz=dz, n=1024, dx=4.0
+    )
 
 
 def test_tanaka_recovers_curie_depth():
@@ -204,7 +198,9 @@ def test_synthetic_matches_forward_model():
     integrating a magnetisation over depth as tests/Bouligand_forward.py does.
     """
     beta, zt, dz, C = 3.0, 1.0, 20.0, 5.0
-    data, extent = fractal_anomaly(n=512, dx=2.0, beta=beta, zt=zt, dz=dz, C=C, seed=1)
+    data, extent = pycurious.fractal_anomaly(
+        n=512, dx=2.0, beta=beta, zt=zt, dz=dz, C=C, seed=1
+    )
 
     grid = pycurious.CurieGrid(data, *extent)
     k, Phi, sigma_Phi = grid.radial_spectrum(grid.data, taper=None, power=2)

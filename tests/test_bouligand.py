@@ -12,27 +12,30 @@ import numpy as np
 import pytest
 
 import pycurious
-from pycurious.grid import _dof_factor
 
-from pycurious import fractal_anomaly
+from conftest import synthetic_grid
 
-TRUTH = dict(beta=3.0, zt=1.0, dz=20.0, C=5.0)
+TRUTH = dict(beta=3.0, zt=1.0, dz=20.0)
 WINDOW = 1000e3
 
 
-def _grid(n=512, dx=2.0, seed=1, **truth):
-    values = dict(TRUTH)
-    values.update(truth)
-    data, extent = fractal_anomaly(n=n, dx=dx, seed=seed, **values)
-    grid = pycurious.CurieOptimiseBouligand(data, *extent)
-    xc = 0.5 * (extent[0] + extent[1])
-    yc = 0.5 * (extent[2] + extent[3])
-    return grid, xc, yc
+def _grid(n=512, seed=1):
+    return synthetic_grid(
+        pycurious.CurieOptimiseBouligand, n=n, seed=seed, **TRUTH
+    )[:3]
 
 
 @pytest.fixture(scope="module")
 def bouligand():
     return _grid()
+
+
+def _uncorrelated_sigma(grid, x, k, Phi, sigma):
+    """What inv(J^T J) would report, i.e. treating the bins as independent."""
+    args = (k, Phi, sigma)
+    r = grid.residuals(x, *args)
+    J = grid._jacobian(x, r, args)
+    return np.sqrt(np.diag(np.linalg.inv(J.T.dot(J))))
 
 
 def test_min_func_is_weighted(bouligand):
@@ -120,9 +123,7 @@ def test_correlation_between_bins_inflates_sigma(bouligand):
 
     k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
     gls = np.sqrt(np.diag(grid._covariance(x, k, Phi, sigma)))
-
-    J = grid._jacobian(x, (k, Phi, sigma, None))
-    iid = np.sqrt(np.diag(np.linalg.inv(J.T.dot(J))))
+    iid = _uncorrelated_sigma(grid, x, k, Phi, sigma)
 
     assert np.all(gls > iid), "GLS must widen the interval, not narrow it"
     ratio = (gls / iid)[[0, 1, 3]]     # beta, zt, C
@@ -135,33 +136,8 @@ def test_correlation_between_bins_inflates_sigma(bouligand):
     x = np.array(grid.optimise(WINDOW, xc, yc, taper=None)[:4])
     k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=None, power=2.0)
     gls = np.sqrt(np.diag(grid._covariance(x, k, Phi, sigma)))
-    J = grid._jacobian(x, (k, Phi, sigma, None))
-    iid = np.sqrt(np.diag(np.linalg.inv(J.T.dot(J))))
+    iid = _uncorrelated_sigma(grid, x, k, Phi, sigma)
     np.testing.assert_allclose((gls / iid)[[0, 1, 3]], 1.0, rtol=0.15)
-
-
-def test_dof_factor_deflates_counts():
-    """
-    The uncertainty of the binned mean is not sigma/sqrt(N): the FFT cells are
-    not independent. Hermitian symmetry alone makes half of them redundant, and
-    a fixed number more is lost to correlation however few the annulus holds --
-    which is why the deflation depends on the count.
-    """
-    assert _dof_factor(None) == 2.0
-    assert _dof_factor(np.hanning) > 2.0
-    assert _dof_factor(np.hamming) > 2.0
-    # an uncalibrated taper falls back to the exact Hermitian factor
-    assert _dof_factor(np.bartlett) == 2.0
-    # and an explicit override wins
-    assert _dof_factor(np.hanning, dof_factor=1.0) == 1.0
-
-    counts = np.array([8, 16, 64, 1024])
-    per_bin = _dof_factor(np.hanning, counts)
-    assert per_bin.shape == counts.shape
-    # sparse bins are deflated hardest, and a full one tends to the asymptote
-    assert np.all(np.diff(per_bin) < 0.0)
-    assert per_bin[0] > 2.0 * per_bin[-1]
-    assert per_bin[-1] == pytest.approx(3.3, rel=0.02)
 
 
 def test_profile_is_asymmetric_for_dz(bouligand):
@@ -499,6 +475,37 @@ def test_metropolis_hastings_respects_bounds_and_is_reproducible(bouligand):
     assert (a[0] >= 0.0).all() and (a[1] >= 0.0).all() and (a[2] >= 0.0).all()
 
 
+def test_only_stochastic_routines_are_seeded(bouligand):
+    """
+    `parallelise_routine` decides once who gets a seed, rather than every
+    routine growing a parameter to absorb one.
+
+    Before, `optimise` had to accept a `seed` it ignored purely so the parallel
+    routine could pass one uniformly -- and that was done on the Bouligand
+    sibling only, so the identical call raised from inside `np.hanning` on the
+    Tanaka one.
+    """
+    grid, xc, yc = _grid(n=128)
+    grid.max_processors = 1
+    window = 200e3
+    xs, ys = np.array([xc]), np.array([yc])
+
+    assert getattr(grid.sensitivity, "wants_seed", False)
+    assert getattr(grid.metropolis_hastings, "wants_seed", False)
+    assert not getattr(grid.optimise, "wants_seed", False)
+
+    # a deterministic routine says so rather than failing inside the taper
+    with pytest.warns(RuntimeWarning, match="deterministic"):
+        grid.optimise_routine(window, xs, ys, taper=np.hanning, seed=7)
+
+    # and a stochastic one is actually seeded, per centroid
+    a = grid.parallelise_routine(window, xs, ys, grid.sensitivity, 3,
+                                 taper=np.hanning, seed=11)
+    b = grid.parallelise_routine(window, xs, ys, grid.sensitivity, 3,
+                                 taper=np.hanning, seed=11)
+    np.testing.assert_allclose(np.array(a, dtype=float), np.array(b, dtype=float))
+
+
 def test_metropolis_hastings_default_return_shape_is_unchanged(bouligand):
     """
     pycurious.parallel dispatches on the dimensionality of a routine's result,
@@ -517,4 +524,4 @@ def test_metropolis_hastings_default_return_shape_is_unchanged(bouligand):
     _, info = grid.metropolis_hastings(
         WINDOW, xc, yc, 60, 10, taper=np.hanning, seed=1, return_diagnostics=True
     )
-    assert set(info) == {"acceptance", "burnin_acceptance", "x_scale", "temperature"}
+    assert set(info) == {"acceptance", "burnin_acceptance", "x_scale"}

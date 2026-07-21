@@ -49,6 +49,24 @@ from multiprocessing import Process, Queue, cpu_count, get_start_method
 import numpy as np
 
 
+def stochastic(func):
+    """
+    Mark a routine as one that `CurieParallel.parallelise_routine` should seed.
+
+    Routines that draw random numbers take a `seed` keyword and carry this
+    marker; deterministic ones do neither, and are left alone. Keeping the
+    distinction here rather than in each routine's signature means a
+    deterministic routine needs no `seed` parameter to absorb and ignore, and
+    that adding a new one cannot silently produce an unseeded map.
+
+    Signature inspection would not do instead: every routine here accepts
+    `**kwargs`, so it cannot distinguish one that wants a seed from one that
+    would forward it to the taper and fail there.
+    """
+    func.wants_seed = True
+    return func
+
+
 class CurieParallel(object):
     def __init__(self, **kwargs):
 
@@ -166,6 +184,16 @@ class CurieParallel(object):
         if on_error not in ("raise", "ignore"):
             raise ValueError("on_error must be 'raise' or 'ignore'")
         seed = kwargs.pop("seed", None)
+
+        if seed is not None and not getattr(func, "wants_seed", False):
+            warnings.warn(
+                "{} is deterministic, so seed has no effect on it. Only the "
+                "stochastic routines -- sensitivity, metropolis_hastings -- "
+                "consume one.".format(getattr(func, "__name__", func)),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            seed = None
 
         n = len(xc_list)
         if n != len(yc_list):

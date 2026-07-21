@@ -44,6 +44,7 @@ uncertainty on the Curie depth rather than a bare number.
 # -*- coding: utf-8 -*-
 from .parallel import CurieParallel
 import numpy as np
+from scipy.linalg import solveh_banded
 from scipy.special import gamma, kv
 import warnings
 
@@ -72,15 +73,19 @@ _TAPER_DOF = {
     "hamming": (3.0, 4.8),
 }
 
-# Hermitian redundancy alone. Conservative (i.e. it understates the
-# uncertainty least badly) for a taper that has not been calibrated, since it
-# is the part that holds exactly whatever the taper does.
-_DEFAULT_DOF = (2.0, 3.4)
+
+# How many off-diagonals of the residual correlation to estimate. The measured
+# correlation length is about 1.4 bins, so two is enough.
+_CORRELATION_BANDS = 2
+
+# Cap on the total off-diagonal weight. By Gershgorin, keeping it below one
+# leaves the banded matrix positive definite and so factorisable.
+_CORRELATION_LIMIT = 0.95
 
 
-def _banded_correlation(r, nbands=2, limit=0.95):
+def _banded_correlation(r):
     """
-    Banded correlation matrix estimated from a vector of fit residuals.
+    Correlation of neighbouring fit residuals, as a band.
 
     Neighbouring radial bins are not independent: a taper spreads each
     wavenumber over a main lobe several bins wide, so their residuals
@@ -95,15 +100,11 @@ def _banded_correlation(r, nbands=2, limit=0.95):
     Args:
         r : 1D array
             residuals, already whitened by their own uncertainties
-        nbands : int (default=2)
-            how many off-diagonals to estimate. The correlation length is about
-            1.4 bins, so two is enough.
-        limit : float (default=0.95)
-            cap on the total off-diagonal weight, which by Gershgorin keeps the
-            matrix positive definite
 
     Returns:
-        R : 2D array shape (len(r), len(r))
+        ab : 2D array shape (`_CORRELATION_BANDS` + 1, len(r))
+            lower-form band of the correlation matrix, as
+            `scipy.linalg.solveh_banded` takes it
 
     Notes:
         The estimate also picks up smooth model error, which is likewise
@@ -115,12 +116,12 @@ def _banded_correlation(r, nbands=2, limit=0.95):
     r = np.asarray(r, dtype=float)
     n = r.size
 
-    rho = np.zeros(nbands + 1)
+    rho = np.zeros(_CORRELATION_BANDS + 1)
     rho[0] = 1.0
 
     denominator = np.sum(r * r)
     if denominator > 0.0:
-        for lag in range(1, nbands + 1):
+        for lag in range(1, _CORRELATION_BANDS + 1):
             if n > lag:
                 rho[lag] = np.sum(r[:-lag] * r[lag:]) / denominator
 
@@ -129,17 +130,50 @@ def _banded_correlation(r, nbands=2, limit=0.95):
     rho[1:] = np.clip(rho[1:], 0.0, None)
 
     total = 2.0 * rho[1:].sum()
-    if total > limit:
-        rho[1:] *= limit / total
+    if total > _CORRELATION_LIMIT:
+        rho[1:] *= _CORRELATION_LIMIT / total
 
-    R = np.eye(n)
-    for lag in range(1, nbands + 1):
+    ab = np.zeros((_CORRELATION_BANDS + 1, n))
+    for lag in range(_CORRELATION_BANDS + 1):
         if n > lag:
-            idx = np.arange(n - lag)
-            R[idx, idx + lag] = rho[lag]
-            R[idx + lag, idx] = rho[lag]
+            ab[lag, : n - lag] = rho[lag]
 
-    return R
+    return ab
+
+
+def _gls_covariance(J, r, ncorrelated):
+    """
+    Parameter covariance allowing for correlation between residuals.
+
+    Generalised least squares, \\( (J^T R^{-1} J)^{-1} \\), with `R` the banded
+    correlation of the first `ncorrelated` residuals from
+    `_banded_correlation`. Any rows beyond that -- the prior terms of a fit --
+    are independent of the spectrum and of each other, so they keep unit weight
+    and never enter the solve.
+
+    Both optimisers use this. They differ in how `J` is obtained, analytically
+    for a straight line and by finite differences for the four-parameter
+    spectral model, but not in what is done with it.
+
+    Args:
+        J : 2D array shape (n, m)
+            Jacobian of the whitened residuals
+        r : 1D array shape (n,)
+            those residuals
+        ncorrelated : int
+            how many leading rows are the correlated spectrum
+
+    Returns:
+        cov : 2D array shape (m, m), or None if the fit is singular
+    """
+    RiJ = np.array(J, dtype=float)
+    ab = _banded_correlation(r[:ncorrelated])
+
+    try:
+        RiJ[:ncorrelated] = solveh_banded(ab, J[:ncorrelated], lower=True)
+        return np.linalg.inv(J.T.dot(RiJ))
+    except (np.linalg.LinAlgError, ValueError):
+        return None
 
 
 def _dof_factor(taper, counts=None, dof_factor=None):
@@ -148,14 +182,15 @@ def _dof_factor(taper, counts=None, dof_factor=None):
 
     Returns the asymptotic scalar when `counts` is None, and the per-bin
     factor otherwise. An explicit `dof_factor` overrides both.
+
+    An uncalibrated taper falls back to the untapered entry, which is
+    conservative in the sense that Hermitian redundancy holds exactly whatever
+    the taper does.
     """
     if dof_factor is not None:
         return float(dof_factor)
 
-    if taper is None:
-        dof_inf, lost = _TAPER_DOF[None]
-    else:
-        dof_inf, lost = _TAPER_DOF.get(getattr(taper, "__name__", None), _DEFAULT_DOF)
+    dof_inf, lost = _TAPER_DOF.get(getattr(taper, "__name__", None), _TAPER_DOF[None])
 
     if counts is None:
         return dof_inf

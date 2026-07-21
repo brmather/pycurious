@@ -60,22 +60,6 @@ def test_centroid_sigma_equals_spectrum_sigma(tanaka):
     assert np.all(np.isfinite(sigma))
 
 
-def test_dof_factor_deflates_counts():
-    """
-    The uncertainty of the binned mean is not sigma/sqrt(N): the FFT cells are
-    not independent. Hermitian symmetry alone makes half of them redundant.
-    """
-    from pycurious.optimise_tanaka import _dof_factor
-
-    assert _dof_factor(None) == 2.0
-    assert _dof_factor(np.hanning) > 2.0
-    assert _dof_factor(np.hamming) > 2.0
-    # an uncalibrated taper falls back to the exact Hermitian factor
-    assert _dof_factor(np.bartlett) == 2.0
-    # and an explicit override wins
-    assert _dof_factor(np.hanning, dof_factor=1.0) == 1.0
-
-
 def test_warns_when_bands_look_like_cycles_per_km(tanaka):
     """
     Bands were specified in cycles/km before v2. Such a call still runs and

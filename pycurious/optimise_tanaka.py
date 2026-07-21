@@ -120,12 +120,13 @@ from multiprocessing import cpu_count
 import numpy as np
 from scipy.optimize import curve_fit
 
-# _dof_factor is not used here directly -- the shared window_spectrum applies
-# it -- but it is imported so that it stays reachable from this module, which
-# is where it lived before both optimisers came to share it.
-from .grid import CurieGrid, _banded_correlation, _dof_factor
+from .grid import CurieGrid, _gls_covariance
+from .parallel import stochastic
 
-__all__ = ["CurieOptimiseTanaka"]
+# Below this many points in a band the residual autocorrelation is estimated
+# from too little to be worth anything, and a noisy inflation is worse than
+# none. The bands used in practice hold two or three times this.
+_MIN_POINTS_FOR_CORRELATION = 8
 
 # Truncating sinh(|k|d) at |k|d biases the centroid, and hence the Curie
 # depth, low. Measured against exact layer spectra the shortfall is
@@ -374,18 +375,17 @@ class CurieOptimiseTanaka(CurieGrid):
         about eight points the estimate is noise, and a noisy inflation is
         worse than none.
         """
-        if k.size < 8:
+        if k.size < _MIN_POINTS_FOR_CORRELATION:
             return fallback
 
         residual = (Phi - _linear_func(k, gradient, intercept)) / sigma
-        R = _banded_correlation(residual)
 
-        # design matrix of the straight line, whitened as curve_fit does
-        X = np.column_stack([k, np.ones_like(k)]) / sigma[:, None]
+        # for a straight line the Jacobian of the whitened residual is just the
+        # design matrix, so there is nothing to differentiate numerically
+        J = np.column_stack([k, np.ones_like(k)]) / sigma[:, None]
 
-        try:
-            cov = np.linalg.inv(X.T.dot(np.linalg.solve(R, X)))
-        except np.linalg.LinAlgError:
+        cov = _gls_covariance(J, residual, k.size)
+        if cov is None:
             return fallback
 
         stdev = np.sqrt(np.diag(cov))[0]
@@ -591,6 +591,7 @@ class CurieOptimiseTanaka(CurieGrid):
             **kwargs
         )
 
+    @stochastic
     def sensitivity(
         self,
         window,

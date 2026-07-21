@@ -1,7 +1,6 @@
 import pytest
 import pycurious
 import numpy as np
-import numpy.testing as npt
 from scipy.optimize import minimize
 
 from conftest import load_magnetic_anomaly

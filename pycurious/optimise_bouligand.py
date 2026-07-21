@@ -33,7 +33,8 @@ anomaly in `pycurious.grid.CurieGrid.radial_spectrum`.
 """
 
 # -*- coding: utf-8 -*-
-from .grid import CurieGrid, bouligand2009, _banded_correlation
+from .grid import CurieGrid, bouligand2009, _gls_covariance
+from .parallel import stochastic
 import numpy as np
 import warnings
 from scipy.optimize import minimize, brentq
@@ -53,6 +54,19 @@ _OVERFLOW_RESIDUAL = 1.0e3
 
 # Parameters of bouligand2009, in the order the optimiser sees them.
 _PARAMETERS = ("beta", "zt", "dz", "C")
+
+# Relative step for the finite-difference Jacobian behind the covariance.
+_JACOBIAN_STEP = 1.0e-6
+
+# Acceptance rate the burn-in tunes the proposal towards, the usual optimum
+# for a random walk over a smooth multivariate target.
+_TARGET_ACCEPTANCE = 0.234
+
+# Tolerance for the root find that refines a profile interval, in the units of
+# whatever is being profiled. A depth is wanted to a metre at most, and each
+# evaluation is a full re-fit, so the default 2e-12 would spend a dozen fits
+# resolving digits far past anything the uncertainty supports.
+_PROFILE_XTOL = 1.0e-3
 
 # `profile` can also work on the Curie depth, which is not a parameter of the
 # forward model but a sum of two of them.
@@ -207,16 +221,12 @@ class CurieOptimiseBouligand(CurieGrid):
         self.prior = {"beta": None, "zt": None, "dz": None, "C": None}
         self.prior_pdf = {"beta": None, "zt": None, "dz": None, "C": None}
 
-    def objective_routine(self, prior=None, **kwargs):
+    def objective_routine(self, **kwargs):
         """
         Evaluate the objective routine to find the misfit with priors
         Only keys carrying a prior will be added to the total misfit
 
         Args:
-            prior : dict, optional
-                priors to use in place of `self.prior`, in the same
-                `{key: (loc, scale)}` form. Lets a caller evaluate against a
-                perturbed set without touching the instance.
             kwargs : parameter values to test against their priors
 
         Usage:
@@ -226,8 +236,7 @@ class CurieOptimiseBouligand(CurieGrid):
             misfit : float
                 misfit integrated over all observations and priors
         """
-        if prior is None:
-            prior = self.prior
+        prior = self.prior
 
         c = 0.0
 
@@ -339,19 +348,37 @@ class CurieOptimiseBouligand(CurieGrid):
         """
         return 0.5 * np.sum(self.residuals(x, kh, Phi, sigma_Phi, prior) ** 2)
 
-    def _jacobian(self, x, args, step=1.0e-6):
+    def _spectrum(self, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs):
         """
-        Central-difference Jacobian of `residuals` at `x`.
+        Radial power spectrum of one window, weighted ready for fitting.
+
+        Pins `power=2`, which is what `pycurious.grid.bouligand2009` describes,
+        so the four routines that need a spectrum cannot drift apart on it.
+        """
+        return self.window_spectrum(
+            window,
+            xc,
+            yc,
+            taper=taper,
+            power=2.0,
+            process_subgrid=process_subgrid,
+            dof_factor=dof_factor,
+            **kwargs
+        )
+
+    def _jacobian(self, x, r, args):
+        """
+        Central-difference Jacobian of `residuals` at `x`, given `r` there.
 
         Eight evaluations for four parameters, so it costs nothing beside the
         fit itself. The step is relative, since the parameters differ in scale
         by more than an order of magnitude.
         """
         x = np.asarray(x, dtype=float)
-        J = np.empty((self.residuals(x, *args).size, x.size))
+        J = np.empty((r.size, x.size))
 
         for i in range(x.size):
-            h = step * max(abs(x[i]), 1.0)
+            h = _JACOBIAN_STEP * max(abs(x[i]), 1.0)
             xp, xm = x.copy(), x.copy()
             xp[i] += h
             xm[i] -= h
@@ -359,37 +386,28 @@ class CurieOptimiseBouligand(CurieGrid):
 
         return J
 
-    def _covariance(self, x, kh, Phi, sigma_Phi, prior=None):
+    def _covariance(self, x, kh, Phi, sigma_Phi):
         """
         Covariance of the fitted parameters at `x`.
 
-        Generalised least squares: \\( (J^T R^{-1} J)^{-1} \\), where `R` is
-        the banded correlation of the spectral residuals from
-        `pycurious.grid._banded_correlation`. With `R` the identity this
-        reduces to the familiar \\( (J^T J)^{-1} \\).
-
-        Prior rows are genuinely independent of the spectrum and of each other,
-        so they keep unit weight.
+        The spectral residuals are correlated between neighbouring bins, so
+        this is generalised least squares rather than \\( (J^T J)^{-1} \\) --
+        see `pycurious.grid._gls_covariance`, which the Tanaka sibling shares.
         """
-        args = (kh, Phi, sigma_Phi, prior)
-        J = self._jacobian(x, args)
+        args = (kh, Phi, sigma_Phi)
         r = self.residuals(x, *args)
+        J = self._jacobian(x, r, args)
 
-        nk = np.size(kh)
-        R = np.eye(r.size)
-        R[:nk, :nk] = _banded_correlation(r[:nk])
-
-        try:
-            RiJ = np.linalg.solve(R, J)
-            return np.linalg.inv(J.T.dot(RiJ))
-        except np.linalg.LinAlgError:
+        cov = _gls_covariance(J, r, np.size(kh))
+        if cov is None:
             warnings.warn(
                 "the fit is singular, so no covariance could be formed. This "
                 "usually means a parameter is unconstrained by the data.",
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return np.full((x.size, x.size), np.nan)
+            return np.full((np.size(x), np.size(x)), np.nan)
+        return cov
 
     def optimise(
         self,
@@ -403,7 +421,6 @@ class CurieOptimiseBouligand(CurieGrid):
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
-        seed=None,
         return_cov=False,
         **kwargs
     ):
@@ -435,13 +452,6 @@ class CurieOptimiseBouligand(CurieGrid):
                 override the effective-degrees-of-freedom deflation applied to
                 the spectral uncertainties, see
                 `pycurious.grid.CurieGrid.window_spectrum`
-            seed : int, optional
-                accepted and ignored -- the fit is deterministic. It is here so
-                that `optimise_routine` can be driven exactly like the
-                stochastic routines, which
-                `pycurious.parallel.CurieParallel.parallelise_routine` seeds
-                per centroid. Without it the keyword would fall through to the
-                taper and fail there.
             return_cov : bool (default=False)
                 also return the 4x4 parameter covariance matrix
             kwargs : keyword arguments
@@ -487,15 +497,8 @@ class CurieOptimiseBouligand(CurieGrid):
 
         x0 = np.array([beta, zt, dz, C])
 
-        k, Phi, sigma_Phi = self.window_spectrum(
-            window,
-            xc,
-            yc,
-            taper=taper,
-            power=2.0,
-            process_subgrid=process_subgrid,
-            dof_factor=dof_factor,
-            **kwargs
+        k, Phi, sigma_Phi = self._spectrum(
+            window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
 
         # minimise function
@@ -604,37 +607,32 @@ class CurieOptimiseBouligand(CurieGrid):
             **kwargs
         )
 
-    def _profiled_misfit(self, target, value, x_hat, args, bounds):
+    def _profiled_misfit(self, target, value, x_hat, args):
         """
         Smallest misfit attainable with `target` held at `value`.
 
         For a parameter of the forward model that means fixing it and
-        minimising over the other three. For the Curie depth it means
-        substituting \\( \\Delta z = \\mathrm{CPD} - z_t \\), which leaves
-        \\( \\beta, z_t, C \\) free -- so the Curie depth is profiled directly
-        rather than propagated from `dz`, whose uncertainty is not symmetric.
+        minimising over the other three. The Curie depth is the same thing one
+        step along: \\( \\Delta z \\) becomes the constrained coordinate
+        through \\( \\Delta z = \\mathrm{CPD} - z_t \\), leaving
+        \\( \\beta, z_t, C \\) free -- so it is profiled directly rather than
+        propagated from `dz`, whose uncertainty is not symmetric.
         """
-        if target == _CPD:
-            free = [0, 1, 3]
+        curie = target == _CPD
+        fixed = _PARAMETERS.index("dz" if curie else target)
+        free = [j for j in range(len(_PARAMETERS)) if j != fixed]
 
-            def expand(y):
-                beta, zt, C = y
-                return np.array([beta, zt, value - zt, C])
-
-        else:
-            fixed = _PARAMETERS.index(target)
-            free = [j for j in range(len(_PARAMETERS)) if j != fixed]
-
-            def expand(y):
-                x = np.empty(len(_PARAMETERS))
-                x[fixed] = value
-                x[free] = y
-                return x
+        def expand(y):
+            x = np.empty(len(_PARAMETERS))
+            x[free] = y
+            # for the Curie depth the constraint depends on zt, which is free
+            x[fixed] = value - x[1] if curie else value
+            return x
 
         res = minimize(
             lambda y: self.min_func(expand(y), *args),
             np.asarray(x_hat)[free],
-            bounds=[bounds[j] for j in free],
+            bounds=[self.bounds[j] for j in free],
         )
         return res.fun
 
@@ -733,15 +731,8 @@ class CurieOptimiseBouligand(CurieGrid):
                 )
             )
 
-        k, Phi, sigma_Phi = self.window_spectrum(
-            window,
-            xc,
-            yc,
-            taper=taper,
-            power=2.0,
-            process_subgrid=process_subgrid,
-            dof_factor=dof_factor,
-            **kwargs
+        k, Phi, sigma_Phi = self._spectrum(
+            window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
         args = (k, Phi, sigma_Phi)
 
@@ -749,8 +740,18 @@ class CurieOptimiseBouligand(CurieGrid):
         res = minimize(self.min_func, x0, args=args, bounds=self.bounds)
         x_hat, F_min = res.x, res.fun
 
+        # every constrained fit is cached, so the root finding below reuses the
+        # scan nodes it lands on rather than paying for them twice
+        cache = {}
+
+        def constrained(value):
+            value = float(value)
+            if value not in cache:
+                cache[value] = self._profiled_misfit(target, value, x_hat, args)
+            return cache[value]
+
         if bracket is None:
-            bracket = self._profile_bracket(target, x_hat, args, k)
+            bracket = self._profile_bracket(target, x_hat, args)
         lo, hi = float(bracket[0]), float(bracket[1])
 
         values = np.linspace(lo, hi, int(npoints))
@@ -763,9 +764,7 @@ class CurieOptimiseBouligand(CurieGrid):
         if lo < hat < hi:
             values = np.unique(np.append(values, hat))
 
-        misfit = np.array(
-            [self._profiled_misfit(target, v, x_hat, args, self.bounds) for v in values]
-        )
+        misfit = np.array([constrained(v) for v in values])
 
         # a constrained fit can land below the unconstrained one when the
         # latter stopped early, which would put the deviance negative
@@ -785,14 +784,23 @@ class CurieOptimiseBouligand(CurieGrid):
                 stacklevel=2,
             )
 
-        lower = self._profile_root(target, values, deviance, threshold, centre,
-                                   x_hat, args, F_min, level, below=True)
-        upper = self._profile_root(target, values, deviance, threshold, centre,
-                                   x_hat, args, F_min, level, below=False)
+        def gap(value):
+            return 2.0 * (constrained(value) - F_min) - threshold
+
+        # walk outwards from the best fit in each direction
+        below = values <= centre
+        above = values >= centre
+        lower = self._profile_root(
+            values[below][::-1], deviance[below][::-1], threshold, gap,
+            -np.inf, target, level,
+        )
+        upper = self._profile_root(
+            values[above], deviance[above], threshold, gap, np.inf, target, level
+        )
 
         return values, deviance, lower, upper
 
-    def _profile_bracket(self, target, x_hat, args, k):
+    def _profile_bracket(self, target, x_hat, args):
         """
         Default scan range: a few standard deviations either side of the fit,
         reaching further above than below because the tail is on that side.
@@ -816,57 +824,47 @@ class CurieOptimiseBouligand(CurieGrid):
         # penalty and carries no information
         if target in ("zt", "dz", _CPD):
             lo = max(lo, 0.0)
-            hi = min(hi, _COSH_OVERFLOW / np.max(k))
+            hi = min(hi, _COSH_OVERFLOW / np.max(args[0]))
         elif target == "beta":
             lo = max(lo, 0.0)
 
         return lo, hi
 
-    def _profile_root(self, target, values, deviance, threshold, centre,
-                      x_hat, args, F_min, level, below):
+    @staticmethod
+    def _profile_root(values, deviance, threshold, gap, unbounded, target, level):
         """
         Where the deviance crosses `threshold`, refined off the scan grid.
 
+        `values` and `deviance` run outwards from the best fit, so this is the
+        same walk in either direction and the caller supplies the reflection
+        and the sign of `unbounded`.
+
         Reading the crossing off the nearest node would quantise the interval
         at the node spacing, which is a large fraction of its width for a
-        sensible `npoints`. Root finding between the two bracketing nodes costs
+        sensible `npoints`; root finding between the two bracketing nodes costs
         a handful of extra fits and removes that.
         """
-        if below:
-            side = values <= centre
-            order = slice(None, None, -1)      # walk outwards, i.e. downwards
-        else:
-            side = values >= centre
-            order = slice(None)
-
-        v, d = values[side][order], deviance[side][order]
-        crossed = np.nonzero(d > threshold)[0]
+        crossed = np.nonzero(deviance > threshold)[0]
 
         if crossed.size == 0:
             warnings.warn(
                 "the {} profile never reached the {:.0%} threshold within "
                 "{:.4g} to {:.4g}, so that side of the interval is unbounded. "
                 "The data do not constrain it; widen `bracket` to confirm."
-                .format(target, level, values[0], values[-1]),
+                .format(target, level, min(values), max(values)),
                 RuntimeWarning,
                 stacklevel=3,
             )
-            return -np.inf if below else np.inf
+            return unbounded
 
         j = crossed[0]
         if j == 0:
-            # already above the threshold at the fitted value: nothing to bracket
-            return float(v[0])
+            # already over the threshold at the best fit: nothing to bracket
+            return float(values[0])
 
-        def gap(value):
-            return (
-                2.0 * (self._profiled_misfit(target, value, x_hat, args, self.bounds)
-                       - F_min)
-                - threshold
-            )
+        return float(brentq(gap, values[j - 1], values[j], xtol=_PROFILE_XTOL))
 
-        return float(brentq(gap, v[j - 1], v[j]))
-
+    @stochastic
     def metropolis_hastings(
         self,
         window,
@@ -882,7 +880,6 @@ class CurieOptimiseBouligand(CurieGrid):
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
-        temperature=None,
         adapt=True,
         seed=None,
         return_diagnostics=False,
@@ -924,9 +921,6 @@ class CurieOptimiseBouligand(CurieGrid):
                 applied to the subgrid before the spectrum is computed
             dof_factor : float, optional
                 see `pycurious.grid.CurieGrid.window_spectrum`
-            temperature : float, optional
-                starting temperature for the burn-in, annealed to 1 over its
-                first half. Off by default -- see Notes.
             adapt : bool (default=True)
                 tune the proposal during burn-in -- see Notes. Turning this off
                 is only sensible if you have a good `x_scale` already.
@@ -934,7 +928,7 @@ class CurieOptimiseBouligand(CurieGrid):
                 seed for reproducibility
             return_diagnostics : bool (default=False)
                 also return a dict of `acceptance`, `burnin_acceptance`,
-                `x_scale` and `temperature`
+                `x_scale`
 
         Returns:
             beta : ndarray shape (nsim,)
@@ -964,19 +958,15 @@ class CurieOptimiseBouligand(CurieGrid):
             `optimise` uses and from the same starting values. That costs a
             fraction of a second and removes the job the burn-in is worst at.
 
-            Tempering is implemented -- the burn-in accepts uphill moves with
-            probability \\( e^{\\Delta F / T} \\), annealing \\( T \\) to 1 over
-            its first half, after Sambridge (2013),
-            doi:10.1093/gji/ggt342 -- but it is **off** by default, and turning
-            it on made things worse in every case tested. Two reasons. The
-            motivation for it was that large parts of the posterior evaluated
-            to zero, which was the \\( e^{-F} \\) underflow rather than a
-            property of the problem, and log-space acceptance removes it. And
-            annealing fights the proposal tuning below: a high temperature
-            makes almost everything acceptable, which drives the scale up,
-            and the scale then collapses as the temperature falls, freezing the
-            chain wherever the hot phase left it. Reach for it only if you have
-            reason to think the posterior is genuinely multimodal.
+            There is no tempering. It was tried -- annealing the burn-in
+            after Sambridge (2013), doi:10.1093/gji/ggt342 -- and made every
+            case worse. What motivated it was that large parts of the posterior
+            evaluated to zero, and that was the \\( e^{-F} \\) underflow rather
+            than a property of the problem, so log-space acceptance removes the
+            reason for it. It also fights the proposal tuning below: a high
+            temperature makes almost everything acceptable, driving the scale
+            up, and the scale then collapses as the temperature falls, freezing
+            the chain wherever the hot phase left it.
 
             The shape of the proposal matters more than any of the above. The
             four parameters are strongly correlated -- \\( \\beta \\) with
@@ -999,15 +989,8 @@ class CurieOptimiseBouligand(CurieGrid):
         rng = np.random.default_rng(seed)
         ndim = len(_PARAMETERS)
 
-        k, Phi, sigma_Phi = self.window_spectrum(
-            window,
-            xc,
-            yc,
-            taper=taper,
-            power=2.0,
-            process_subgrid=process_subgrid,
-            dof_factor=dof_factor,
-            **kwargs
+        k, Phi, sigma_Phi = self._spectrum(
+            window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
 
         lower = np.array(
@@ -1022,21 +1005,12 @@ class CurieOptimiseBouligand(CurieGrid):
                 return -np.inf
             return -self.min_func(x, k, Phi, sigma_Phi)
 
-        def step(x, F, scale, chol, T):
-            """One Metropolis move at temperature `T`."""
-            if chol is None:
-                proposal = x + rng.normal(size=ndim) * scale
-            else:
-                proposal = x + scale * chol.dot(rng.normal(size=ndim))
+        def step(x, F, scale, chol):
+            """One Metropolis move."""
+            proposal = x + scale * chol.dot(rng.normal(size=ndim))
 
             F1 = log_posterior(proposal)
-            if not np.isfinite(F1):
-                accepted = False
-            elif not np.isfinite(F):
-                # started outside the bounds, so anything valid is an improvement
-                accepted = True
-            else:
-                accepted = np.log(rng.random()) < (F1 - F) / T
+            accepted = np.isfinite(F1) and np.log(rng.random()) < F1 - F
 
             if accepted:
                 return proposal, F1, True
@@ -1065,35 +1039,27 @@ class CurieOptimiseBouligand(CurieGrid):
         # covariance narrower than the truth, proposes from it, and confirms
         # itself. Measured that way the chain reported a sigma on dz of 0.8
         # against a true 8.7.
-        chol = self._proposal_cholesky(self._covariance(x, k, Phi, sigma_Phi), ndim)
+        chol = self._proposal_cholesky(self._covariance(x, k, Phi, sigma_Phi))
 
-        if chol is None:
-            scale = np.ones(ndim) if x_scale is None else np.array(x_scale, dtype=float)
-        else:
-            # a scalar multiplier on an already correctly shaped proposal
-            scale = 1.0 if x_scale is None else float(np.mean(x_scale))
-
-        if temperature is None:
-            temperature = 1.0
-        anneal = max(1, int(burnin) // 2)
+        # `scale` is a scalar multiplier on an already correctly shaped
+        # proposal, so there is one thing for the burn-in to tune
+        scale = 1.0 if x_scale is None else float(np.mean(x_scale))
 
         burnin_accepted = 0
 
         for i in range(int(burnin)):
-            # geometric anneal to T = 1 over the first half, then equilibrate
-            T = temperature ** (1.0 - min(i / anneal, 1.0))
-            x, F, accepted = step(x, F, scale, chol, T)
+            x, F, accepted = step(x, F, scale, chol)
             burnin_accepted += accepted
 
             if adapt:
                 # Robbins-Monro: nudge towards 0.234, with a decaying step so
                 # the scale settles rather than rattling around
-                scale = scale * np.exp((accepted - 0.234) / (i + 1.0) ** 0.6)
+                scale = scale * np.exp((accepted - _TARGET_ACCEPTANCE) / (i + 1.0) ** 0.6)
 
         samples = np.empty((int(nsim), ndim))
         accepted_total = 0
         for i in range(int(nsim)):
-            x, F, accepted = step(x, F, scale, chol, 1.0)
+            x, F, accepted = step(x, F, scale, chol)
             accepted_total += accepted
             samples[i] = x
 
@@ -1102,7 +1068,6 @@ class CurieOptimiseBouligand(CurieGrid):
                 "acceptance": accepted_total / max(int(nsim), 1),
                 "burnin_acceptance": burnin_accepted / max(int(burnin), 1),
                 "x_scale": scale,
-                "temperature": temperature,
             }
             return list(samples.T), diagnostics
 
@@ -1111,9 +1076,9 @@ class CurieOptimiseBouligand(CurieGrid):
         return list(samples.T)
 
     @staticmethod
-    def _proposal_cholesky(cov, ndim):
+    def _proposal_cholesky(cov):
         """
-        Scaled Cholesky factor of a covariance, for use as a proposal, or None.
+        Scaled Cholesky factor of a covariance, for use as a proposal.
 
         Proposing along the covariance lets the chain move down the correlated
         ridge the parameters lie on, which no proposal with one width per
@@ -1122,17 +1087,22 @@ class CurieOptimiseBouligand(CurieGrid):
         \\( 2.38/\\sqrt{d} \\) is the usual optimal scaling for a Gaussian
         target.
 
-        Returns None when the covariance is not usable, so the caller falls
-        back to a diagonal proposal rather than drawing from a degenerate one.
+        Falls back to the identity when the covariance is unusable, so the
+        chain still runs -- isotropically, and badly -- rather than drawing
+        from a degenerate distribution or failing outright.
         """
-        if cov is None or not np.all(np.isfinite(cov)):
-            return None
+        ndim = np.shape(cov)[0] if cov is not None else len(_PARAMETERS)
+        scaling = 2.38 / np.sqrt(ndim)
 
-        try:
-            return np.linalg.cholesky(cov) * 2.38 / np.sqrt(ndim)
-        except np.linalg.LinAlgError:
-            return None
+        if cov is not None and np.all(np.isfinite(cov)):
+            try:
+                return np.linalg.cholesky(cov) * scaling
+            except np.linalg.LinAlgError:
+                pass
 
+        return np.eye(ndim) * scaling
+
+    @stochastic
     def sensitivity(
         self,
         window,
@@ -1202,16 +1172,17 @@ class CurieOptimiseBouligand(CurieGrid):
 
         use_keys = [key for key, pdf in self.prior_pdf.items() if pdf is not None]
 
-        k, Phi, sigma_Phi = self.window_spectrum(
-            window,
-            xc,
-            yc,
-            taper=taper,
-            power=2.0,
-            process_subgrid=process_subgrid,
-            dof_factor=dof_factor,
-            **kwargs
+        k, Phi, sigma_Phi = self._spectrum(
+            window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
+
+        # Every resampled spectrum lands in the same basin, so start each
+        # simulation from the unresampled solution rather than from the
+        # caller's guess. One extra fit up front, and about a third off the
+        # total for any useful `nsim`.
+        x0 = minimize(
+            self.min_func, x0, args=(k, Phi, sigma_Phi), bounds=self.bounds
+        ).x
 
         for sim in range(0, nsim):
             # a fresh set of prior centres, drawn without disturbing the ones
