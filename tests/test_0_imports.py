@@ -21,6 +21,7 @@ def test_pycurious_modules():
     from pycurious import CurieGrid
     from pycurious import CurieOptimiseBouligand
     from pycurious import CurieOptimiseTanaka
+    from pycurious import fractal_anomaly
     from pycurious import mapping
     from pycurious import download
 

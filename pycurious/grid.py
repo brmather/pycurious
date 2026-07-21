@@ -78,6 +78,70 @@ _TAPER_DOF = {
 _DEFAULT_DOF = (2.0, 3.4)
 
 
+def _banded_correlation(r, nbands=2, limit=0.95):
+    """
+    Banded correlation matrix estimated from a vector of fit residuals.
+
+    Neighbouring radial bins are not independent: a taper spreads each
+    wavenumber over a main lobe several bins wide, so their residuals
+    correlate. Treating them as independent understates the uncertainty of
+    every fitted parameter by around 30% under `numpy.hanning`.
+
+    Estimating from the residuals rather than tabulating per taper means this
+    holds for a taper that has not been calibrated. On a correct model it
+    recovers the taper: 0.008 with no taper against a measured 0.003, and 0.383
+    under `numpy.hanning` against a measured 0.363.
+
+    Args:
+        r : 1D array
+            residuals, already whitened by their own uncertainties
+        nbands : int (default=2)
+            how many off-diagonals to estimate. The correlation length is about
+            1.4 bins, so two is enough.
+        limit : float (default=0.95)
+            cap on the total off-diagonal weight, which by Gershgorin keeps the
+            matrix positive definite
+
+    Returns:
+        R : 2D array shape (len(r), len(r))
+
+    Notes:
+        The estimate also picks up smooth model error, which is likewise
+        correlated between neighbours. That is a feature rather than a flaw --
+        a model that cannot follow the data genuinely leaves its parameters
+        less well determined -- but it does mean the result describes the fit
+        as a whole and not the taper alone.
+    """
+    r = np.asarray(r, dtype=float)
+    n = r.size
+
+    rho = np.zeros(nbands + 1)
+    rho[0] = 1.0
+
+    denominator = np.sum(r * r)
+    if denominator > 0.0:
+        for lag in range(1, nbands + 1):
+            if n > lag:
+                rho[lag] = np.sum(r[:-lag] * r[lag:]) / denominator
+
+    # a negative estimate is noise about zero, and would not describe a taper
+    # spreading power into its neighbours
+    rho[1:] = np.clip(rho[1:], 0.0, None)
+
+    total = 2.0 * rho[1:].sum()
+    if total > limit:
+        rho[1:] *= limit / total
+
+    R = np.eye(n)
+    for lag in range(1, nbands + 1):
+        if n > lag:
+            idx = np.arange(n - lag)
+            R[idx, idx + lag] = rho[lag]
+            R[idx + lag, idx] = rho[lag]
+
+    return R
+
+
 def _dof_factor(taper, counts=None, dof_factor=None):
     """
     Effective-degrees-of-freedom deflation for a taper.

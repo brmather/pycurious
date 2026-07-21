@@ -14,7 +14,7 @@ import pytest
 import pycurious
 from pycurious.grid import _dof_factor
 
-from synthetic import fractal_anomaly
+from pycurious import fractal_anomaly
 
 TRUTH = dict(beta=3.0, zt=1.0, dz=20.0, C=5.0)
 WINDOW = 1000e3
@@ -380,3 +380,141 @@ def test_reported_sigma_matches_the_spread_over_realisations():
 
     # dz is understated, and knowingly so
     assert ratio[2] > 1.15, "dz ratio {:.3f}".format(ratio[2])
+
+
+def test_calculate_CPD_matches_the_tanaka_sibling(bouligand):
+    """
+    Both classes must return (CPD, CPD_stdev) from the same shaped call.
+
+    The Bouligand version used to be a bare `return zt+dz` with no uncertainty,
+    so code written against one sibling misbehaved silently against the other.
+    """
+    grid, _, _ = bouligand
+    tanaka = pycurious.CurieOptimiseTanaka(np.zeros((9, 9)), 0.0, 8e3, 0.0, 8e3)
+
+    CPD, sigma = grid.calculate_CPD(1.0, 10.0, 0.3, 0.4)
+    assert CPD == pytest.approx(11.0)
+    assert sigma == pytest.approx(np.hypot(0.3, 0.4))
+
+    # same arity and return shape as Tanaka, which parameterises by z0 instead
+    assert len(grid.calculate_CPD(1.0, 10.0)) == len(tanaka.calculate_CPD(1.0, 6.0))
+
+    # and vectorises over a map of centroids
+    CPD, sigma = grid.calculate_CPD(
+        np.array([1.0, 2.0]), np.array([10.0, 11.0]), 0.0, 0.0
+    )
+    np.testing.assert_allclose(CPD, [11.0, 13.0])
+    np.testing.assert_allclose(sigma, [0.0, 0.0])
+
+
+def test_metropolis_hastings_acceptance_is_in_a_usable_band(bouligand):
+    """
+    The chain must actually move.
+
+    Comparing exp(-F) directly underflows to zero for any real spectrum, so
+    every proposal was rejected: the old sampler returned 9 distinct states in
+    2000 draws while reporting an acceptance rate of 0.004. Acceptance is
+    decided in log space now, and the proposal is drawn along the fit
+    covariance rather than a diagonal, which is what lets it move along the
+    ridge beta and zt lie on.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    posterior, info = grid.metropolis_hastings(
+        WINDOW, xc, yc, 2000, 500, taper=np.hanning, seed=1, return_diagnostics=True
+    )
+    chain = np.array(posterior)
+
+    assert 0.15 < info["acceptance"] < 0.6, info["acceptance"]
+    assert len(np.unique(chain[0])) > 0.1 * chain.shape[1]
+
+
+def test_metropolis_hastings_is_invariant_to_a_constant_misfit(bouligand):
+    """
+    A log-space acceptance ratio sees only differences, so shifting the misfit
+    by a constant leaves the chain where it was. The old exp(-F) form with its
+    1e-99 clamp did not have that property -- which is precisely why it stalled
+    once F grew to a few hundred: exp(-F) underflowed to zero and every
+    proposal was rejected.
+
+    Agreement is close but not bit-exact, and the reason is not the acceptance
+    rule. min_func also drives the search for the mode the chain starts from,
+    and scipy's convergence tolerance is relative to the value of the
+    objective, so offsetting it moves where the minimiser stops -- by about
+    3e-06 here. Reintroducing exp() would not miss this tolerance narrowly; it
+    would freeze the chain outright.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    kwargs = dict(taper=np.hanning, seed=3, adapt=False)
+
+    before = np.array(grid.metropolis_hastings(WINDOW, xc, yc, 200, 100, **kwargs))
+
+    original = grid.min_func
+    grid.min_func = lambda *a, **kw: original(*a, **kw) + 1000.0
+    try:
+        after = np.array(grid.metropolis_hastings(WINDOW, xc, yc, 200, 100, **kwargs))
+    finally:
+        del grid.min_func
+
+    np.testing.assert_allclose(before, after, rtol=1e-4)
+    # and neither chain is frozen, which is what the old form produced
+    assert len(np.unique(before[0])) > 20
+
+
+def test_metropolis_hastings_agrees_with_the_other_estimators(bouligand):
+    """
+    beta, zt and C are near-Gaussian, so the posterior width should match what
+    the covariance and the resampling ensemble report.
+
+    dz is deliberately excluded: its posterior is skewed, so its marginal is
+    wider than a curvature-based sigma by construction.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    sigma = np.array(grid.optimise(WINDOW, xc, yc, taper=np.hanning)[4:8])
+    chain = np.array(
+        grid.metropolis_hastings(WINDOW, xc, yc, 4000, 1000, taper=np.hanning, seed=1)
+    )
+
+    for i, name in ((0, "beta"), (1, "zt"), (3, "C")):
+        ratio = chain[i].std() / sigma[i]
+        assert 0.5 < ratio < 1.6, "{} ratio {:.3f}".format(name, ratio)
+
+
+def test_metropolis_hastings_respects_bounds_and_is_reproducible(bouligand):
+    """
+    The optimiser has always honoured self.bounds; the chain used to ignore
+    them and could wander to a negative thickness.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    kwargs = dict(taper=np.hanning)
+    a = np.array(grid.metropolis_hastings(WINDOW, xc, yc, 300, 100, seed=5, **kwargs))
+    b = np.array(grid.metropolis_hastings(WINDOW, xc, yc, 300, 100, seed=5, **kwargs))
+    c = np.array(grid.metropolis_hastings(WINDOW, xc, yc, 300, 100, seed=6, **kwargs))
+
+    np.testing.assert_allclose(a, b)
+    assert not np.allclose(a, c)
+    assert (a[0] >= 0.0).all() and (a[1] >= 0.0).all() and (a[2] >= 0.0).all()
+
+
+def test_metropolis_hastings_default_return_shape_is_unchanged(bouligand):
+    """
+    pycurious.parallel dispatches on the dimensionality of a routine's result,
+    so the diagnostics have to be opt-in or every parallel MCMC call breaks.
+
+    Also checks a burn-in too short to condition a 4x4 covariance, which
+    test_routines.py exercises at burnin=10.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+
+    plain = grid.metropolis_hastings(WINDOW, xc, yc, 60, 10, taper=np.hanning, seed=1)
+    assert isinstance(plain, list) and len(plain) == 4
+    assert all(np.asarray(a).shape == (60,) for a in plain)
+
+    _, info = grid.metropolis_hastings(
+        WINDOW, xc, yc, 60, 10, taper=np.hanning, seed=1, return_diagnostics=True
+    )
+    assert set(info) == {"acceptance", "burnin_acceptance", "x_scale", "temperature"}

@@ -149,5 +149,6 @@ from .documentation import install_documentation
 from .grid import CurieGrid, bouligand2009, tanaka1999, maus1995, ComputeTanaka
 from .optimise_bouligand import CurieOptimiseBouligand
 from .optimise_tanaka import CurieOptimiseTanaka
+from .synthetic import fractal_anomaly
 from . import mapping
 from . import download

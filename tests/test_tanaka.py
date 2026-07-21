@@ -60,7 +60,7 @@ def test_centroid_sigma_equals_spectrum_sigma(tanaka):
     assert np.all(np.isfinite(sigma))
 
 
-def test_effective_dof_deflates_counts():
+def test_dof_factor_deflates_counts():
     """
     The uncertainty of the binned mean is not sigma/sqrt(N): the FFT cells are
     not independent. Hermitian symmetry alone makes half of them redundant.
@@ -113,11 +113,19 @@ def test_too_few_points_raises(tanaka):
         grid.optimise(300e3, xc, yc, (2.0, 2.001), Z0_RANGE, taper=np.hanning)
 
 
-def test_sensitivity_collapses_to_covariance_without_band_jitter(tanaka):
+def test_sensitivity_tracks_the_covariance_without_band_jitter(tanaka):
     """
-    With band_scale=0 only the spectrum is resampled, which must reproduce the
-    analytic fit covariance. Jittering the bands should then widen it, since
-    band placement dominates.
+    With band_scale=0 only the spectrum is resampled, which should track the
+    analytic fit covariance -- but land below it by a known factor.
+
+    `sensitivity` redraws each bin independently, and the covariance no longer
+    assumes they are: a taper correlates neighbouring annuli, which inflates
+    the reported sigma by about 1.35 under np.hanning. So the two agreeing
+    exactly would mean the correlation correction had been dropped. Measured
+    0.272 against 0.370, a ratio of 1.36.
+
+    Jittering the bands then widens it further, since band placement dominates
+    over spectral scatter on this fixture.
     """
     grid, xc, yc = tanaka
     _, _, _, _, sigma_zt, sigma_z0 = grid.optimise(
@@ -129,7 +137,8 @@ def test_sensitivity_collapses_to_covariance_without_band_jitter(tanaka):
         300e3, xc, yc, 400, ZT_RANGE, Z0_RANGE,
         taper=np.hanning, band_scale=0.0, seed=42,
     )
-    np.testing.assert_allclose(cpd_s.std(), sigma_CPD, rtol=0.25)
+    inflation = sigma_CPD / cpd_s.std()
+    assert 1.15 < inflation < 1.6, "inflation {:.3f}".format(inflation)
 
     _, _, cpd_jitter = grid.sensitivity(
         300e3, xc, yc, 400, ZT_RANGE, Z0_RANGE,

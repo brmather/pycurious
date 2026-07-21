@@ -30,12 +30,24 @@ half space, and the log amplitude spectrum has slope \\( -Z_t \\):
 
 $$ \\ln \\Phi_{\\Delta T}^{1/2} = \\ln B - |k| Z_t $$
 
-At long wavelengths, writing \\( Z_0 \\) for the centroid depth and
-\\( d \\) for the half thickness, the bracket becomes
-\\( 2 \\sinh(|k| d) \\approx 2 |k| d \\), so dividing through by \\( |k| \\)
-leaves a line of slope \\( -Z_0 \\):
+At long wavelengths the expression is rewritten about the centroid depth
+\\( Z_0 \\), with \\( d \\) for the *half* thickness. Since
+\\( \\Phi^{1/2} \\propto e^{-|k|Z_t} - e^{-|k|Z_b} \\), and
+\\( Z_t - Z_0 = -d \\) while \\( Z_b - Z_0 = +d \\), factoring out
+\\( e^{-|k|Z_0} \\) turns the difference into a hyperbolic sine:
+
+$$ \\Phi_{\\Delta T}^{1/2} = C e^{-|k| Z_0}
+   \\left( e^{+|k|d} - e^{-|k|d} \\right)
+   = 2 C e^{-|k| Z_0} \\sinh(|k| d) $$
+
+For \\( |k| d \\ll 1 \\) the sinh is approximately \\( |k| d \\), so dividing
+through by \\( |k| \\) leaves a line of slope \\( -Z_0 \\):
 
 $$ \\ln \\left( \\Phi_{\\Delta T}^{1/2} / |k| \\right) = \\ln D - |k| Z_0 $$
+
+Note the factor \\( e^{-|k|Z_0} \\) has to be taken out of the exponential
+prefactor for this to work: it is not the bracket of the first equation that
+becomes a sinh, but the whole right-hand side once it is re-centred.
 
 The base of the magnetic source, taken to be the Curie point depth, then
 follows from the two:
@@ -74,6 +86,27 @@ biases \\( Z_t \\) high by \\( (\\beta - 1) / 2\\bar{k} \\). Pass `beta` to
 remove it -- see `pycurious.grid.bouligand2009`, which fits \\( \\beta \\)
 directly.
 
+**The correction is verified for \\( Z_t \\) only.** Removing the
+\\( \\ln|k| \\) term recovers the top of the source almost exactly, but it does
+not make the two models agree: `bouligand2009` also carries \\( \\beta \\)
+inside its \\( \\cosh \\)/Bessel factor, and what is left over falls on the
+centroid. Fitting an exact, noiseless `bouligand2009` spectrum with
+\\( Z_t = 1 \\), \\( \\Delta z = 20 \\) and the correction applied:
+
+| \\( \\beta \\) | \\( Z_t \\) | \\( Z_b \\) | error in \\( Z_b \\) |
+|---|---|---|---|
+| 1 | 0.999 | 37.6 | +16.6 |
+| 2 | 0.999 | 25.2 | +4.2 |
+| 3 | 0.998 | 21.6 | +0.6 |
+| 4 | 0.997 | 20.5 | -0.5 |
+
+\\( Z_t \\) comes back to three decimal places throughout; the Curie depth does
+not. Near \\( \\beta = 3 \\) the residual happens to cancel the opposing
+\\( |k|d \\) bias, which is a coincidence of that one value and not a
+validation. For a fractal source, fit \\( \\beta \\) directly with
+`pycurious.optimise_bouligand.CurieOptimiseBouligand` rather than correcting
+for it here.
+
 ## References
 
 Tanaka, A., Okubo, Y., & Matsubayashi, O. (1999). Curie point depth based on
@@ -87,10 +120,35 @@ from multiprocessing import cpu_count
 import numpy as np
 from scipy.optimize import curve_fit
 
-from .grid import CurieGrid, _TAPER_DOF, _DEFAULT_DOF, _dof_factor
+# _dof_factor is not used here directly -- the shared window_spectrum applies
+# it -- but it is imported so that it stays reachable from this module, which
+# is where it lived before both optimisers came to share it.
+from .grid import CurieGrid, _banded_correlation, _dof_factor
 
-# re-exported from pycurious.grid, where both optimisers now share them
 __all__ = ["CurieOptimiseTanaka"]
+
+# Truncating sinh(|k|d) at |k|d biases the centroid, and hence the Curie
+# depth, low. Measured against exact layer spectra the shortfall is
+# proportional to both the thickness and |k|d:
+#
+#     Z_b bias = -0.17 * thickness * |k|d
+#
+# holding to within 6% over thicknesses of 10-40 km and |k|d of 0.2-1.0. That
+# lets check_bands quote a bias in km rather than leave the user to judge
+# whether |k|d is small enough.
+_CENTROID_BIAS = -0.17
+
+# Warn once the bias reaches about 5% of the source thickness. The previous
+# threshold of 1.0 only fired when the Curie depth was already 3.3 km out on a
+# 20 km layer, having said nothing at |k|d = 0.5 where it is 1.7 km out.
+_KD_LIMIT = 0.3
+
+# The zt fit wants wavelengths short compared with the source thickness. The
+# previous rule warned above twice the thickness, where the measured zt error
+# is 0.05% of it -- so it complained about a 10 m error while staying silent
+# about the kilometres above. At four times the thickness the error is about
+# 1%, which is the point at which it starts to matter.
+_HALF_SPACE_RATIO = 4.0
 
 # A zt band fits the short-wavelength end of the spectrum, so its upper edge
 # sitting this far down the available range means the numbers are much more
@@ -165,7 +223,10 @@ class CurieOptimiseTanaka(CurieGrid):
         Returns:
             diagnostics : dict
                 `dk`, `n_zt`, `n_z0`, `lambda_zt`, `lambda_z0` and, if
-                `thickness` was given, `kd_max` and `lambda_zt_min_required`
+                `thickness` was given, `kd_max`, `CPD_bias` and
+                `lambda_zt_min_required`. `CPD_bias` is an estimate in km of
+                how far the \\( |k|d \\) approximation drags the Curie depth,
+                and is negative.
 
         Usage:
             >>> k, Phi, sigma_Phi = grid.radial_spectrum(subgrid, power=1)
@@ -205,23 +266,27 @@ class CurieOptimiseTanaka(CurieGrid):
         if thickness is not None:
             half = 0.5 * float(thickness)
             kd_max = float(k[mask_z0].max() * half) if n_z0 else np.nan
+            cpd_bias = _CENTROID_BIAS * float(thickness) * kd_max
             diagnostics["kd_max"] = kd_max
-            diagnostics["lambda_zt_min_required"] = 2.0 * float(thickness)
+            diagnostics["CPD_bias"] = cpd_bias
+            diagnostics["lambda_zt_min_required"] = _HALF_SPACE_RATIO * float(thickness)
 
-            if n_z0 and kd_max > 1.0:
+            if n_z0 and kd_max > _KD_LIMIT:
                 messages.append(
-                    "z0_range reaches |k|d = {:.2f}. The centroid fit assumes "
-                    "|k|d << 1, and exceeding it biases z0 low -- at |k|d = 3 "
-                    "the bias is several km. Lower the upper edge of z0_range, "
-                    "or use a wider window so there are enough points below "
-                    "it.".format(kd_max)
+                    "z0_range reaches |k|d = {:.2f}, which biases the Curie "
+                    "depth low by about {:.1f} km. The centroid fit assumes "
+                    "|k|d << 1. Lower the upper edge of z0_range, or use a "
+                    "wider window so there are enough points below "
+                    "it.".format(kd_max, abs(cpd_bias))
                 )
-            if n_zt and diagnostics["lambda_zt"][1] > 2.0 * thickness:
+            if n_zt and diagnostics["lambda_zt"][1] > _HALF_SPACE_RATIO * thickness:
                 messages.append(
-                    "zt_range reaches a wavelength of {:.1f} km, longer than "
-                    "twice the source thickness ({:.1f} km). The half-space "
-                    "approximation does not hold there.".format(
-                        diagnostics["lambda_zt"][1], 2.0 * thickness
+                    "zt_range reaches a wavelength of {:.1f} km, more than {:g} "
+                    "times the source thickness ({:.1f} km). The half-space "
+                    "approximation behind the zt fit weakens there.".format(
+                        diagnostics["lambda_zt"][1],
+                        _HALF_SPACE_RATIO,
+                        thickness,
                     )
                 )
 
@@ -238,7 +303,10 @@ class CurieOptimiseTanaka(CurieGrid):
                 )
             )
             if thickness is not None:
-                print("z0 band reaches |k|d = {:.2f} (want << 1)".format(kd_max))
+                print(
+                    "z0 band reaches |k|d = {:.2f}, biasing the Curie depth by "
+                    "about {:+.1f} km".format(kd_max, cpd_bias)
+                )
             for message in messages:
                 print("WARNING: {}".format(message))
             if not messages:
@@ -257,6 +325,13 @@ class CurieOptimiseTanaka(CurieGrid):
 
         Returns `(depth, intercept, depth_stdev)`, where `depth` is the
         negated gradient and so is positive downwards.
+
+        The gradient is the ordinary weighted least-squares one. Its
+        uncertainty is not: neighbouring spectral bins are correlated, and
+        `curve_fit` assumes they are not, so the covariance it returns is too
+        small -- on the legacy fixture the centroid band reports 0.126 km where
+        the residuals imply 0.282. The correlation is estimated from the fit
+        residuals and folded in, as it is on the Bouligand side.
         """
         mask = np.logical_and(k >= band[0], k <= band[1])
         mask &= np.isfinite(Phi) & np.isfinite(sigma) & (sigma > 0.0)
@@ -277,7 +352,44 @@ class CurieOptimiseTanaka(CurieGrid):
             absolute_sigma=absolute_sigma,
         )
 
-        return -gradient, intercept, np.sqrt(np.diag(covariance))[0]
+        stdev = np.sqrt(np.diag(covariance))[0]
+        if absolute_sigma:
+            stdev = self._correlated_gradient_stdev(
+                k[mask], Phi[mask], sigma[mask], gradient, intercept, stdev
+            )
+
+        return -gradient, intercept, stdev
+
+    @staticmethod
+    def _correlated_gradient_stdev(k, Phi, sigma, gradient, intercept, fallback):
+        """
+        Standard deviation of a fitted gradient, allowing for correlation
+        between neighbouring spectral bins.
+
+        \\( (X^T R^{-1} X)^{-1} \\) for the whitened design matrix `X` of the
+        straight line, with `R` the banded correlation of the residuals.
+
+        Falls back to the uncorrelated value when the band holds too few points
+        to estimate a correlation from, or when the result is singular. Below
+        about eight points the estimate is noise, and a noisy inflation is
+        worse than none.
+        """
+        if k.size < 8:
+            return fallback
+
+        residual = (Phi - _linear_func(k, gradient, intercept)) / sigma
+        R = _banded_correlation(residual)
+
+        # design matrix of the straight line, whitened as curve_fit does
+        X = np.column_stack([k, np.ones_like(k)]) / sigma[:, None]
+
+        try:
+            cov = np.linalg.inv(X.T.dot(np.linalg.solve(R, X)))
+        except np.linalg.LinAlgError:
+            return fallback
+
+        stdev = np.sqrt(np.diag(cov))[0]
+        return stdev if np.isfinite(stdev) else fallback
 
     def _spectrum(self, window, xc, yc, taper, beta, process_subgrid, dof_factor,
                   **kwargs):
@@ -394,6 +506,29 @@ class CurieOptimiseTanaka(CurieGrid):
             independent: Hermitian symmetry makes about half of them
             redundant, and tapering correlates neighbours. The correction is
             calibrated per taper; `dof_factor` overrides it.
+
+            Cells in *neighbouring* annuli are correlated too, which `_fit_band`
+            allows for. Against 80 independent synthetics the ratio of the true
+            spread to the reported `sigma_zt` improves from 1.48 to 1.12 with
+            that correction in place.
+
+            `sigma_z0` remains understated, at a ratio of about 1.34, and no
+            covariance can fix it. The centroid gradient is fitted over a
+            handful of the longest wavelengths the window resolves, and its
+            distribution is heavy-tailed: on a 4000 km grid with a true
+            \\( Z_0 \\) of 11 km, the middle 90% of estimates spanned 4.2 to
+            25.3 km. Treat `sigma_z0`, and the Curie depth that follows from
+            it, as a lower bound.
+
+            There is no profile-likelihood alternative here, as there is on the
+            Bouligand side. Each band is a straight-line fit, so its misfit is
+            exactly quadratic in the gradient and the profile interval is
+            provably the same as the covariance one -- verified, a deviance of
+            3.841459 against a threshold of 3.841459 on both bands. It would
+            return the number `_fit_band` already returns. The equivalence
+            holds only for `absolute_sigma=True`; setting it False rescales the
+            covariance by the reduced chi-squared afterwards, which the profile
+            construction does not do.
         """
         k, Phi, Phi_n, sigma = self._spectrum(
             window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs

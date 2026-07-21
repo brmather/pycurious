@@ -2,7 +2,7 @@
 Parameter recovery against synthetics with a known Curie depth.
 
 Unlike the fixed `test_mag_data.txt` fixture, these synthetics are generated
-with prescribed parameters (see `tests/synthetic.py`), so the tests ask whether
+with prescribed parameters (see `pycurious.synthetic`), so the tests ask whether
 each method recovers what it was given rather than whether it reproduces one
 hard-coded number.
 """
@@ -12,7 +12,7 @@ import pytest
 
 import pycurious
 
-from synthetic import fractal_anomaly
+from pycurious import fractal_anomaly
 
 # (beta, zt, dz) -- a shallow thick layer and a deeper thinner one
 CASES = [(3.0, 1.0, 20.0), (2.0, 5.0, 15.0)]
@@ -113,6 +113,35 @@ def test_tanaka_recovers_curie_depth():
     assert sigma_CPD > 0.0
 
 
+@pytest.mark.parametrize("beta", [2.0, 3.0, 4.0])
+def test_tanaka_beta_correction_is_verified_for_zt_only(beta):
+    """
+    Supplying `beta` recovers the top of the source at any beta, but not the
+    Curie depth.
+
+    Removing the -(beta-1)ln|k| term does not make the two models agree:
+    bouligand2009 also carries beta inside its cosh/Bessel factor, and the
+    remainder lands on the centroid. Fitting an exact noiseless spectrum with
+    zt=1 and dz=20, the error in Zb runs +16.6 km at beta=1, +4.2 at 2, +0.6 at
+    3 and -0.5 at 4, while zt comes back to three decimal places throughout.
+
+    So `test_tanaka_recovers_curie_depth` passing at beta=3 is a coincidence of
+    that one value, where the residual cancels the opposing |k|d bias. This
+    test pins the part that is actually general.
+    """
+    zt, dz = 1.0, 20.0
+    k = np.arange(1, 600) * 0.0034
+    sigma = np.full_like(k, 0.01)
+    grid = pycurious.CurieOptimiseTanaka(np.zeros((9, 9)), 0.0, 8e3, 0.0, 8e3)
+
+    # power=1 is the amplitude spectrum, half the log power spectrum
+    Phi = 0.5 * pycurious.bouligand2009(k, beta, zt, dz, 0.0)
+    corrected = Phi + 0.5 * (beta - 1.0) * np.log(k)
+
+    zt_r, _, _ = grid._fit_band(k, corrected, sigma, (0.20, 0.60))
+    assert np.abs(zt_r - zt) < 0.01, "zt {:.4f} at beta={}".format(zt_r, beta)
+
+
 def test_tanaka_beta_correction_removes_fractal_bias():
     """
     Without the correction, zt is biased high by (beta-1)/(2*kbar). Supplying
@@ -164,8 +193,15 @@ def test_tanaka_exact_spectrum():
 
 def test_synthetic_matches_forward_model():
     """
-    The generator must actually produce the spectrum it claims, otherwise the
-    recovery tests above are circular.
+    The measured spectrum of the generated field matches the model it was built
+    from, so the wavenumber grid, the radial binning and the generator agree.
+
+    This is *not* a check against circularity, whatever it may look like. The
+    generator filters noise by exp(bouligand2009/2) and this refits
+    bouligand2009, so the two cannot disagree about the model itself -- only
+    about the machinery in between, which is what it actually exercises. An
+    independent check would need a forward model built some other way, such as
+    integrating a magnetisation over depth as tests/Bouligand_forward.py does.
     """
     beta, zt, dz, C = 3.0, 1.0, 20.0, 5.0
     data, extent = fractal_anomaly(n=512, dx=2.0, beta=beta, zt=zt, dz=dz, C=C, seed=1)
