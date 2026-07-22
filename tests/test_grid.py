@@ -90,6 +90,96 @@ def test_radial_spectrum_counts():
     assert counts.sum() <= grid.data.size
 
 
+def _reference_FFT_spectrum(subgrid, vtaper, dk, kbins, const):
+    """
+    Explicit per-bin reference for `_FFT_spectrum`, kept deliberately naive.
+
+    This is the pre-vectorised implementation. It is O(nbins * N**2) and far
+    too slow to use, but it states the binning semantics unambiguously, so the
+    bincount version is pinned against it rather than against stored numbers.
+    """
+    nr, nc = subgrid.shape
+    nbins = kbins.size - 1
+
+    FT = np.fft.fftshift(np.abs(np.fft.fft2(subgrid * vtaper)))
+    i0, j0 = int(nr // 2), int(nc // 2)
+    ix, iy = np.mgrid[0:nr, 0:nc]
+    kk = np.hypot((ix - i0) * dk, (iy - j0) * dk)
+
+    S = np.empty(nbins)
+    k = np.empty(nbins)
+    sigma = np.empty(nbins)
+    counts = np.empty(nbins, dtype=int)
+    for i in range(nbins):
+        # half-open above, except the last bin which is closed
+        if i == nbins - 1:
+            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
+        else:
+            mask = np.logical_and(kk >= kbins[i], kk < kbins[i + 1])
+        rr = const * np.log(FT[mask])
+        S[i] = rr.mean()
+        k[i] = kk[mask].mean()
+        sigma[i] = np.std(rr)
+        counts[i] = rr.size
+    return k, S, sigma, counts
+
+
+@pytest.mark.parametrize("n", [64, 65, 128, 301])
+@pytest.mark.parametrize("taper", [None, np.hanning])
+@pytest.mark.parametrize("power", [1.0, 2.0])
+def test_FFT_spectrum_matches_per_bin_reference(n, taper, power):
+    """
+    The vectorised binning must reproduce the per-bin loop exactly.
+
+    The bin-edge semantics are easy to break: annuli are half-open `[lo, hi)`
+    so a cell landing on an edge is counted once, *except* the last bin which
+    is closed. Cells sit on edges constantly -- everything on the kx or ky
+    axis has `kk` an exact multiple of `dk` -- so an off-by-one here silently
+    shifts counts between neighbouring annuli.
+    """
+    data, extent = pycurious.fractal_anomaly(n, 1.0, 3.0, 1.0, 20.0, 5.0, seed=n)
+    grid = pycurious.CurieGrid(data, *extent)
+    vtaper, dk, kbins = grid._taper_spectrum(data, taper)
+
+    got = grid._FFT_spectrum(data, vtaper, dk, kbins, power)
+    want = _reference_FFT_spectrum(data, vtaper, dk, kbins, power)
+
+    # counts must be identical, not close -- they are a partition
+    np.testing.assert_array_equal(got[3], want[3])
+    for name, g, w in zip(("k", "S", "sigma"), got, want):
+        np.testing.assert_allclose(g, w, rtol=1e-12, atol=0, err_msg=name)
+
+
+def test_FFT_spectrum_sigma_is_population_std():
+    """
+    `sigma` is the population standard deviation (ddof=0) of `const*ln|FFT|`
+    within the annulus, computed two-pass. The cheaper `E[x**2] - E[x]**2`
+    form cancels badly here -- `ln|FFT|` is O(10) with O(1) scatter -- and
+    loses three digits, more on a near-constant bin.
+    """
+    n = 128
+    data, extent = pycurious.fractal_anomaly(n, 1.0, 3.0, 1.0, 20.0, 5.0, seed=2)
+    grid = pycurious.CurieGrid(data, *extent)
+    vtaper, dk, kbins = grid._taper_spectrum(data, np.hanning)
+
+    k, S, sigma, counts = grid._FFT_spectrum(data, vtaper, dk, kbins, 2.0)
+
+    FT = np.fft.fftshift(np.abs(np.fft.fft2(data * vtaper)))
+    i0 = j0 = int(n // 2)
+    ix, iy = np.mgrid[0:n, 0:n]
+    kk = np.hypot((ix - i0) * dk, (iy - j0) * dk)
+
+    for i in (0, 1, len(k) // 2, len(k) - 1):
+        if i == len(k) - 1:
+            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
+        else:
+            mask = np.logical_and(kk >= kbins[i], kk < kbins[i + 1])
+        cells = 2.0 * np.log(FT[mask])
+        assert counts[i] == cells.size
+        np.testing.assert_allclose(sigma[i], np.std(cells), rtol=1e-13)
+        np.testing.assert_allclose(S[i], cells.mean(), rtol=1e-13)
+
+
 def test_FFT(load_magnetic_anomaly):
     d = load_magnetic_anomaly["mag_data"]
     xc = load_magnetic_anomaly["xc"]

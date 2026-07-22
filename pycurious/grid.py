@@ -437,32 +437,49 @@ class CurieGrid(CurieParallel):
         FT = np.abs(np.fft.fft2(data * vtaper))
         FT = np.fft.fftshift(FT)
 
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
-        counts = np.empty(nbins, dtype=int)
-
         # index of the zero frequency after fftshift, which is nr//2 for both
         # odd and even nr -- (nr-1)//2 is off by one when nr is even
         i0 = int(nr // 2)
         j0 = int(nc // 2)
-        ix, iy = np.mgrid[0:nr, 0:nc]
-        kk = np.hypot((ix - i0) * dk, (iy - j0) * dk)
+        # broadcast two vectors rather than materialising two n*n index grids
+        ix = (np.arange(nr) - i0)[:, np.newaxis] * dk
+        iy = (np.arange(nc) - j0)[np.newaxis, :] * dk
+        kk = np.hypot(ix, iy).ravel()
 
-        for i in range(nbins):
-            # half-open above, so a cell landing on a bin edge is counted once
-            # rather than in both adjacent annuli
-            if i == nbins - 1:
-                mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
-            else:
-                mask = np.logical_and(kk >= kbins[i], kk < kbins[i + 1])
-            rr = const * np.log(FT[mask])
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
-            counts[i] = rr.size
+        # bin every cell once and reduce with bincount. Masking the whole array
+        # per bin instead is O(nbins * nr * nc), which is cubic in the window
+        # and dominates a large run -- over 20x slower at nr = 2001.
+        idx = np.digitize(kk, kbins) - 1
+        # digitize is half-open above, matching the annuli, so a cell landing on
+        # an edge is counted once rather than in both neighbours. The final bin
+        # is the exception: it is closed, so a cell exactly at kbins[-1] belongs
+        # to it rather than falling off the end.
+        idx[(idx == nbins) & (kk <= kbins[-1])] = nbins - 1
+        keep = (idx >= 0) & (idx < nbins)
+        idx = idx[keep]
+        kk = kk[keep]
+        # log only the cells that land in a bin, so a zero outside the binned
+        # range cannot raise a divide-by-zero that the per-bin masking never saw
+        rr = const * np.log(FT.ravel()[keep])
 
-        return k, S, sigma, counts
+        counts = np.bincount(idx, minlength=nbins)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            S = np.bincount(idx, weights=rr, minlength=nbins) / counts
+            k = np.bincount(idx, weights=kk, minlength=nbins) / counts
+            # two-pass variance. The one-pass E[x^2] - E[x]^2 form is cheaper
+            # but cancels: ln|FFT| is O(10) with O(1) scatter, so it loses
+            # three digits of sigma, and more on a near-constant bin.
+            dev = rr - S[idx]
+            sigma = np.sqrt(
+                np.bincount(idx, weights=dev * dev, minlength=nbins) / counts
+            )
+
+        # an empty annulus averages nothing -- mirrors the mean of an empty
+        # slice the per-bin form produced, without the warning
+        empty = counts == 0
+        S[empty] = k[empty] = sigma[empty] = np.nan
+
+        return k, S, sigma, counts.astype(int)
 
     def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, return_counts=False, **kwargs):
         """
