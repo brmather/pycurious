@@ -380,8 +380,13 @@ class CurieGrid(CurieParallel):
         # Centring the means before the inner product drops the constant
         # term's contribution (sum(i) == sum(j) == 0) and keeps the sum well
         # conditioned, so the fit matches lstsq to machine precision.
-        ci = (i * (data.mean(axis=1) - mean)).sum() / (i * i).sum()
-        cj = (j * (data.mean(axis=0) - mean)).sum() / (j * j).sum()
+        # A slope is only identifiable along an axis with more than one node;
+        # a singleton axis carries no trend and its (i*i).sum() is zero, so
+        # take a zero slope there rather than dividing by zero into a NaN.
+        sii = (i * i).sum()
+        sjj = (j * j).sum()
+        ci = (i * (data.mean(axis=1) - mean)).sum() / sii if sii else 0.0
+        cj = (j * (data.mean(axis=0) - mean)).sum() / sjj if sjj else 0.0
         return data - (mean + ci * i[:, None] + cj * j[None, :])
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):

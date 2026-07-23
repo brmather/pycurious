@@ -359,3 +359,13 @@ def test_remove_trend_linear():
         np.testing.assert_allclose(
             grid.remove_trend_linear(data), lstsq_detrend(data), atol=1e-9
         )
+
+    # a singleton axis carries no identifiable slope: the separable fit divides
+    # the inner product by (i*i).sum(), which is zero along a length-1 axis, so
+    # without a guard it returns all-NaN. It must stay finite and still remove
+    # the trend along the long axis, matching the (rank-deficient) lstsq fit.
+    for shape in [(1, 12), (12, 1)]:
+        line = rng.standard_normal(shape)
+        detrended = grid.remove_trend_linear(line)
+        assert np.all(np.isfinite(detrended))
+        np.testing.assert_allclose(detrended, lstsq_detrend(line), atol=1e-9)
