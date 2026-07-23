@@ -358,6 +358,15 @@ class CurieGrid(CurieParallel):
         This may come in handy if the magnetic data has not been
         reduced to the pole.
 
+        The trend is the least-squares plane. Over a regular grid the centred
+        row and column indices are mutually orthogonal and both orthogonal to
+        the constant, so the normal equations decouple and the plane's three
+        coefficients are one mean and two 1-D inner products -- no design
+        matrix and no SVD. This is an order of magnitude cheaper than the
+        equivalent ``lstsq`` fit (the trend is subtracted once per window when
+        computing a spectrum), and unlike an ``(nr, nc)`` vs ``(nc, nr)``
+        design matrix it stays correct when the grid is not square.
+
         Args:
             data : 2D numpy array
 
@@ -365,10 +374,15 @@ class CurieGrid(CurieParallel):
             data : 2D numpy array
         """
         nr, nc = data.shape
-        yq, xq = np.mgrid[0:nc, 0:nr]
-        A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
-        c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
-        return data - np.dot(A, c).reshape(data.shape)
+        i = np.arange(nr) - (nr - 1) / 2.0  # centred row index
+        j = np.arange(nc) - (nc - 1) / 2.0  # centred column index
+        mean = data.mean()
+        # Centring the means before the inner product drops the constant
+        # term's contribution (sum(i) == sum(j) == 0) and keeps the sum well
+        # conditioned, so the fit matches lstsq to machine precision.
+        ci = (i * (data.mean(axis=1) - mean)).sum() / (i * i).sum()
+        cj = (j * (data.mean(axis=0) - mean)).sum() / (j * j).sum()
+        return data - (mean + ci * i[:, None] + cj * j[None, :])
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """

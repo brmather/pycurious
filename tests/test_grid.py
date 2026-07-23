@@ -322,3 +322,40 @@ def test_dof_factor_deflates_counts():
     assert np.all(np.diff(per_bin) < 0.0)
     assert per_bin[0] > 2.0 * per_bin[-1]
     assert per_bin[-1] == pytest.approx(3.3, rel=0.02)
+
+
+def test_remove_trend_linear():
+    """
+    remove_trend_linear subtracts the least-squares plane.
+
+    It must reduce an exact plane to zero -- on non-square grids as well as
+    square ones -- and agree with a correctly aligned lstsq plane fit on
+    arbitrary data. The non-square case is a regression guard: a design matrix
+    built as (nc, nr) instead of (nr, nc) passes the square tests but leaves a
+    finite trend on a rectangular grid.
+    """
+    # remove_trend_linear reads only its argument's shape, so any valid grid
+    # will do; the constructor just requires equal node spacing in x and y.
+    grid = pycurious.CurieGrid(np.zeros((8, 8)), 0.0, 7e3, 0.0, 7e3)
+
+    def lstsq_detrend(data):
+        nr, nc = data.shape
+        ii, jj = np.mgrid[0:nr, 0:nc]  # aligned with data's own (nr, nc) layout
+        A = np.c_[ii.ravel(), jj.ravel(), np.ones(data.size)]
+        coef, *_ = np.linalg.lstsq(A, data.ravel(), rcond=None)
+        return data - (A @ coef).reshape(data.shape)
+
+    rng = np.random.default_rng(0)
+    for nr, nc in [(64, 64), (40, 25), (25, 40)]:
+        ii, jj = np.mgrid[0:nr, 0:nc]
+        plane = 3.0 + 0.5 * ii - 0.25 * jj
+
+        # an exact plane is removed to zero, whatever the aspect ratio
+        detrended = grid.remove_trend_linear(plane.astype(float))
+        np.testing.assert_allclose(detrended, 0.0, atol=1e-9)
+
+        # and on noisy data it matches the lstsq plane fit
+        data = plane + rng.standard_normal((nr, nc))
+        np.testing.assert_allclose(
+            grid.remove_trend_linear(data), lstsq_detrend(data), atol=1e-9
+        )
