@@ -51,6 +51,11 @@ geotiff = ["gdal"]
 # running the example notebooks
 examples = ["matplotlib", "jupyter", "cartopy", "pyproj"]
 test = ["pytest"]
+# building the Sphinx documentation. myst-nb pulls in myst-parser, so a single
+# parser handles both the Markdown pages and the tutorial notebooks. Building
+# the tutorials also needs the `examples` (and `mapping`) extras so the
+# notebooks execute.
+docs = ["sphinx", "furo", "myst-nb", "sphinx-copybutton"]
 
 [tool.setuptools]
 packages = ["pycurious"]

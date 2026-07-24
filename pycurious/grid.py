@@ -15,30 +15,21 @@
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-This PyCurious module contains the `pycurious.grid.CurieGrid` class,
-which can be initialised with a magnetic grid of equal spacing in the x and y direction.
-It contains methods for the following functionality:
+The ``CurieGrid`` class and the shared spectrum and covariance machinery.
 
-- Decomposition of subgrids for processing square windows of the magnetic anomaly
-- Radially averaged spectra, either raw (`radial_spectrum`) or weighted ready
-  for fitting (`window_spectrum`)
-- Removing linear trends from the magnetic anomaly
-- Upward continuation
-- Reduction to the pole
+``CurieGrid`` is initialised with a magnetic grid of equal spacing in x and y and
+provides:
 
-Other functions within this module are useful to compute analytical solutions
-of the radial power spectrum, \\( \\Phi \\) according to Bouligand *et al.* (2009),
-Maus and Dimri (1995), and the decomposition of \\( \\Phi \\) from the magnetic
-anomaly according to Tanaka *et al.* (1999):
+- decomposition of subgrids for processing square windows of the anomaly;
+- radially averaged spectra, either raw (``radial_spectrum``) or weighted ready
+  for fitting (``window_spectrum``);
+- removing linear trends, upward continuation, and reduction to the pole.
 
-- `bouligand2009`: analytic solution used in `pycurious.optimise_bouligand.CurieOptimiseBouligand`
-- `maus1995`: simplified version of `bouligand2009` without higher order integration.
-
-`tanaka1999` and `ComputeTanaka` implement the centroid method, but are
-**deprecated**: use `pycurious.optimise_tanaka.CurieOptimiseTanaka`, which
-fits both spectral bands with `scipy.optimize.curve_fit` and so returns an
-uncertainty on the Curie depth rather than a bare number.
-
+The module also holds the analytic spectra used by the optimisers --
+``bouligand2009`` and its simplified form ``maus1995`` -- and the covariance
+machinery both methods share. ``tanaka1999`` and ``ComputeTanaka`` implement the
+centroid method without uncertainties and are **deprecated** in favour of
+``pycurious.optimise_tanaka.CurieOptimiseTanaka``.
 """
 
 # -*- coding: utf-8 -*-

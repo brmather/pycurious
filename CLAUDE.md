@@ -30,8 +30,10 @@ usually easier than pip.
 To execute notebooks headlessly:
 `MPLBACKEND=Agg jupyter nbconvert --to notebook --execute --inplace <nb>`
 
-There is **no CI**. `.travis.yml` is stale (targets Python 3.5/3.7) and nothing
-runs the tests automatically.
+CI runs on **GitHub Actions** (`.github/workflows/`): `tests.yml` runs the suite
+on every push and PR across Python 3.9-3.13; `docs.yml` builds the Sphinx docs
+(and deploys to GitHub Pages from `master`); `publish.yml` uploads to PyPI via
+OIDC trusted publishing when a GitHub release is published. Travis is gone.
 
 ## Layout
 
@@ -171,11 +173,14 @@ minimum.
 
 ## Style
 
-LGPL header on every module, then a markdown module docstring (pdoc renders
-these, with LaTeX escaped as `\\( ... \\)`). Google-style docstrings with
-`Args:` / `Returns:` / `Notes:` / `References:`. Calibration numbers in
-docstrings are measured — if you change the method, re-measure rather than
-adjusting the prose.
+LGPL header on every module, then a short module docstring. Google-style
+docstrings with `Args:` / `Returns:` / `Notes:` / `References:`, rendered by
+Sphinx (`sphinx.ext.napoleon`) into the API reference — see `docs/`. The heavy
+method narrative and math live in the hand-written theory pages
+(`docs/theory/`), not the module docstrings, which were trimmed to summaries in
+the pdoc→Sphinx migration; keep new math there rather than re-growing the
+docstrings. Calibration numbers in docstrings are measured — if you change the
+method, re-measure rather than adjusting the prose.
 
 ## Packaging
 
@@ -197,13 +202,14 @@ left in place, which makes a correct `MANIFEST.in` look broken.
 
 ## Known defects
 
-- **`install_documentation()` fails for an installed package.** It is advertised
-  in the README and the package docstring, but `[tool.setuptools] packages =
+- **`install_documentation()` fails for an installed package.** It is still
+  advertised in the README, but `[tool.setuptools] packages =
   ["pycurious"]` installs only the package directory, and `Examples/` sits at the
   repository root. `_find_examples` looks inside the package and one level above
   it, and in a wheel neither exists. Works from a source checkout only.
   Pre-dates the v2 restructure that moved `Examples/` out of the package.
 
-`docs/bouligand-findings.md` records seven findings from the Tanaka work and how
+`notes/bouligand-findings.md` records seven findings from the Tanaka work and how
 each was resolved — including two whose prescribed fix turned out to be wrong on
-measurement. Worth reading before trusting any of them.
+measurement. Worth reading before trusting any of them. (It lives in `notes/`,
+not `docs/`, so it stays out of the Sphinx build.)

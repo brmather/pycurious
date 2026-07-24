@@ -27,3 +27,12 @@ Examples/data/*
 *.tiff
 *.npz
 !tests/*.npz
+
+# Sphinx build output, and the tutorial notebooks + data fixture that
+# docs/copy_notebooks.py stages into the source tree on every build. These are
+# regenerated from Examples/, so they are never committed.
+docs/_build/
+docs/tutorials/bouligand/
+docs/tutorials/tanaka/
+docs/data/
+docs/api/generated/

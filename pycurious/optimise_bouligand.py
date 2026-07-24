@@ -15,21 +15,16 @@
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-This PyCurious module contains the `pycurious.optimise.CurieOptimiseBouligand` class,
-which inherits the `pycurious.grid.CurieGrid` class with added functionality for:
+Fit the fractal spectrum of Bouligand *et al.* (2009), with uncertainties.
 
-- Fitting the synthetic power spectrum \\( \\Phi \\) computed with `pycurious.grid.bouligand2009`
-- Defining an objective function with a flexible interface for adding *a priori* and likelihood functions
-- Parallel decomposition of routines to compute the optimal radial power spectrum, and thus Curie depth
-- Metropolis-Hastings algorithm and sensitivity analysis to estimate the uncertainty of the posterior
-
-The posterior is defined as
-
-\\( P(\\mathbf{m}|\\mathbf{d}) = P(\\beta, z_t, \\Delta z, C|\\Phi_d) \\)
-
-where \\( \\beta, z_t, \\Delta z, C \\) are input parameters to `pycurious.grid.bouligand2009` and
-\\( \\Phi_d \\) is the radial power spectrum computed from a FFT over square windows of the magnetic
-anomaly in `pycurious.grid.CurieGrid.radial_spectrum`.
+``CurieOptimiseBouligand`` inherits ``pycurious.grid.CurieGrid`` and recovers the
+four parameters of ``bouligand2009`` (beta, zt, dz, C) by optimisation, posing
+the recovery as a Bayesian inverse problem with a flexible objective function
+that accepts *a priori* and likelihood terms. Beyond the fit it offers
+profile-deviance intervals, Metropolis-Hastings posterior sampling, and a
+sensitivity analysis, and it decomposes the computation across CPUs to map Curie
+depth over a grid. The model and the uncertainty machinery are documented in the
+online theory guide.
 """
 
 # -*- coding: utf-8 -*-
