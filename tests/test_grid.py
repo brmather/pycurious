@@ -180,6 +180,78 @@ def test_FFT_spectrum_sigma_is_population_std():
         np.testing.assert_allclose(S[i], cells.mean(), rtol=1e-13)
 
 
+@pytest.mark.filterwarnings("ignore:subgrid is not square")
+@pytest.mark.parametrize("shape", [(48, 80), (81, 50), (64, 65), (65, 64), (128, 127)])
+@pytest.mark.parametrize("taper", [None, np.hanning])
+def test_FFT_spectrum_rectangular_matches_full_fft2(shape, taper):
+    """
+    The rfft2 binning must reproduce a full complex fft2 for non-square windows
+    and odd sizes too.
+
+    rfft2 only halves the last (column) axis, so a rectangle and an odd or even
+    `nc` are exactly where the Hermitian column weighting -- interior columns
+    counted twice, the self-mirrored DC and even-`nc` Nyquist columns once -- is
+    easiest to get wrong. The square case is pinned above; this covers the rest
+    against the same per-bin reference.
+    """
+    nr, nc = shape
+    rng = np.random.default_rng(nr * 1000 + nc)
+    data = rng.normal(size=(nr, nc))
+    # equal node spacing so CurieGrid accepts the rectangle
+    grid = pycurious.CurieGrid(data, 0.0, (nc - 1) * 1e3, 0.0, (nr - 1) * 1e3)
+    vtaper, dk, kbins = grid._taper_spectrum(data, taper)
+
+    got = grid._FFT_spectrum(data, vtaper, dk, kbins, 2.0)
+    want = _reference_FFT_spectrum(data, vtaper, dk, kbins, 2.0)
+
+    # counts are a partition -- identical, not merely close
+    np.testing.assert_array_equal(got[3], want[3])
+    for name, g, w in zip(("k", "S", "sigma"), got, want):
+        np.testing.assert_allclose(g, w, rtol=1e-12, atol=0, err_msg=name)
+
+
+def test_FFT_spectrum_hermitian_weighting_restores_full_counts():
+    """
+    `counts` must be the full-spectrum count, not rfft2's half plane.
+
+    `window_spectrum` deflates `sigma` by `counts`, and the `_TAPER_DOF`
+    calibration folds in the Hermitian factor of two directly -- its untapered
+    `dof_inf` is 2 -- so halving `counts` would inflate every reported
+    uncertainty by ~sqrt(2). This pins the column weighting that reconstructs
+    the full count, and shows that binning the half plane without it is
+    detectably wrong (which is what a naive rfft2 swap would do).
+    """
+    n = 96  # even, so there is a self-mirrored Nyquist column to weight
+    data, extent = pycurious.fractal_anomaly(n, 1.0, 3.0, 1.0, 20.0, 5.0, seed=7)
+    grid = pycurious.CurieGrid(data, *extent)
+    vtaper, dk, kbins = grid._taper_spectrum(data, np.hanning)
+    nbins = kbins.size - 1
+
+    counts = grid._FFT_spectrum(data, vtaper, dk, kbins, 2.0)[3]
+
+    def binned(kk):
+        idx = np.digitize(kk, kbins) - 1
+        idx[(idx == nbins) & (kk <= kbins[-1])] = nbins - 1
+        keep = (idx >= 0) & (idx < nbins)
+        return np.bincount(idx[keep], minlength=nbins)
+
+    # full complex fft2 plane, binned by brute force
+    i0 = int(n // 2)
+    ix, iy = np.mgrid[0:n, 0:n]
+    full = binned(np.hypot((ix - i0) * dk, (iy - i0) * dk).ravel())
+
+    # the same half plane rfft2 sees, but binned WITHOUT the weighting
+    ncol = n // 2 + 1
+    rf = np.arange(n)
+    rf[rf > (n - 1) // 2] -= n
+    kk_half = np.hypot((rf * dk)[:, None], (np.arange(ncol) * dk)[None, :]).ravel()
+    naive = binned(kk_half)
+
+    np.testing.assert_array_equal(counts, full)   # weighting reproduces the full count
+    assert not np.array_equal(naive, full)        # ... and the unweighted half does not
+    assert naive.sum() < 0.6 * full.sum()          # it is roughly half, as expected
+
+
 def test_FFT(load_magnetic_anomaly):
     d = load_magnetic_anomaly["mag_data"]
     xc = load_magnetic_anomaly["xc"]

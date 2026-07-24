@@ -444,6 +444,18 @@ class CurieGrid(CurieParallel):
         Returns `(k, S, sigma, counts)`, where `counts` is the number of FFT
         cells averaged into each radial bin.
 
+        The transform is `numpy.fft.rfft2`, not the full `fft2`. The anomaly is
+        real, so `|FFT|` is symmetric under reflection through the origin and
+        the discarded half carries no new information; using it halves both the
+        transform and the number of cells to bin, for around twice the speed
+        with no change to the result. To keep `counts` the full-spectrum count
+        -- which `window_spectrum` deflates `sigma` by, and whose Hermitian
+        factor of two is baked into the `_TAPER_DOF` calibration -- each
+        retained cell is weighted by how many full-spectrum cells it stands in
+        for: the columns whose mirror was dropped count twice, the self-mirrored
+        DC and (for even `nc`) Nyquist columns count once. Dropping that weight
+        would halve `counts` and inflate every reported uncertainty by ~sqrt(2).
+
         > This method returned three values prior to v2. Subclasses that
         > override it must now also return `counts`.
         """
@@ -452,18 +464,31 @@ class CurieGrid(CurieParallel):
 
         nbins = kbins.size - 1
 
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data * vtaper))
-        FT = np.fft.fftshift(FT)
+        # real-input transform: only the non-redundant half plane, nc//2 + 1
+        # columns wide, is computed. No fftshift -- rows stay in FFT order and
+        # columns are the non-negative frequencies 0 .. nc//2.
+        FT = np.abs(np.fft.rfft2(data * vtaper))
+        ncol = nc // 2 + 1
 
-        # index of the zero frequency after fftshift, which is nr//2 for both
-        # odd and even nr -- (nr-1)//2 is off by one when nr is even
-        i0 = int(nr // 2)
-        j0 = int(nc // 2)
-        # broadcast two vectors rather than materialising two n*n index grids
-        ix = (np.arange(nr) - i0)[:, np.newaxis] * dk
-        iy = (np.arange(nc) - j0)[np.newaxis, :] * dk
+        # signed integer row frequencies (0, 1, .. -1), built exactly rather
+        # than via fftfreq so a cell on the kx axis lands on the same bin edge
+        # as the old centred grid did, to the bit -- counts are a partition and
+        # must match a full fft2 exactly. Only |k| is binned, so the sign of the
+        # row frequency does not matter.
+        row_freq = np.arange(nr)
+        row_freq[row_freq > (nr - 1) // 2] -= nr
+        ix = (row_freq * dk)[:, np.newaxis]
+        iy = (np.arange(ncol) * dk)[np.newaxis, :]
         kk = np.hypot(ix, iy).ravel()
+
+        # a dropped mirror means every interior column stands for two cells of
+        # the full spectrum; the DC column and, when nc is even, the Nyquist
+        # column are their own mirror and stand for one.
+        weight = np.full(ncol, 2.0)
+        weight[0] = 1.0
+        if nc % 2 == 0:
+            weight[-1] = 1.0
+        weight = np.broadcast_to(weight, (nr, ncol)).ravel()
 
         # bin every cell once and reduce with bincount. Masking the whole array
         # per bin instead is O(nbins * nr * nc), which is cubic in the window
@@ -477,20 +502,21 @@ class CurieGrid(CurieParallel):
         keep = (idx >= 0) & (idx < nbins)
         idx = idx[keep]
         kk = kk[keep]
+        weight = weight[keep]
         # log only the cells that land in a bin, so a zero outside the binned
         # range cannot raise a divide-by-zero that the per-bin masking never saw
         rr = const * np.log(FT.ravel()[keep])
 
-        counts = np.bincount(idx, minlength=nbins)
+        counts = np.bincount(idx, weights=weight, minlength=nbins)
         with np.errstate(invalid="ignore", divide="ignore"):
-            S = np.bincount(idx, weights=rr, minlength=nbins) / counts
-            k = np.bincount(idx, weights=kk, minlength=nbins) / counts
+            S = np.bincount(idx, weights=weight * rr, minlength=nbins) / counts
+            k = np.bincount(idx, weights=weight * kk, minlength=nbins) / counts
             # two-pass variance. The one-pass E[x^2] - E[x]^2 form is cheaper
             # but cancels: ln|FFT| is O(10) with O(1) scatter, so it loses
             # three digits of sigma, and more on a near-constant bin.
             dev = rr - S[idx]
             sigma = np.sqrt(
-                np.bincount(idx, weights=dev * dev, minlength=nbins) / counts
+                np.bincount(idx, weights=weight * dev * dev, minlength=nbins) / counts
             )
 
         # an empty annulus averages nothing -- mirrors the mean of an empty
@@ -498,7 +524,10 @@ class CurieGrid(CurieParallel):
         empty = counts == 0
         S[empty] = k[empty] = sigma[empty] = np.nan
 
-        return k, S, sigma, counts.astype(int)
+        # counts are integer-valued (sums of the weights 1 and 2); round before
+        # casting so a float sum landing a hair below the integer is not
+        # truncated downward.
+        return k, S, sigma, np.rint(counts).astype(int)
 
     def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, return_counts=False, **kwargs):
         """
