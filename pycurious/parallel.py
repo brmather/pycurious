@@ -147,7 +147,7 @@ class CurieParallel(object):
 
             Each centroid is assigned a new process and sent to a free processor
             to compute. In this case, the output is separate lists of shape(l,)
-            for \\( \\beta, z_t, \\Delta z, C \\). If `len(xc_list)=2` then,
+            for :math:`\\beta, z_t, \\Delta z, C`. If `len(xc_list)=2` then,
 
             >>> self.parallelise_routine(window, [x1,x2], [y1, y2], self.optimise)
             [[beta1  beta2], [zt1  zt2], [dz1  dz2], [C1  C2]]
@@ -156,24 +156,24 @@ class CurieParallel(object):
 
             >>> self.parallelise_routine(window, xc_list, yc_list, self.sensitivity, nsim)
 
-            This time the output will be a list of lists for \\( \\beta, z_t, \\Delta z, C \\)
+            This time the output will be a list of lists for :math:`\\beta, z_t, \\Delta z, C`
             i.e. if `len(xc_list)=2` is the number of centroids and `nsim=4` is the number of
-            simulations then separatee lists will be returned for \\( \\beta, z_t, \\Delta z, C \\).
+            simulations then separate lists will be returned for :math:`\\beta, z_t, \\Delta z, C`.
 
             >>> self.parallelise_routine(window, [x1,x2], [y1,y2], self.sensitivity, 4)
 
             which would return:
 
-            ```python
-            [[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
-              [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
-             [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
-              [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
-             [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
-              [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
-             [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
-              [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
-            ```
+            .. code-block:: python
+
+                [[[ beta1a , beta1b , beta1c , beta1d ],   # centroid 1 (x1,y1)
+                  [ beta2a , beta2b , beta2c , beta2d ]],  # centroid 2 (x2,y2)
+                 [[   zt1a ,   zt1b ,   zt1c ,   zt1d ],   # centroid 1 (x1,y1)
+                  [   zt2a ,   zt2b ,   zt2c ,   zt2d ]],  # centroid 2 (x2,y2)
+                 [[   dz1a ,   dz1b ,   dz1c ,   dz1d ],   # centroid 1 (x1,y1)
+                  [   dz2a ,   dz2b ,   dz2c ,   dz2d ]]   # centroid 2 (x2,y2)
+                 [[    C1a ,    C1b ,    C1c ,    C1d ],   # centroid 1 (x1,y1)
+                  [    C2a ,    C2b ,    C2c ,    C2d ]]]  # centroid 2 (x2,y2)
 
         Notes:
             See the module docstring for the `if __name__ == "__main__":`

@@ -136,7 +136,7 @@ def _gls_covariance(J, r, ncorrelated):
     """
     Parameter covariance allowing for correlation between residuals.
 
-    Generalised least squares, \\( (J^T R^{-1} J)^{-1} \\), with `R` the banded
+    Generalised least squares, :math:`(J^T R^{-1} J)^{-1}`, with `R` the banded
     correlation of the first `ncorrelated` residuals from
     `_banded_correlation`. Any rows beyond that -- the prior terms of a fit --
     are independent of the spectrum and of each other, so they keep unit weight
@@ -426,11 +426,9 @@ class CurieGrid(CurieParallel):
         A constant `const` should be applied to the FFT of the magnetic anomaly
         to convert `S` and `sigma` to specific units for further analysis.
 
-        It is useful to remember that:
+        It is useful to remember that::
 
-        ```python
-        2*log(FFT) == log(FFT**2)
-        ```
+            2*log(FFT) == log(FFT**2)
 
         Returns `(k, S, sigma, counts)`, where `counts` is the number of FFT
         cells averaged into each radial bin.
@@ -447,8 +445,10 @@ class CurieGrid(CurieParallel):
         DC and (for even `nc`) Nyquist columns count once. Dropping that weight
         would halve `counts` and inflate every reported uncertainty by ~sqrt(2).
 
-        > This method returned three values prior to v2. Subclasses that
-        > override it must now also return `counts`.
+        .. note::
+
+            This method returned three values prior to v2. Subclasses that
+            override it must now also return `counts`.
         """
         data = subgrid
         nr, nc = data.shape
@@ -524,7 +524,7 @@ class CurieGrid(CurieParallel):
         """
         Compute the radial spectrum for a square grid.
 
-        > Wavenumber is returned in values of __rad/km__
+        Wavenumber is returned in units of **rad/km**.
 
         Args:
             subgrid : 2D array
@@ -532,11 +532,12 @@ class CurieGrid(CurieParallel):
             taper : function (default=np.hanning)
                 taper function, set to None for no taper function
             power : float
-                raise the FFT of the magnetic anomaly to the power.
-                - 2.0 for Bouligand _et al._ (2009) use cases, which gives
-                  the log power spectrum \\( \\ln \\Phi_{\\Delta T} \\)
-                - 1.0 for Tanaka _et al._ (1999) use cases, which gives the
-                  log amplitude spectrum \\( \\ln \\Phi_{\\Delta T}^{1/2} \\)
+                raise the FFT of the magnetic anomaly to the power:
+
+                - 2.0 for Bouligand *et al.* (2009) use cases, which gives
+                  the log power spectrum :math:`\\ln \\Phi_{\\Delta T}`
+                - 1.0 for Tanaka *et al.* (1999) use cases, which gives the
+                  log amplitude spectrum :math:`\\ln \\Phi_{\\Delta T}^{1/2}`
             return_counts : bool (default=False)
                 also return the number of FFT cells averaged into each bin
             kwargs : keyword arguments
@@ -554,7 +555,7 @@ class CurieGrid(CurieParallel):
                 Only returned if `return_counts=True`.
 
         Notes:
-            `Phi` is the mean of \\( \\ln |FFT| \\) over each annulus, so
+            `Phi` is the mean of :math:`\\ln |FFT|` over each annulus, so
             `sigma_Phi` describes the scatter of the individual cells, not
             the uncertainty of that mean. Dividing by the square root of
             `counts` gives the standard error, though note the cells are not
@@ -562,7 +563,7 @@ class CurieGrid(CurieParallel):
             half of them are redundant, and tapering correlates neighbours.
 
             While `subgrid` is projected in eastings / northings (in metres),
-            the wavenumber, \\( k \\), is returned in units of rad/km.
+            the wavenumber, :math:`k`, is returned in units of rad/km.
             This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
             (1999) require the computation of Curie depth in these units.
 
@@ -707,28 +708,30 @@ class CurieGrid(CurieParallel):
             This functions performs the reduction in the frequency domain
             (using the FFT). The transform filter is (in the freq domain):
 
-            \\( RTP(k_x, k_y) = \\frac{|k|}{
-                a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
-                i|k|(b_1 k_x + b_2 k_y)}    \\)
+            .. math::
 
-            in which \\( k_x, k_y \\) are the wave-numbers in the x and y
+                RTP(k_x, k_y) = \\frac{|k|}
+                {a_1 k_x^2 + a_2 k_y^2 + a_3 k_x k_y +
+                i|k|(b_1 k_x + b_2 k_y)}
+
+            in which :math:`k_x, k_y` are the wave-numbers in the x and y
             directions and
 
-            \\( |k| = \\sqrt{k_x^2 + k_y^2} \\)
+            :math:`|k| = \\sqrt{k_x^2 + k_y^2}`
 
-            \\( a_1 = m_z f_z - m_x f_x     \\)
+            :math:`a_1 = m_z f_z - m_x f_x`
 
-            \\( a_2 = m_z f_z - m_y f_y     \\)
+            :math:`a_2 = m_z f_z - m_y f_y`
 
-            \\( a_3 = -m_y f_x - m_x f_y    \\)
+            :math:`a_3 = -m_y f_x - m_x f_y`
 
-            \\( b_1 = m_x f_z + m_z f_x     \\)
+            :math:`b_1 = m_x f_z + m_z f_x`
 
-            \\( b_2 = m_y f_z + m_z f_y     \\)
+            :math:`b_2 = m_y f_z + m_z f_y`
 
-            \\( \\mathbf{m} = (m_x, m_y, m_z) \\) is the unit-vector of the total
+            :math:`\\mathbf{m} = (m_x, m_y, m_z)` is the unit-vector of the total
             magnetization of the source and
-            \\( \\mathbf{f} = (f_x, f_y, f_z) \\) is the unit-vector of the
+            :math:`\\mathbf{f} = (f_x, f_y, f_z)` is the unit-vector of the
             Geomagnetic field.
         """
         nr, nc = data.shape
@@ -772,12 +775,12 @@ class CurieGrid(CurieParallel):
         Calculates the continuation through the Fast Fourier Transform in
         the wavenumber domain (Blakely, 1996):
 
-        \\( F\\{h_{up}\\} = F\\{h\\} e^{-\\Delta z |k|} \\)
+        :math:`F\\{h_{up}\\} = F\\{h\\} e^{-\\Delta z |k|}`
 
-        and then transformed back to the space domain. \\( h_{up} \\) is the
-        upward continue data, \\( \\Delta z \\) is the height increase,
-        \\( F \\) denotes the Fourier Transform,
-        \\( |k| \\) is the wavenumber modulus.
+        and then transformed back to the space domain. :math:`h_{up}` is the
+        upward continue data, :math:`\\Delta z` is the height increase,
+        :math:`F` denotes the Fourier Transform,
+        :math:`|k|` is the wavenumber modulus.
 
         Args:
             data : 2D array
@@ -834,7 +837,7 @@ def bouligand2009(kh, beta, zt, dz, C):
             top of magnetic sources
         dz : float / 1D array
             thickness of magnetic sources
-        C : float 1D array
+        C : float / 1D array
             field constant (Maus et al., 1997)
 
     Returns:
@@ -877,9 +880,10 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
         k : float / 1D-array
             wavenumber in rad/km
         lnPhi : float / 1D array
-            log of the radial power spectrum (see power_spectrum_log)
-            expected in ln(sqrt(S)) form
-        sigma_lnPhi : standard deviation of lnPhi
+            log of the radial power spectrum, expected in ln(sqrt(S)) form
+            (as returned by `radial_spectrum` with `power=1`)
+        sigma_lnPhi : float / 1D array
+            standard deviation of lnPhi
         kmin_range : tuple (default:(0.05, 0.2))
             minimum and maximum range of spatial frequencies to fit for the
             top of magnetic sources - ideally low frequency, straight line
@@ -894,7 +898,7 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
             (Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources
 
     Notes:
-        .. deprecated::
+        .. deprecated:: 2.0
             Use `pycurious.optimise_tanaka.CurieOptimiseTanaka.optimise`,
             which fits both bands with `scipy.optimize.curve_fit` and returns
             depths positive downwards with their uncertainties.
@@ -965,7 +969,7 @@ def ComputeTanaka(zT, dzT, z0, dz0):
     """
     Compute the Curie depth from the results of `tanaka1999`.
 
-    .. deprecated::
+    .. deprecated:: 2.0
         Use `pycurious.optimise_tanaka.CurieOptimiseTanaka.calculate_CPD`.
 
     Args:

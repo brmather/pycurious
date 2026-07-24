@@ -133,8 +133,8 @@ class CurieOptimiseBouligand(CurieGrid):
     
     Attributes:
         bounds : list of tuples
-            lower and upper bounds for \\( \\beta, z_t, \\Delta z, C \\).
-            \\( \\Delta z \\) is capped where the forward model stops
+            lower and upper bounds for :math:`\\beta, z_t, \\Delta z, C`.
+            :math:`\\Delta z` is capped where the forward model stops
             evaluating, which depends on the grid spacing and is hundreds of km
             -- far beyond any Curie depth on Earth, so it never binds on data
             that constrain the base. Reassign this attribute to impose a
@@ -142,7 +142,7 @@ class CurieOptimiseBouligand(CurieGrid):
             will truncate the upper tail of a skewed posterior rather than
             report it.
         prior : dict
-            dictionary of priors for \\( \\beta, z_t, \\Delta z, C \\)
+            dictionary of priors for :math:`\\beta, z_t, \\Delta z, C`
         grid : 2D numpy array
             2D array of magnetic data
         xmin : float
@@ -194,7 +194,7 @@ class CurieOptimiseBouligand(CurieGrid):
         Largest `dz` this grid can evaluate, in km.
 
         The radial spectrum reaches the Nyquist wavenumber,
-        \\( \\pi/\\Delta x \\) in rad/km, whatever the window size, so the depth at which
+        :math:`\\pi/\\Delta x` in rad/km, whatever the window size, so the depth at which
         `pycurious.grid.bouligand2009` overflows is fixed by the grid spacing
         alone: 446 km at 2 km spacing, 111 km at 500 m. Both are far beyond any
         Curie depth on Earth, which is the point -- see `_COSH_OVERFLOW`.
@@ -204,7 +204,7 @@ class CurieOptimiseBouligand(CurieGrid):
     def add_prior(self, **kwargs):
         """
         Add a prior to the dictionary (tuple)
-        Available priors are \\( \\beta, z_t, \\Delta z, C \\)
+        Available priors are :math:`\\beta, z_t, \\Delta z, C`
 
         Assumes a normal distribution or
         define another distribution from `scipy.stats`
@@ -289,19 +289,19 @@ class CurieOptimiseBouligand(CurieGrid):
 
         `min_func` is the half sum of squares of this vector, and the fit
         covariance comes from its Jacobian, so the two cannot drift apart.
-        A Gaussian prior \\( N(p, \\sigma_p) \\) on a parameter \\( m \\) is
+        A Gaussian prior :math:`N(p, \\sigma_p)` on a parameter :math:`m` is
         just another observation, contributing a residual
-        \\( (m - p)/\\sigma_p \\).
+        :math:`(m - p)/\\sigma_p`.
 
         Args:
             x : array shape (4,)
-                \\( \\beta, z_t, \\Delta z, C \\)
+                :math:`\\beta, z_t, \\Delta z, C`
             kh : array shape (n,)
                 wavenumbers (rad/km)
             Phi : array shape (n,)
-                radial power spectrum \\( \\Phi \\)
+                radial power spectrum :math:`\\Phi`
             sigma_Phi : array shape (n,)
-                uncertainty of \\( \\Phi \\), as returned by
+                uncertainty of :math:`\\Phi`, as returned by
                 `pycurious.grid.CurieGrid.window_spectrum`
             prior : dict, optional
                 priors to use in place of `self.prior`
@@ -343,13 +343,13 @@ class CurieOptimiseBouligand(CurieGrid):
 
         Args:
             x : array shape (4,)
-                array of variables \\( \\beta, z_t, \\Delta z, C \\)
+                array of variables :math:`\\beta, z_t, \\Delta z, C`
             kh : array shape (n,)
                 wavenumbers (rad/km)
             Phi : array shape (n,)
-                radial power spectrum \\( \\Phi \\)
+                radial power spectrum :math:`\\Phi`
             sigma_Phi : array shape (n,)
-                uncertainty of \\( \\Phi \\), as returned by
+                uncertainty of :math:`\\Phi`, as returned by
                 `pycurious.grid.CurieGrid.window_spectrum`
             prior : dict, optional
                 priors to use in place of `self.prior`
@@ -410,7 +410,7 @@ class CurieOptimiseBouligand(CurieGrid):
         Covariance of the fitted parameters at `x`.
 
         The spectral residuals are correlated between neighbouring bins, so
-        this is generalised least squares rather than \\( (J^T J)^{-1} \\) --
+        this is generalised least squares rather than :math:`(J^T J)^{-1}` --
         see `pycurious.grid._gls_covariance`, which the Tanaka sibling shares.
         """
         args = (kh, Phi, sigma_Phi)
@@ -444,7 +444,7 @@ class CurieOptimiseBouligand(CurieGrid):
         **kwargs
     ):
         """
-        Find the optimal parameters of \\( \\beta, z_t, \\Delta z, C \\)
+        Find the optimal parameters of :math:`\\beta, z_t, \\Delta z, C`
         for a given centroid (xc,yc) and window size, with their
         uncertainties.
 
@@ -465,7 +465,7 @@ class CurieOptimiseBouligand(CurieGrid):
                 field constant (starting value)
             taper : taper (default=`numpy.hanning`)
                 taper function, set to None for no taper function
-            process_subgrids : function
+            process_subgrid : function
                 a custom function to process the subgrid
             dof_factor : float, optional
                 override the effective-degrees-of-freedom deflation applied to
@@ -502,16 +502,16 @@ class CurieOptimiseBouligand(CurieGrid):
             the spectrum at this window and this model. They do **not** include
             the systematic error from the choice of window size or centroid,
             which on a small grid is larger: sweeping those over
-            `tests/test_mag_data.txt` moves \\( \\Delta z \\) by 5.5 km, where
+            `tests/test_mag_data.txt` moves :math:`\\Delta z` by 5.5 km, where
             the fit reports about 3.3 km.
 
             `sigma_dz` in particular should be read as a lower bound. The
-            likelihood in \\( \\Delta z \\) has a long upper tail (Mather &
+            likelihood in :math:`\\Delta z` has a long upper tail (Mather &
             Fullea, 2019), so a symmetric interval is the wrong shape for it.
             Measured over 200 independent synthetics, `sigma_beta`, `sigma_zt`
             and `sigma_C` reproduce the true spread to within 1%, while
             `sigma_dz` understates it by about 40%. Use `profile` for an honest
-            interval on \\( \\Delta z \\) and on the Curie depth.
+            interval on :math:`\\Delta z` and on the Curie depth.
         """
 
         x0 = np.array([beta, zt, dz, C])
@@ -567,7 +567,7 @@ class CurieOptimiseBouligand(CurieGrid):
     ):
         """
         Iterate through a list of centroids to compute the optimal values
-        of \\( \\beta, z_t, \\Delta z, C \\) for a given window size.
+        of :math:`\\beta, z_t, \\Delta z, C` for a given window size.
         
         Args:
             window : float
@@ -587,8 +587,12 @@ class CurieOptimiseBouligand(CurieGrid):
             taper : function
                 taper function (default=`numpy.hanning`)
                 set to None for no taper function
-            process_subgrids : func
+            process_subgrid : func
                 a custom function to process the subgrid
+            dof_factor : float, optional
+                override the effective-degrees-of-freedom deflation applied to
+                the spectral uncertainties, see
+                `pycurious.grid.CurieGrid.window_spectrum`
             kwargs : keyword arguments
                 to pass to radial_spectrum.
 
@@ -632,9 +636,9 @@ class CurieOptimiseBouligand(CurieGrid):
 
         For a parameter of the forward model that means fixing it and
         minimising over the other three. The Curie depth is the same thing one
-        step along: \\( \\Delta z \\) becomes the constrained coordinate
-        through \\( \\Delta z = \\mathrm{CPD} - z_t \\), leaving
-        \\( \\beta, z_t, C \\) free -- so it is profiled directly rather than
+        step along: :math:`\\Delta z` becomes the constrained coordinate
+        through :math:`\\Delta z = \\mathrm{CPD} - z_t`, leaving
+        :math:`\\beta, z_t, C` free -- so it is profiled directly rather than
         propagated from `dz`, whose uncertainty is not symmetric.
         """
         curie = target == _CPD
@@ -678,13 +682,13 @@ class CurieOptimiseBouligand(CurieGrid):
         assuming the posterior is symmetric.
 
         Each point of the scan holds `target` fixed and re-optimises everything
-        else, tracing the deviance \\( 2(F - F_{min}) \\). The interval is
-        where that crosses \\( \\chi^2_1 \\) at the requested level, which is
+        else, tracing the deviance :math:`2(F - F_{min})`. The interval is
+        where that crosses :math:`\\chi^2_1` at the requested level, which is
         the usual likelihood-ratio construction.
 
-        This matters most for \\( \\Delta z \\) and hence the Curie depth. Both
+        This matters most for :math:`\\Delta z` and hence the Curie depth. Both
         have a long upper tail (Mather & Fullea, 2019), so the symmetric
-        \\( \\pm \\sigma \\) that `optimise` reports understates how far the
+        :math:`\\pm \\sigma` that `optimise` reports understates how far the
         parameter can plausibly reach -- by about 40% on synthetics.
 
         Args:
@@ -718,7 +722,7 @@ class CurieOptimiseBouligand(CurieGrid):
             values : 1D array shape (npoints,)
                 where the target was held
             deviance : 1D array shape (npoints,)
-                \\( 2(F - F_{min}) \\) at each of those
+                :math:`2(F - F_{min})` at each of those
             lower : float
                 lower end of the interval, `-inf` if the scan never crossed
             upper : float
@@ -739,9 +743,9 @@ class CurieOptimiseBouligand(CurieGrid):
             Like the covariance from `optimise`, the interval describes the
             scatter of the spectrum at a fixed window, centroid and model. It
             does not cover the systematic error from choosing those: on
-            `tests/test_mag_data.txt` the interval for \\( \\Delta z \\) is
+            `tests/test_mag_data.txt` the interval for :math:`\\Delta z` is
             about 3.3 km wide, where sweeping the window size and centroid
-            moves \\( \\Delta z \\) over 5.5 km.
+            moves :math:`\\Delta z` over 5.5 km.
         """
         if target not in _PARAMETERS + (_CPD,):
             raise ValueError(
@@ -907,7 +911,7 @@ class CurieOptimiseBouligand(CurieGrid):
         MCMC algorithm using a Metropolis-Hastings sampler.
 
         Evaluates a Markov chain for starting values of
-        \\( \\beta, z_t, \\Delta z, C \\) and returns the ensemble of model
+        :math:`\\beta, z_t, \\Delta z, C` and returns the ensemble of model
         realisations.
 
         Args:
@@ -920,7 +924,8 @@ class CurieOptimiseBouligand(CurieGrid):
             nsim : int
                 number of simulations
             burnin : int
-                number of burn-in simulations before to nsim
+                number of burn-in simulations discarded before the `nsim`
+                recorded samples
             x_scale : float(4), optional
                 initial width of the proposal in each parameter
                 (default=`[1,1,1,1]` for `[beta, zt, dz, C]`). With
@@ -967,8 +972,8 @@ class CurieOptimiseBouligand(CurieGrid):
 
         Notes:
             Acceptance is decided in log space. Comparing
-            \\( e^{-F} \\) directly underflows to zero for any real spectrum --
-            \\( F \\) runs to hundreds -- at which point every proposal is
+            :math:`e^{-F}` directly underflows to zero for any real spectrum --
+            :math:`F` runs to hundreds -- at which point every proposal is
             rejected and the chain returns a handful of distinct states
             dressed up as a posterior.
 
@@ -979,7 +984,7 @@ class CurieOptimiseBouligand(CurieGrid):
             There is no tempering. It was tried -- annealing the burn-in
             after Sambridge (2013), doi:10.1093/gji/ggt342 -- and made every
             case worse. What motivated it was that large parts of the posterior
-            evaluated to zero, and that was the \\( e^{-F} \\) underflow rather
+            evaluated to zero, and that was the :math:`e^{-F}` underflow rather
             than a property of the problem, so log-space acceptance removes the
             reason for it. It also fights the proposal tuning below: a high
             temperature makes almost everything acceptable, driving the scale
@@ -987,8 +992,8 @@ class CurieOptimiseBouligand(CurieGrid):
             the chain wherever the hot phase left it.
 
             The shape of the proposal matters more than any of the above. The
-            four parameters are strongly correlated -- \\( \\beta \\) with
-            \\( z_t \\) at about -0.92, \\( z_t \\) with \\( C \\) at about
+            four parameters are strongly correlated -- :math:`\\beta` with
+            :math:`z_t` at about -0.92, :math:`z_t` with :math:`C` at about
             0.87 -- and their marginal widths differ by a factor of thirty, so
             a proposal with one width per parameter cannot move along the ridge
             they lie on, and the chain sits still. The proposal is therefore
@@ -1102,7 +1107,7 @@ class CurieOptimiseBouligand(CurieGrid):
         ridge the parameters lie on, which no proposal with one width per
         parameter can follow: `beta` and `zt` correlate at about -0.92 and
         their marginal widths differ by a factor of thirty. The factor of
-        \\( 2.38/\\sqrt{d} \\) is the usual optimal scaling for a Gaussian
+        :math:`2.38/\\sqrt{d}` is the usual optimal scaling for a Gaussian
         target.
 
         Falls back to the identity when the covariance is unusable, so the
@@ -1138,7 +1143,7 @@ class CurieOptimiseBouligand(CurieGrid):
         **kwargs
     ):
         """
-        Sample the uncertainty of \\( \\beta, z_t, \\Delta z, C \\) by
+        Sample the uncertainty of :math:`\\beta, z_t, \\Delta z, C` by
         resampling the spectrum, and the centre of each prior distribution
         (if provided by the user - see add_prior).
 
@@ -1159,6 +1164,10 @@ class CurieOptimiseBouligand(CurieGrid):
                 starting thickness of magnetic layer
             C : float
                 starting field constant
+            taper : function (default=`numpy.hanning`)
+                taper function, set to None for no taper function
+            process_subgrid : function, optional
+                a custom function to process the subgrid
             dof_factor : float, optional
                 override the effective-degrees-of-freedom deflation, see
                 `pycurious.grid.CurieGrid.window_spectrum`
@@ -1247,15 +1256,15 @@ class CurieOptimiseBouligand(CurieGrid):
             >>> CPD, sigma_CPD = grid.calculate_CPD(zt, dz, s_zt, s_dz)
 
         Notes:
-            \\( Z_b = z_t + \\Delta z \\), so the uncertainties combine as
-            \\( \\sqrt{\\sigma_{z_t}^2 + \\sigma_{\\Delta z}^2} \\). The two are
-            correlated -- about 0.6 -- but \\( \\sigma_{\\Delta z} \\) exceeds
-            \\( \\sigma_{z_t} \\) by four orders of magnitude, so including the
+            :math:`Z_b = z_t + \\Delta z`, so the uncertainties combine as
+            :math:`\\sqrt{\\sigma_{z_t}^2 + \\sigma_{\\Delta z}^2}`. The two are
+            correlated -- about 0.6 -- but :math:`\\sigma_{\\Delta z}` exceeds
+            :math:`\\sigma_{z_t}` by four orders of magnitude, so including the
             covariance changes the answer by around 1%. `optimise` will hand
             over the full matrix with `return_cov=True` for anyone who wants it.
 
             The far larger effect is that this is symmetric and the Curie depth
-            is not: \\( \\Delta z \\) has a long upper tail, so `CPD_stdev`
+            is not: :math:`\\Delta z` has a long upper tail, so `CPD_stdev`
             understates how deep the base can plausibly lie. Use `profile` with
             `target="CPD"` for an interval that does not assume symmetry.
 

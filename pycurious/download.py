@@ -22,23 +22,23 @@ unique signature used to identify a file, and ensure that the data
 contained within the file is legitimate. Here is a sample workflow for
 downloading EMAG2 (v3) and evaluating its checksum:
 
-```python
-resource = {
-     "local_file":"../../data/EMAG2_V3_20170530.npz",
-     "md5":'c0898b6a91efb3f13783873a8b67380c',
-     "url":"https://zenodo.org/record/3245551/files/EMAG2_V3_20170530.npz?download=1",
-     "expected_size":"500Mb"
+.. code-block:: python
+
+    resource = {
+         "local_file": "../../data/EMAG2_V3_20170530.npz",
+         "md5": "c0898b6a91efb3f13783873a8b67380c",
+         "url": "https://zenodo.org/record/3245551/files/EMAG2_V3_20170530.npz?download=1",
+         "expected_size": "500Mb",
     }
 
-download_cached_file(resource["url"], resource["local_file"], resource["md5"], resource["expected_size"])
-```
+    download_cached_file(resource["url"], resource["local_file"], resource["md5"], resource["expected_size"])
 
 The file will commence downloading if it does not already exist in the local directory
 or if the checksum (md5) does not match. If you do not know the checksum for a file, run
 
-```python
-md5sum(filename)
-```
+.. code-block:: python
+
+    md5sum(filename)
 
 to return its unique identifier.
 """
@@ -53,6 +53,9 @@ def download_file(url, local_filename, expected_size="Unknown"):
             URL that points to the file to be downloaded
         local_filename : str
             download content to this filename
+        expected_size : float / int / str, optional
+            expected size of the file, used only for progress reporting
+            (default="Unknown")
     """
     import requests
     import os
@@ -92,7 +95,15 @@ def download_file(url, local_filename, expected_size="Unknown"):
 
 def md5sum(filename):
     """
-    Returns the checksum for a given file
+    Compute the MD5 checksum of a file.
+
+    Args:
+        filename : str
+            path to the file to checksum
+
+    Returns:
+        digest : str
+            hexadecimal MD5 digest of the file contents
     """
     import hashlib
     from functools import partial
@@ -122,6 +133,11 @@ def download_cached_file(
             checksum belonging to that file
         expected_size : float / int / str (optional)
             optional size of file (default="Unknown")
+
+    Returns:
+        status : int
+            2 if the cached file was reused, 1 if the file was downloaded,
+            0 if the download failed
     """
     import sys
 

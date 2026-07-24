@@ -104,9 +104,10 @@ class CurieOptimiseTanaka(CurieGrid):
     Attributes:
         max_processors : int
             processors used by the parallel routines
-        (plus all attributes inherited from `pycurious.grid.CurieGrid`)
 
     Notes:
+        All attributes of `pycurious.grid.CurieGrid` are inherited as well.
+
         The grid must be projected in eastings/northings (metres), not
         degrees, since depths are computed in km.
     """
@@ -129,9 +130,9 @@ class CurieOptimiseTanaka(CurieGrid):
             k : 1D array
                 wavenumbers from `radial_spectrum`, in rad/km
             zt_range : tuple
-                (min, max) wavenumber of the \\( Z_t \\) band, rad/km
+                (min, max) wavenumber of the :math:`Z_t` band, rad/km
             z0_range : tuple
-                (min, max) wavenumber of the \\( Z_0 \\) band, rad/km
+                (min, max) wavenumber of the :math:`Z_0` band, rad/km
             thickness : float, optional
                 estimated source thickness in km. Without it the validity of
                 each approximation cannot be assessed, only the point counts.
@@ -144,7 +145,7 @@ class CurieOptimiseTanaka(CurieGrid):
                 `dk`, `n_zt`, `n_z0`, `lambda_zt`, `lambda_z0` and, if
                 `thickness` was given, `kd_max`, `CPD_bias` and
                 `lambda_zt_min_required`. `CPD_bias` is an estimate in km of
-                how far the \\( |k|d \\) approximation drags the Curie depth,
+                how far the :math:`|k|d` approximation drags the Curie depth,
                 and is negative.
 
         Usage:
@@ -285,7 +286,7 @@ class CurieOptimiseTanaka(CurieGrid):
         Standard deviation of a fitted gradient, allowing for correlation
         between neighbouring spectral bins.
 
-        \\( (X^T R^{-1} X)^{-1} \\) for the whitened design matrix `X` of the
+        :math:`(X^T R^{-1} X)^{-1}` for the whitened design matrix `X` of the
         straight line, with `R` the banded correlation of the residuals.
 
         Falls back to the uncorrelated value when the band holds too few points
@@ -366,11 +367,11 @@ class CurieOptimiseTanaka(CurieGrid):
                 centroid of the window
             zt_range : tuple
                 (min, max) wavenumber in **rad/km** over which to fit
-                \\( Z_t \\). Should cover wavelengths shorter than twice the
+                :math:`Z_t`. Should cover wavelengths shorter than twice the
                 source thickness.
             z0_range : tuple
                 (min, max) wavenumber in **rad/km** over which to fit
-                \\( Z_0 \\). Must satisfy \\( |k| d \\ll 1 \\) -- check with
+                :math:`Z_0`. Must satisfy :math:`|k| d \\ll 1` -- check with
                 `check_bands`.
             taper : function (default=np.hanning)
                 taper function, or None for no taper
@@ -396,9 +397,9 @@ class CurieOptimiseTanaka(CurieGrid):
             z0 : float
                 centroid depth of the magnetic source, km
             zt_intercept : float
-                intercept of the \\( Z_t \\) fit
+                intercept of the :math:`Z_t` fit
             z0_intercept : float
-                intercept of the \\( Z_0 \\) fit
+                intercept of the :math:`Z_0` fit
             sigma_zt : float
                 standard deviation of `zt`
             sigma_z0 : float
@@ -434,7 +435,7 @@ class CurieOptimiseTanaka(CurieGrid):
             covariance can fix it. The centroid gradient is fitted over a
             handful of the longest wavelengths the window resolves, and its
             distribution is heavy-tailed: on a 4000 km grid with a true
-            \\( Z_0 \\) of 11 km, the middle 90% of estimates spanned 4.2 to
+            :math:`Z_0` of 11 km, the middle 90% of estimates spanned 4.2 to
             25.3 km. Treat `sigma_z0`, and the Curie depth that follows from
             it, as a lower bound.
 
@@ -534,7 +535,8 @@ class CurieOptimiseTanaka(CurieGrid):
         The fit covariance alone understates the uncertainty, because where
         the band edges are placed usually matters more than the scatter of the
         spectrum. Each simulation therefore redraws the spectrum within its
-        uncertainty *and* jitters both band edges.
+        uncertainty *and* jitters both band edges. The remaining arguments are
+        as `optimise`.
 
         Args:
             window : float
@@ -552,7 +554,6 @@ class CurieOptimiseTanaka(CurieGrid):
                 spectrum, which recovers the analytic covariance.
             seed : int, optional
                 seed for reproducibility
-            (remaining arguments as `optimise`)
 
         Returns:
             zt : 1D array shape (nsim,)
@@ -644,8 +645,8 @@ class CurieOptimiseTanaka(CurieGrid):
                 standard deviation of `CPD`
 
         Notes:
-            \\( Z_b = 2 Z_0 - Z_t \\), so the uncertainties combine as
-            \\( \\sqrt{\\sigma_{Z_t}^2 + 4\\sigma_{Z_0}^2} \\). This assumes
+            :math:`Z_b = 2 Z_0 - Z_t`, so the uncertainties combine as
+            :math:`\\sqrt{\\sigma_{Z_t}^2 + 4\\sigma_{Z_0}^2}`. This assumes
             the two fits are independent, which holds well enough in practice
             -- they use disjoint bands, and the measured correlation between
             them is about 0.05.

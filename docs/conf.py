@@ -80,7 +80,11 @@ autodoc_member_order = "bysource"
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
-napoleon_use_rtype = True
+# The docstrings carry NumPy-style `name : type` bodies under Google-style
+# `Returns:` headers, which napoleon would otherwise emit as a bogus
+# `:rtype:` field (the return *name* mistaken for its type). Fold the return
+# details into the description instead of a separate "Return type" line.
+napoleon_use_rtype = False
 
 # -- MyST / myst-nb ----------------------------------------------------------
 

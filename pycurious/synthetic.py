@@ -19,13 +19,13 @@ Synthetic magnetic anomalies with a known Curie depth.
 
 Filtering white noise by the square root of `pycurious.grid.bouligand2009`
 produces a field whose expected radial power spectrum *is* the analytic model,
-for any choice of \\( \\beta, z_t \\) and \\( \\Delta z \\). That makes it
+for any choice of :math:`\\beta, z_t` and :math:`\\Delta z`. That makes it
 possible to ask whether a method recovers the parameters it was given, rather
 than whether it reproduces one hard-coded number.
 
 Because the field is a single random realisation its measured spectrum scatters
-about the model, so recovery is approximate. \\( \\beta \\) and \\( z_t \\) come
-back tightly; \\( \\Delta z \\) does not, and one realisation in five puts it
+about the model, so recovery is approximate. :math:`\\beta` and :math:`z_t` come
+back tightly; :math:`\\Delta z` does not, and one realisation in five puts it
 tens of percent out. That is a property of the problem rather than of the
 generator -- see `pycurious.optimise_bouligand.CurieOptimiseBouligand.profile`.
 
@@ -78,10 +78,10 @@ def fractal_anomaly(n=512, dx=2.0, beta=3.0, zt=1.0, dz=20.0, C=5.0, seed=0):
         and both depend on how the spectrum is measured rather than on how the
         field was made:
 
-        - the radial spectrum averages \\( \\ln |FFT| \\) rather than taking
+        - the radial spectrum averages :math:`\\ln |FFT|` rather than taking
           the log of the mean, which is lower by the Euler-Mascheroni constant,
           0.577;
-        - a taper removes power, by \\( \\ln (3/8)^2 = -1.96 \\) for a
+        - a taper removes power, by :math:`\\ln (3/8)^2 = -1.96` for a
           separable `numpy.hanning`.
 
         So a fit through `numpy.hanning` returns `C` about 2.5 low, and through

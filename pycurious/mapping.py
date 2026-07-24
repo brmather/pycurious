@@ -16,7 +16,7 @@
 
 """
 The `pycurious.mapping` module of PyCurious contains various functions to help
-manipulate geospatial data into common formats. It handles commonly encounted
+manipulate geospatial data into common formats. It handles commonly encountered
 operations, such as:
 
 - Gridding scattered data points
@@ -25,9 +25,9 @@ operations, such as:
 
 It requires some **additional dependencies**:
 
-- [`matplotlib`](https://matplotlib.org/) - for plotting
-- [`pyproj`](https://github.com/jswhit/pyproj) - for transforming between different CRS
-- [`cartopy`](https://scitools.org.uk/cartopy/docs/latest/) - for generating maps
+- `matplotlib <https://matplotlib.org/>`__ -- for plotting
+- `pyproj <https://github.com/jswhit/pyproj>`__ -- for transforming between different CRS
+- `cartopy <https://scitools.org.uk/cartopy/docs/latest/>`__ -- for generating maps
 
 Beware that most global data are georeferenced in WGS84 (EPSG: 4326).
 The radial power spectrum must be in rad/km, which requires a transformation
@@ -38,9 +38,9 @@ georeferenced in WGS84 longitude / latitude. This will need to be projected
 in a local CRS to use with PyCurious. If, for example, we are interested in a
 region across Ireland we could use the IRENET95 local CRS (EPSG: 2157),
 
-```python
-transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
-```
+.. code-block:: python
+
+    transform_coordinates(lons, lats, epsg_in=4326, epsg_out=2157)
 
 which would return a list of eastings and northings in IRENET95 projection.
 """
@@ -58,7 +58,7 @@ def transform_coordinates(x, y, epsg_in, epsg_out):
     """
     Transform between any coordinate system.
 
-    **Requires `pyproj`** - install using pip.
+    **Requires** `pyproj` -- install using pip.
 
     Args:
         x : float / 1D array
@@ -121,13 +121,13 @@ def trim(coords, data, extent, buffer_amount=0.0):
             values corresponding to coordinates
         extent : tuple
             bounding box to trim data
-        buffer : float
+        buffer_amount : float
             amount of buffer to include (default=0.0)
 
     Returns:
         coords_trim : array shape (l,2)
             trimmed coordinates
-        data_trim : array shape (l,2)
+        data_trim : array shape (l,)
             trimmed data array
     """
     xmin, xmax, ymin, ymax = extent
@@ -157,7 +157,7 @@ def grid(coords, data, extent, shape=None, epsg_in=None, epsg_out=None, **kwargs
     consideration transformations into various coordinate
     reference systems (CRS).
 
-    **Requires `scipy.interpolate.griddata`**
+    **Requires** `scipy.interpolate.griddata`
     
     Args:
         coords : array shape (n,2)
@@ -280,7 +280,7 @@ def import_geotiff(file_path):
     Import a GeoTIFF to a numpy array and prints
     information of the Coordinate Reference System (CRS).
 
-    **Requires `osgeo`.**
+    **Requires** `osgeo`.
 
     Args:
         file_path : str
@@ -288,8 +288,9 @@ def import_geotiff(file_path):
 
     Returns:
         data : 2D array
+            the raster values
         extent : tuple
-            bounding box in the projection of the GeoTIFF
+            bounding box in the projection of the GeoTIFF,
             e.g. [xmin, xmax, ymin, ymax]
     """
     try:
@@ -331,7 +332,7 @@ def export_geotiff(file_path, array, extent, epsg):
     Export a GeoTIFF from a numpy array projected in a
     predefined Coordinate Reference System (CRS).
 
-    **Requires `osgeo`.**
+    **Requires** `osgeo`.
 
     Args:
         file_path : str
@@ -382,13 +383,13 @@ def export_netcdf4(file_path, array, extent):
     Export a netCDF4 file from a numpy array
     over a user-defined extent.
 
-    **Requires `netcdf4`.**
+    **Requires** `netcdf4`.
     `pip install netcdf4`
 
     Args:
         file_path : str
-            path to write the netCDF4
-        array: 2D array
+            path to write the netCDF4 file to
+        array : 2D array
             array to save to netCDF4
         extent : tuple
             bounding box in the projection of the netCDF4 file
@@ -416,12 +417,12 @@ def import_netcdf4(file_path):
     Import a netCDF4 file from a numpy array
     over a user-defined extent.
 
-    **Requires `netcdf4`.**
+    **Requires** `netcdf4`.
     `pip install netcdf4`
 
     Args:
         file_path : str
-            path to write the netCDF4
+            path to the netCDF4 file to read
 
     Returns:
         array : ndarray
