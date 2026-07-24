@@ -1,16 +1,17 @@
 name: pycurious
 channels:
-    - default
     - conda-forge
+    - defaults
 dependencies:
-    - python=3.7
+    - python=3.13
     - pip
     - numpy
     - scipy
-    - cython
     - pytest
     # Optional dependencies
     - jupyter
     - matplotlib
     - pyproj
     - cartopy
+    - netcdf4
+    - requests

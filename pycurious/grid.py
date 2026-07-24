@@ -15,38 +15,182 @@
 # along with PyCurious.  If not, see <http://www.gnu.org/licenses/>.
 
 """
-This PyCurious module contains the `pycurious.grid.CurieGrid` class,
-which can be initialised with a magnetic grid of equal spacing in the x and y direction.
-It contains methods for the following functionality:
+The ``CurieGrid`` class and the shared spectrum and covariance machinery.
 
-- Decomposition of subgrids for processing square windows of the magnetic anomaly
-- Removing linear trends from the magnetic anomaly
-- Upward continuation
-- Reduction to the pole
+``CurieGrid`` is initialised with a magnetic grid of equal spacing in x and y and
+provides:
 
-Other functions within this module are useful to compute analytical solutions
-of the radial power spectrum, \\( \\Phi \\) according to Bouligand *et al.* (2009),
-Maus and Dimri (1995), and the decomposition of \\( \\Phi \\) from the magnetic
-anomaly according to Tanaka *et al.* (1999):
+- decomposition of subgrids for processing square windows of the anomaly;
+- radially averaged spectra, either raw (``radial_spectrum``) or weighted ready
+  for fitting (``window_spectrum``);
+- removing linear trends, upward continuation, and reduction to the pole.
 
-- `bouligand2009`: analytic solution used in `pycurious.optimise.CurieOptimise`
-- `maus1995`: simplified version of `bouligand2009` without higher order integration.
-- `tanaka1999`: to be used in conjunction with `ComputeTanaka`
-
+The module also holds the analytic spectra used by the optimisers --
+``bouligand2009`` and its simplified form ``maus1995`` -- and the covariance
+machinery both methods share. ``tanaka1999`` and ``ComputeTanaka`` implement the
+centroid method without uncertainties and are **deprecated** in favour of
+``pycurious.optimise_tanaka.CurieOptimiseTanaka``.
 """
 
 # -*- coding: utf-8 -*-
+from .parallel import CurieParallel
 import numpy as np
+from scipy.linalg import solveh_banded
 from scipy.special import gamma, kv
 import warnings
 
-try:
-    range = xrange
-except:
-    pass
+
+# How much larger the scatter of the binned mean is than sigma_Phi/sqrt(N),
+# because the FFT cells in an annulus are not independent. There are two
+# effects, and the deflation is stored as (dof_inf, lost):
+#
+#     dof(N) = dof_inf * N / max(N - lost, 1)
+#
+# `dof_inf` is the asymptotic redundancy. A real field has Hermitian symmetry,
+# so about half of its cells repeat -- the factor of 2 with no taper, which is
+# exact -- and tapering correlates neighbours further.
+#
+# `lost` is a fixed number of cells given up to correlation however many the
+# annulus holds, so it only matters for the innermost bins. It matters a lot
+# there: at N = 8 it costs another factor of 2.6 under np.hanning, and those
+# are the bins a centroid depth leans on hardest.
+#
+# Measured by Monte Carlo over 400 realisations at n = 128, 256 and 512.
+# Both terms are stable to about 6% across that range, and depend on the bin
+# count rather than on the grid size.
+_TAPER_DOF = {
+    None: (2.0, 3.4),
+    "hanning": (3.3, 4.9),
+    "hamming": (3.0, 4.8),
+}
 
 
-class CurieGrid(object):
+# How many off-diagonals of the residual correlation to estimate. The measured
+# correlation length is about 1.4 bins, so two is enough.
+_CORRELATION_BANDS = 2
+
+# Cap on the total off-diagonal weight. By Gershgorin, keeping it below one
+# leaves the banded matrix positive definite and so factorisable.
+_CORRELATION_LIMIT = 0.95
+
+
+def _banded_correlation(r):
+    """
+    Correlation of neighbouring fit residuals, as a band.
+
+    Neighbouring radial bins are not independent: a taper spreads each
+    wavenumber over a main lobe several bins wide, so their residuals
+    correlate. Treating them as independent understates the uncertainty of
+    every fitted parameter by around 30% under `numpy.hanning`.
+
+    Estimating from the residuals rather than tabulating per taper means this
+    holds for a taper that has not been calibrated. On a correct model it
+    recovers the taper: 0.008 with no taper against a measured 0.003, and 0.383
+    under `numpy.hanning` against a measured 0.363.
+
+    Args:
+        r : 1D array
+            residuals, already whitened by their own uncertainties
+
+    Returns:
+        ab : 2D array shape (`_CORRELATION_BANDS` + 1, len(r))
+            lower-form band of the correlation matrix, as
+            `scipy.linalg.solveh_banded` takes it
+
+    Notes:
+        The estimate also picks up smooth model error, which is likewise
+        correlated between neighbours. That is a feature rather than a flaw --
+        a model that cannot follow the data genuinely leaves its parameters
+        less well determined -- but it does mean the result describes the fit
+        as a whole and not the taper alone.
+    """
+    r = np.asarray(r, dtype=float)
+    n = r.size
+
+    rho = np.zeros(_CORRELATION_BANDS + 1)
+    rho[0] = 1.0
+
+    denominator = np.sum(r * r)
+    if denominator > 0.0:
+        for lag in range(1, _CORRELATION_BANDS + 1):
+            if n > lag:
+                rho[lag] = np.sum(r[:-lag] * r[lag:]) / denominator
+
+    # a negative estimate is noise about zero, and would not describe a taper
+    # spreading power into its neighbours
+    rho[1:] = np.clip(rho[1:], 0.0, None)
+
+    total = 2.0 * rho[1:].sum()
+    if total > _CORRELATION_LIMIT:
+        rho[1:] *= _CORRELATION_LIMIT / total
+
+    ab = np.zeros((_CORRELATION_BANDS + 1, n))
+    for lag in range(_CORRELATION_BANDS + 1):
+        if n > lag:
+            ab[lag, : n - lag] = rho[lag]
+
+    return ab
+
+
+def _gls_covariance(J, r, ncorrelated):
+    """
+    Parameter covariance allowing for correlation between residuals.
+
+    Generalised least squares, \\( (J^T R^{-1} J)^{-1} \\), with `R` the banded
+    correlation of the first `ncorrelated` residuals from
+    `_banded_correlation`. Any rows beyond that -- the prior terms of a fit --
+    are independent of the spectrum and of each other, so they keep unit weight
+    and never enter the solve.
+
+    Both optimisers use this. They differ in how `J` is obtained, analytically
+    for a straight line and by finite differences for the four-parameter
+    spectral model, but not in what is done with it.
+
+    Args:
+        J : 2D array shape (n, m)
+            Jacobian of the whitened residuals
+        r : 1D array shape (n,)
+            those residuals
+        ncorrelated : int
+            how many leading rows are the correlated spectrum
+
+    Returns:
+        cov : 2D array shape (m, m), or None if the fit is singular
+    """
+    RiJ = np.array(J, dtype=float)
+    ab = _banded_correlation(r[:ncorrelated])
+
+    try:
+        RiJ[:ncorrelated] = solveh_banded(ab, J[:ncorrelated], lower=True)
+        return np.linalg.inv(J.T.dot(RiJ))
+    except (np.linalg.LinAlgError, ValueError):
+        return None
+
+
+def _dof_factor(taper, counts=None, dof_factor=None):
+    """
+    Effective-degrees-of-freedom deflation for a taper.
+
+    Returns the asymptotic scalar when `counts` is None, and the per-bin
+    factor otherwise. An explicit `dof_factor` overrides both.
+
+    An uncalibrated taper falls back to the untapered entry, which is
+    conservative in the sense that Hermitian redundancy holds exactly whatever
+    the taper does.
+    """
+    if dof_factor is not None:
+        return float(dof_factor)
+
+    dof_inf, lost = _TAPER_DOF.get(getattr(taper, "__name__", None), _TAPER_DOF[None])
+
+    if counts is None:
+        return dof_inf
+
+    counts = np.asarray(counts, dtype=float)
+    return dof_inf * counts / np.maximum(counts - lost, 1.0)
+
+
+class CurieGrid(CurieParallel):
     """
     Accepts a 2D array and Cartesian coordinates specifying the
     bounding box of the array
@@ -95,7 +239,9 @@ class CurieGrid(object):
         in incorrect Curie depth calculations.
     """
 
-    def __init__(self, grid, xmin, xmax, ymin, ymax):
+    def __init__(self, grid, xmin, xmax, ymin, ymax, **kwargs):
+
+        super(CurieGrid, self).__init__()
 
         self.data = np.array(grid)
         ny, nx = self.data.shape
@@ -203,6 +349,15 @@ class CurieGrid(object):
         This may come in handy if the magnetic data has not been
         reduced to the pole.
 
+        The trend is the least-squares plane. Over a regular grid the centred
+        row and column indices are mutually orthogonal and both orthogonal to
+        the constant, so the normal equations decouple and the plane's three
+        coefficients are one mean and two 1-D inner products -- no design
+        matrix and no SVD. This is an order of magnitude cheaper than the
+        equivalent ``lstsq`` fit (the trend is subtracted once per window when
+        computing a spectrum), and unlike an ``(nr, nc)`` vs ``(nc, nr)``
+        design matrix it stays correct when the grid is not square.
+
         Args:
             data : 2D numpy array
 
@@ -210,18 +365,24 @@ class CurieGrid(object):
             data : 2D numpy array
         """
         nr, nc = data.shape
-        yq, xq = np.mgrid[0:nc, 0:nr]
-        A = np.c_[xq.ravel(), yq.ravel(), np.ones(xq.size)]
-        c, resid, rank, sigma = np.linalg.lstsq(A, data.ravel(), rcond=None)
-        return data - np.dot(A, c).reshape(data.shape)
+        i = np.arange(nr) - (nr - 1) / 2.0  # centred row index
+        j = np.arange(nc) - (nc - 1) / 2.0  # centred column index
+        mean = data.mean()
+        # Centring the means before the inner product drops the constant
+        # term's contribution (sum(i) == sum(j) == 0) and keeps the sum well
+        # conditioned, so the fit matches lstsq to machine precision.
+        # A slope is only identifiable along an axis with more than one node;
+        # a singleton axis carries no trend and its (i*i).sum() is zero, so
+        # take a zero slope there rather than dividing by zero into a NaN.
+        sii = (i * i).sum()
+        sjj = (j * j).sum()
+        ci = (i * (data.mean(axis=1) - mean)).sum() / sii if sii else 0.0
+        cj = (j * (data.mean(axis=0) - mean)).sum() / sjj if sjj else 0.0
+        return data - (mean + ci * i[:, None] + cj * j[None, :])
 
     def _taper_spectrum(self, subgrid, taper=np.hanning, scale=0.001, **kwargs):
         """
-        Template for tapering the power spectrum used in:
-
-        - `radial_spectrum`
-        - `radial_spectrum_log`
-        - `azimuthal_spectrum`
+        Template for tapering the power spectrum used in `radial_spectrum`.
         """
         data = subgrid
         nr, nc = data.shape
@@ -231,6 +392,16 @@ class CurieGrid(object):
 
         # control taper
         if taper is None:
+            # nothing downstream consumes kwargs once there is no taper to pass
+            # them to, so an unrecognised one would be silently ignored rather
+            # than raising as it does when a taper is present
+            if kwargs:
+                raise TypeError(
+                    "unexpected keyword argument(s) {} -- with taper=None there "
+                    "is no taper function to pass them to".format(
+                        ", ".join(repr(key) for key in sorted(kwargs))
+                    )
+                )
             vtaper = 1.0
         else:
             rt = taper(nr, **kwargs)
@@ -240,17 +411,17 @@ class CurieGrid(object):
 
         # scaling factor to transform wavenumber into units of rad/km
         dx_scale = self.dx * scale
-        dk = 2.0 * np.pi / (nr - 1) / dx_scale
+        # the DFT fundamental is 2*pi/(N*dx). Using (N-1) overstates every
+        # wavenumber by N/(N-1) and so understates every depth by (N-1)/N.
+        dk = 2.0 * np.pi / nr / dx_scale
 
         kbins = np.arange(dk, dk * nr / 2, dk)
         return vtaper, dk, kbins
 
     def _FFT_spectrum(self, subgrid, vtaper, dk, kbins, const):
         """
-        Template for computing the (fast) Fourier transform used in:
-
-        - `radial_spectrum`
-        - `radial_spectrum_log`
+        Template for computing the (fast) Fourier transform used in
+        `radial_spectrum`.
 
         A constant `const` should be applied to the FFT of the magnetic anomaly
         to convert `S` and `sigma` to specific units for further analysis.
@@ -260,34 +431,96 @@ class CurieGrid(object):
         ```python
         2*log(FFT) == log(FFT**2)
         ```
+
+        Returns `(k, S, sigma, counts)`, where `counts` is the number of FFT
+        cells averaged into each radial bin.
+
+        The transform is `numpy.fft.rfft2`, not the full `fft2`. The anomaly is
+        real, so `|FFT|` is symmetric under reflection through the origin and
+        the discarded half carries no new information; using it halves both the
+        transform and the number of cells to bin, for around twice the speed
+        with no change to the result. To keep `counts` the full-spectrum count
+        -- which `window_spectrum` deflates `sigma` by, and whose Hermitian
+        factor of two is baked into the `_TAPER_DOF` calibration -- each
+        retained cell is weighted by how many full-spectrum cells it stands in
+        for: the columns whose mirror was dropped count twice, the self-mirrored
+        DC and (for even `nc`) Nyquist columns count once. Dropping that weight
+        would halve `counts` and inflate every reported uncertainty by ~sqrt(2).
+
+        > This method returned three values prior to v2. Subclasses that
+        > override it must now also return `counts`.
         """
         data = subgrid
         nr, nc = data.shape
 
         nbins = kbins.size - 1
 
-        # fast Fourier transform and shift
-        FT = np.abs(np.fft.fft2(data * vtaper))
-        FT = np.fft.fftshift(FT)
+        # real-input transform: only the non-redundant half plane, nc//2 + 1
+        # columns wide, is computed. No fftshift -- rows stay in FFT order and
+        # columns are the non-negative frequencies 0 .. nc//2.
+        FT = np.abs(np.fft.rfft2(data * vtaper))
+        ncol = nc // 2 + 1
 
-        S = np.empty(nbins)
-        k = np.empty(nbins)
-        sigma = np.empty(nbins)
+        # signed integer row frequencies (0, 1, .. -1), built exactly rather
+        # than via fftfreq so a cell on the kx axis lands on the same bin edge
+        # as the old centred grid did, to the bit -- counts are a partition and
+        # must match a full fft2 exactly. Only |k| is binned, so the sign of the
+        # row frequency does not matter.
+        row_freq = np.arange(nr)
+        row_freq[row_freq > (nr - 1) // 2] -= nr
+        ix = (row_freq * dk)[:, np.newaxis]
+        iy = (np.arange(ncol) * dk)[np.newaxis, :]
+        kk = np.hypot(ix, iy).ravel()
 
-        i0 = int((nr - 1) // 2)
-        ix, iy = np.mgrid[0:nr, 0:nr]
-        kk = np.hypot((ix - i0) * dk, (iy - i0) * dk)
+        # a dropped mirror means every interior column stands for two cells of
+        # the full spectrum; the DC column and, when nc is even, the Nyquist
+        # column are their own mirror and stand for one.
+        weight = np.full(ncol, 2.0)
+        weight[0] = 1.0
+        if nc % 2 == 0:
+            weight[-1] = 1.0
+        weight = np.broadcast_to(weight, (nr, ncol)).ravel()
 
-        for i in range(nbins):
-            mask = np.logical_and(kk >= kbins[i], kk <= kbins[i + 1])
-            rr = const * np.log(FT[mask])
-            S[i] = rr.mean()
-            k[i] = kk[mask].mean()
-            sigma[i] = np.std(rr)
+        # bin every cell once and reduce with bincount. Masking the whole array
+        # per bin instead is O(nbins * nr * nc), which is cubic in the window
+        # and dominates a large run -- over 20x slower at nr = 2001.
+        idx = np.digitize(kk, kbins) - 1
+        # digitize is half-open above, matching the annuli, so a cell landing on
+        # an edge is counted once rather than in both neighbours. The final bin
+        # is the exception: it is closed, so a cell exactly at kbins[-1] belongs
+        # to it rather than falling off the end.
+        idx[(idx == nbins) & (kk <= kbins[-1])] = nbins - 1
+        keep = (idx >= 0) & (idx < nbins)
+        idx = idx[keep]
+        kk = kk[keep]
+        weight = weight[keep]
+        # log only the cells that land in a bin, so a zero outside the binned
+        # range cannot raise a divide-by-zero that the per-bin masking never saw
+        rr = const * np.log(FT.ravel()[keep])
 
-        return k, S, sigma
+        counts = np.bincount(idx, weights=weight, minlength=nbins)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            S = np.bincount(idx, weights=weight * rr, minlength=nbins) / counts
+            k = np.bincount(idx, weights=weight * kk, minlength=nbins) / counts
+            # two-pass variance. The one-pass E[x^2] - E[x]^2 form is cheaper
+            # but cancels: ln|FFT| is O(10) with O(1) scatter, so it loses
+            # three digits of sigma, and more on a near-constant bin.
+            dev = rr - S[idx]
+            sigma = np.sqrt(
+                np.bincount(idx, weights=weight * dev * dev, minlength=nbins) / counts
+            )
 
-    def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, **kwargs):
+        # an empty annulus averages nothing -- mirrors the mean of an empty
+        # slice the per-bin form produced, without the warning
+        empty = counts == 0
+        S[empty] = k[empty] = sigma[empty] = np.nan
+
+        # counts are integer-valued (sums of the weights 1 and 2); round before
+        # casting so a float sum landing a hair below the integer is not
+        # truncated downward.
+        return k, S, sigma, np.rint(counts).astype(int)
+
+    def radial_spectrum(self, subgrid, taper=np.hanning, power=2.0, return_counts=False, **kwargs):
         """
         Compute the radial spectrum for a square grid.
 
@@ -300,8 +533,12 @@ class CurieGrid(object):
                 taper function, set to None for no taper function
             power : float
                 raise the FFT of the magnetic anomaly to the power.
-                - 2.0 for Bouligand _et al._ (2009) use cases
-                - 0.5 for Tanaka _et al.__ (1999) use cases
+                - 2.0 for Bouligand _et al._ (2009) use cases, which gives
+                  the log power spectrum \\( \\ln \\Phi_{\\Delta T} \\)
+                - 1.0 for Tanaka _et al._ (1999) use cases, which gives the
+                  log amplitude spectrum \\( \\ln \\Phi_{\\Delta T}^{1/2} \\)
+            return_counts : bool (default=False)
+                also return the number of FFT cells averaged into each bin
             kwargs : keyword arguments
                 keyword arguments to pass to `taper`
 
@@ -311,9 +548,19 @@ class CurieGrid(object):
             Phi : 1D array shape (n,)
                 Radial power spectrum
             sigma_Phi : 1D array shape (n,)
-                Standard deviation of Phi
+                Standard deviation of Phi within each radial bin
+            counts : 1D array shape (n,)
+                number of FFT cells in each radial bin.
+                Only returned if `return_counts=True`.
 
         Notes:
+            `Phi` is the mean of \\( \\ln |FFT| \\) over each annulus, so
+            `sigma_Phi` describes the scatter of the individual cells, not
+            the uncertainty of that mean. Dividing by the square root of
+            `counts` gives the standard error, though note the cells are not
+            independent -- a real field has Hermitian symmetry, so roughly
+            half of them are redundant, and tapering correlates neighbours.
+
             While `subgrid` is projected in eastings / northings (in metres),
             the wavenumber, \\( k \\), is returned in units of rad/km.
             This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
@@ -336,71 +583,93 @@ class CurieGrid(object):
 
         # calculate the Fourier transform and apply scaling constant to retrieve
         # values compatible with Bouligand or Tanaka analysis
-        return self._FFT_spectrum(subgrid, vtaper, dk, kbins, power)
+        k, Phi, sigma_Phi, counts = self._FFT_spectrum(
+            subgrid, vtaper, dk, kbins, power
+        )
 
-    def azimuthal_spectrum(
-        self, subgrid, taper=np.hanning, power=2.0, theta=5.0, **kwargs
+        if return_counts:
+            return k, Phi, sigma_Phi, counts
+        return k, Phi, sigma_Phi
+
+    def window_spectrum(
+        self,
+        window,
+        xc,
+        yc,
+        taper=np.hanning,
+        power=2.0,
+        process_subgrid=None,
+        dof_factor=None,
+        **kwargs
     ):
         """
-        Compute azimuthal spectrum for a square grid.
+        Radial spectrum of one window, weighted ready for fitting.
 
-        > Wavenumber is returned in values of __rad/km__
+        Extracts the subgrid, computes its radial spectrum, and converts the
+        within-annulus scatter into the uncertainty of the annulus *mean*,
+        which is what a fit needs. Both `pycurious.optimise_bouligand` and
+        `pycurious.optimise_tanaka` build on this.
 
         Args:
-            subgrid : 2D array
-                window of the original data (see subgrid method)
+            window : float
+                size of the window in metres
+            xc, yc : float
+                centroid of the window
             taper : function (default=np.hanning)
-                taper function, set to None for no taper function
-            theta : float
-                angle increment in degrees
-            args : arguments
-                arguments o pass to taper
+                taper function, or None for no taper
+            power : float
+                raise the FFT of the anomaly to this power -- 2.0 for the log
+                power spectrum that Bouligand *et al.* (2009) fit, 1.0 for the
+                log amplitude spectrum of Tanaka *et al.* (1999)
+            process_subgrid : function, optional
+                applied to the subgrid before the spectrum is computed
+            dof_factor : float, optional
+                override the effective-degrees-of-freedom deflation (see Notes)
+            kwargs : keyword arguments
+                passed to `taper`
 
         Returns:
-            k : 1D array shape (n,)
+            k : 1D array
                 wavenumber in rad/km
-            Phi : 1D array shape (n,)
-                Radial power spectrum
-            sigma_Phi : 1D array shape (n,)
-                Standard deviation of Phi
+            Phi : 1D array
+                log spectrum, raised to `power`
+            sigma : 1D array
+                uncertainty of the binned mean
+
+        Usage:
+            >>> k, Phi, sigma = grid.window_spectrum(200e3, xc, yc, power=2)
 
         Notes:
-            While `subgrid` is projected in eastings / northings (in metres),
-            the wavenumber, \\( k \\), is returned in units of rad/km.
-            This is because both Bouligand *et al.* (2009) and Tanaka *et al.*
-            (1999) require the computation of Curie depth in these units.
+            `radial_spectrum` returns the scatter of the FFT cells within each
+            annulus, whereas a fit needs the uncertainty of the annulus mean.
+            That is the standard error, except that the cells are not
+            independent: Hermitian symmetry makes about half of them redundant,
+            and tapering correlates neighbours. The correction is calibrated
+            per taper and varies with the number of cells in the bin, since a
+            fixed number of them is lost to correlation however few there are.
+            `dof_factor` overrides it with a constant.
 
-        References:
-            Bouligand, C., J. M. G. Glen, and R. J. Blakely (2009), Mapping Curie
-            temperature depth in the western United States with a fractal model for
-            crustal magnetization, J. Geophys. Res., 114, B11104,
-            doi:10.1029/2009JB006494
-
-            Tanaka, A., Okubo, Y., & Matsubayashi, O. (1999). Curie point depth
-            based on spectrum analysis of the magnetic anomaly data in East and
-            Southeast Asia. Tectonophysics, 306(3–4), 461–470.
-            doi:10.1016/S0040-1951(99)00072-4
+            The cells of *neighbouring* annuli are correlated too, which this
+            does not address -- it inflates the uncertainty of a fitted
+            parameter rather than of any individual bin. See
+            `pycurious.optimise_bouligand.CurieOptimiseBouligand.optimise`.
         """
-        from pycurious import radon
+        if process_subgrid is None:
+            # dummy function
+            def process_subgrid(subgrid):
+                return subgrid
 
-        vtaper, dk, kbins = self._taper_spectrum(subgrid, taper, **kwargs)
+        subgrid = self.subgrid(window, xc, yc)
+        subgrid = process_subgrid(subgrid)
 
-        dtheta = np.arange(0.0, 180.0, theta)
-        sinogram = radon.radon2d(subgrid, np.pi * dtheta / 180.0)
-        S = np.zeros((dtheta.size, kbins.size))
+        kwargs.pop("return_counts", None)
+        k, Phi, sigma_Phi, counts = self.radial_spectrum(
+            subgrid, taper=taper, power=power, return_counts=True, **kwargs
+        )
 
-        # control taper
-        if taper is None:
-            vtaper = 1.0
-        else:
-            vtaper = taper(sinogram.shape[0], **kwargs)
+        sigma = sigma_Phi / np.sqrt(counts / _dof_factor(taper, counts, dof_factor))
 
-        nk = 1 + 2 * kbins.size
-        for i in range(0, dtheta.size):
-            PSD = np.abs(np.fft.fft(vtaper * sinogram[:, i], n=nk))
-            S[i, :] = power * np.log(PSD[1 : kbins.size + 1])
-
-        return kbins, S, dtheta
+        return k, Phi, sigma
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
         """
@@ -624,7 +893,25 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
         lower_source : tuple
             (Zor,bor,dZor) gradient, intercept, error for the bottom of magnetic sources
 
+    Notes:
+        .. deprecated::
+            Use `pycurious.optimise_tanaka.CurieOptimiseTanaka.optimise`,
+            which fits both bands with `scipy.optimize.curve_fit` and returns
+            depths positive downwards with their uncertainties.
+
+        This hand-rolled weighted least squares squares an already-squared
+        error term, so it weights by 1/sigma**4 rather than 1/sigma**2, and it
+        subtracts ln(k) from a standard deviation. Its uncertainties are
+        therefore not meaningful. It is retained only so existing scripts keep
+        running.
     """
+    warnings.warn(
+        "tanaka1999 is deprecated, use CurieOptimiseTanaka.optimise instead. "
+        "Its uncertainties are not meaningful -- see the docstring.",
+        FutureWarning,
+        stacklevel=2,
+    )
+
     # for now...
     S = lnPhi
     sigma2 = sigma_lnPhi ** 2
@@ -674,29 +961,47 @@ def tanaka1999(k, lnPhi, sigma_lnPhi, kmin_range=(0.05, 0.2), kmax_range=(0.05, 
     return (Ztr, btr, dZtr), (Zor, bor, dZor)
 
 
-def ComputeTanaka(Ztr, dZtr, Zor, dZor):
+def ComputeTanaka(zT, dzT, z0, dz0):
     """
-    Compute the Curie depth from the results of tanaka1999
+    Compute the Curie depth from the results of `tanaka1999`.
+
+    .. deprecated::
+        Use `pycurious.optimise_tanaka.CurieOptimiseTanaka.calculate_CPD`.
 
     Args:
-        Ztr : float / 1D array
+        zT : float / 1D array
             top of the magnetic source
-        dZtr : float / 1D array
-            error of Ztr
-        Zor : float / 1D array
+        dzT : float / 1D array
+            standard deviation of zT
+        z0 : float / 1D array
             centroid depth of the magnetic source
-        dZor : float / 1D array
-            error of Zor
+        dz0 : float / 1D array
+            standard deviation of z0
 
     Returns:
-        Zb : float / 1D array
+        CPD : float / 1D array
             estimated Curie point depth at bottom of magnetic source
-        eZb : float / 1D array
-            error of `Zb`
+        CPD_stdev : float / 1D array
+            standard deviation
+
+    Notes:
+        The arguments interleave the depths with their standard deviations,
+        whereas `calculate_CPD` groups them. Renaming a call without also
+        reordering the arguments computes nonsense.
     """
-    Zb = 2.0 * Zor - Ztr
-    dZb = 2.0 * dZor + dZtr
-    return abs(Zb), dZb
+    warnings.warn(
+        "ComputeTanaka is deprecated, use "
+        "CurieOptimiseTanaka.calculate_CPD(zt, z0, sigma_zt, sigma_z0) "
+        "instead. Note the argument order differs: ComputeTanaka takes "
+        "(zt, sigma_zt, z0, sigma_z0), interleaving each depth with its "
+        "standard deviation. Note also that the returned standard deviation "
+        "changed in v2, from 2*dz0 + dzT to the quadrature sum.",
+        FutureWarning,
+        stacklevel=2,
+    )
+    CPD = abs(2.0 * z0 - zT)
+    CPD_stdev = np.sqrt(dzT ** 2 + (dz0 * 2) ** 2)
+    return CPD, CPD_stdev
 
 
 def maus1995(beta, zt, kh, C=0.0):

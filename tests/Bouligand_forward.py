@@ -106,8 +106,8 @@ if __name__ == "__main__":
     ##Mf(1,1,1)=mean([Mf(2,1,1) Mf(1,2,1) Mf(1,1,2)])
 
     Mi = np.fft.ifftn(Mf)
-    TFANO = np.zeros((nx, ny), dtype=np.complex)
-    ANO = np.zeros((nx, ny), dtype=np.complex)
+    TFANO = np.zeros((nx, ny), dtype=complex)
+    ANO = np.zeros((nx, ny), dtype=complex)
     # input("Press Enter to continue.")
     ## executes fine up to here.
     for k in range(0, nz):

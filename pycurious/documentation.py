@@ -20,8 +20,8 @@ Jupyter Notebooks and example data to a local directory.
 
 """
 
-import pkg_resources as _pkg_resources
-from distutils import dir_util as _dir_util
+import importlib.resources as _resources
+import shutil as _shutil
 import os
 
 
@@ -48,19 +48,37 @@ def install_documentation(path="./PyCurious-Examples"):
 
     """
 
-    Notebooks_Path = _pkg_resources.resource_filename(
-        "pycurious", os.path.join("Examples")
-    )
+    Notebooks_Path = _find_examples()
 
-    ct = _dir_util.copy_tree(
-        Notebooks_Path,
-        path,
-        preserve_mode=1,
-        preserve_times=1,
-        preserve_symlinks=1,
-        update=0,
-        verbose=1,
-        dry_run=0,
-    )
+    _shutil.copytree(Notebooks_Path, path, symlinks=True, dirs_exist_ok=True)
 
     return
+
+
+def _find_examples():
+    """
+    Locate the bundled Examples directory.
+
+    In an installed wheel the notebooks sit inside the package. In a source
+    checkout (including `pip install -e .`) they live at the repository root,
+    one level above the package, so fall back to that.
+    """
+
+    package_dir = _resources.files("pycurious")
+
+    candidates = [
+        os.path.join(str(package_dir), "Examples"),
+        os.path.join(os.path.dirname(str(package_dir)), "Examples"),
+    ]
+
+    for candidate in candidates:
+        if os.path.isdir(candidate):
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not locate the PyCurious Examples directory. Looked in:\n  "
+        + "\n  ".join(candidates)
+        + "\nIf you installed PyCurious from PyPI, the notebooks may not have "
+        "been bundled; fetch them from "
+        "https://github.com/brmather/pycurious instead."
+    )

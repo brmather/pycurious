@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycurious"
+version = "2.0"
+description = "Python tool for computing the Curie depth from magnetic data"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "LGPL-3.0-or-later"
+license-files = ["COPYING", "COPYING.LESSER"]
+authors = [
+    { name = "Ben Mather", email = "brmather1@gmail.com" },
+]
+keywords = ["geophysics", "magnetics", "curie depth", "spectral analysis"]
+
+# Only numpy and scipy are imported at package import time. Everything else is
+# imported lazily inside the function that needs it, so it belongs in an extra.
+dependencies = [
+    "numpy>=1.20",
+    "scipy>=1.5",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/brmather/pycurious"
+Repository = "https://github.com/brmather/pycurious"
+
+[project.optional-dependencies]
+# pycurious.download.download_file and friends
+download = ["requests"]
+# pycurious.mapping: projections and netCDF I/O
+mapping = ["pyproj", "netCDF4"]
+# pycurious.mapping.export_geotiff / import_geotiff. Kept out of `mapping`
+# because the GDAL bindings need a matching libgdal already on the system,
+# so requiring them would make `pip install pycurious[mapping]` fail for
+# most users. Conda installs this more easily than pip.
+geotiff = ["gdal"]
+# running the example notebooks
+examples = ["matplotlib", "jupyter", "cartopy", "pyproj"]
+test = ["pytest"]
+# building the Sphinx documentation. myst-nb pulls in myst-parser, so a single
+# parser handles both the Markdown pages and the tutorial notebooks. Building
+# the tutorials also needs the `examples` (and `mapping`) extras so the
+# notebooks execute.
+docs = ["sphinx", "furo", "myst-nb", "sphinx-copybutton"]
+
+[tool.setuptools]
+packages = ["pycurious"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    # calibrating a reported uncertainty means fitting a few hundred
+    # independent realisations, which is minutes rather than seconds.
+    # Run the rest with -m "not slow".
+    "slow: takes minutes, not seconds",
+]

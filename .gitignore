@@ -1,8 +1,38 @@
-pycurious-src/pycurious/Examples/Notebooks/Bouligand/.ipynb_checkpoints/*
-pycurious-src/pycurious/Examples/Notebooks/Tanaka/.ipynb_checkpoints/*
-pycurious-src/pycurious/Examples/.ipynb_checkpoints/*
+# Python
 *.pyc
-.eggs
-build
-*.egg-info
+__pycache__/
 *.so
+.eggs
+*.egg-info
+build
+dist
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Datasets fetched by pycurious.download at notebook runtime. These are
+# hundreds of megabytes and are reproducible from their URL and checksum, so
+# they are cached locally rather than committed. Everything in Examples/data
+# is ignored except the small synthetic anomaly the tests rely on.
+Examples/data/*
+!Examples/data/test_mag_data.txt
+
+# Rasters and grids written by the notebooks themselves, e.g. the GeoTIFF
+# exported at the end of Ex5.
+*.tif
+*.tiff
+*.npz
+!tests/*.npz
+
+# Sphinx build output, and the tutorial notebooks + data fixture that
+# docs/copy_notebooks.py stages into the source tree on every build. These are
+# regenerated from Examples/, so they are never committed.
+docs/_build/
+docs/tutorials/bouligand/
+docs/tutorials/tanaka/
+docs/data/
+docs/api/generated/
