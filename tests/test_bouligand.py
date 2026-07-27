@@ -221,6 +221,101 @@ def test_profile_rejects_unknown_target(bouligand):
         grid.profile(WINDOW, xc, yc, "curie_depth")
 
 
+@pytest.mark.parametrize(
+    "seed, interval",
+    [
+        (1, (11.12, np.inf)),
+        (2, (1.695, 48.17)),
+        (3, (5.094, 32.47)),
+        (4, (24.06, np.inf)),
+    ],
+)
+def test_profile_dz_interval_is_unchanged_by_the_optimiser(seed, interval):
+    """
+    Pinned against the values L-BFGS-B produced before `_fit` moved to
+    `least_squares`, so a change of optimiser cannot quietly move a published
+    interval. These are the numbers, not a tolerance band: the swap was
+    adopted on the evidence that it reproduces them.
+
+    A better inner optimiser is not automatically safe here. It finds lower
+    constrained minima, which re-anchors the deviance, and on a multimodal
+    window that moves the reported interval -- see the test above. dz was
+    checked across seeds for exactly that reason.
+    """
+    grid, xc, yc = _grid(seed=seed)
+    grid.reset_priors()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        _, _, lower, upper = grid.profile(200e3, xc, yc, "dz")
+    np.testing.assert_allclose([lower, upper], interval, rtol=2e-3)
+
+
+def test_analytic_jacobian_columns_match_the_finite_difference(bouligand):
+    """
+    `_fit` supplies the zt and C columns of the Jacobian in closed form and
+    differences only beta and dz. If the forward model changes and these are
+    not re-derived, every fit silently descends a slightly wrong gradient --
+    it still converges, just to a worse place, and nothing complains.
+    """
+    from pycurious.optimise_bouligand import _ANALYTIC_COLUMNS
+
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    x = np.array([3.0, 1.0, 20.0, 5.0])
+    args = (k, Phi, sigma)
+    J = grid._jacobian(x, grid.residuals(x, *args), args)
+
+    for index in (1, 3):
+        np.testing.assert_allclose(
+            _ANALYTIC_COLUMNS[index](k, sigma), J[: k.size, index], rtol=1e-6
+        )
+
+
+def test_fit_cost_is_min_func(bouligand):
+    """
+    `_profiled_misfit` returns `res.cost` where it used to return the value of
+    `min_func`, and the deviance -- so every profile interval -- is differences
+    of those. The two are the same quantity only for as long as `residuals` and
+    `min_func` agree.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    args = (k, Phi, sigma)
+    res = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args)
+    assert res.cost == pytest.approx(grid.min_func(res.x, *args))
+
+
+def test_fit_honours_a_held_coordinate(bouligand):
+    """
+    A constrained fit must actually hold what it was told to, including the
+    Curie-depth case where the held coordinate is dz = CPD - zt and so moves
+    with a free parameter.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    args = (k, Phi, sigma)
+    x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
+
+    free = [0, 1, 3]
+
+    # dz pinned at 25: the reported cost must be the misfit of the model that
+    # actually has dz = 25, which is what makes the deviance meaningful
+    held = grid._fit(x_hat[free], args, free=free, fixed=(2, 25.0))
+    beta, zt, C = held.x
+    assert held.cost == pytest.approx(grid.min_func([beta, zt, 25.0, C], *args))
+    assert held.cost >= grid._fit(x_hat, args).cost
+
+    # Curie depth pinned at 30: dz is not fixed, zt + dz is
+    curie = grid._fit(x_hat[free], args, free=free, fixed=(2, 30.0), curie=True)
+    beta, zt, C = curie.x
+    assert curie.cost == pytest.approx(
+        grid.min_func([beta, zt, 30.0 - zt, C], *args)
+    )
+
+
 def test_sensitivity_does_not_disturb_priors(bouligand):
     """
     sensitivity used to redraw each prior centre by mutating self.prior in
@@ -235,22 +330,27 @@ def test_sensitivity_does_not_disturb_priors(bouligand):
     grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
     assert grid.prior == before
 
-    # and still intact when a simulation blows up part way through
+    # and still intact when a simulation blows up part way through. The count
+    # is of fits rather than of objective evaluations: the first is the
+    # unresampled solution the simulations start from, so raising on the third
+    # lands inside the loop, which is where the prior is copied and where a
+    # leak would show.
     calls = {"n": 0}
-    original = grid.min_func
+    original = grid._fit
 
     def exploding(*args, **kwargs):
         calls["n"] += 1
-        if calls["n"] > 5:
+        if calls["n"] > 2:
             raise RuntimeError("boom")
         return original(*args, **kwargs)
 
-    grid.min_func = exploding
+    grid._fit = exploding
     try:
         with pytest.raises(RuntimeError, match="boom"):
             grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
     finally:
-        del grid.min_func
+        del grid._fit
+    assert calls["n"] > 2
     assert grid.prior == before
 
     grid.reset_priors()
@@ -415,12 +515,13 @@ def test_metropolis_hastings_is_invariant_to_a_constant_misfit(bouligand):
     once F grew to a few hundred: exp(-F) underflowed to zero and every
     proposal was rejected.
 
-    Agreement is close but not bit-exact, and the reason is not the acceptance
-    rule. min_func also drives the search for the mode the chain starts from,
-    and scipy's convergence tolerance is relative to the value of the
-    objective, so offsetting it moves where the minimiser stops -- by about
-    3e-06 here. Reintroducing exp() would not miss this tolerance narrowly; it
-    would freeze the chain outright.
+    The chain starts from a `least_squares` fit of `residuals`, which does not
+    go through `min_func`, so the offset moves nothing but the acceptance
+    ratio and the two chains should now agree to the bit. They are compared
+    loosely anyway: the point of the test is that the chain is not frozen by a
+    constant, and pinning it exactly would make the test fail for reasons that
+    have nothing to do with that. Reintroducing exp() would not miss this
+    tolerance narrowly; it would freeze the chain outright.
     """
     grid, xc, yc = bouligand
     grid.reset_priors()
