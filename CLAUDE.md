@@ -79,15 +79,23 @@ depth.
 gradients the fits produce.
 
 **Every Bouligand fit goes through `_fit`, which is `least_squares`, not
-`minimize`.** Do not put L-BFGS-B back. It spends seconds of CPU on this
-four-parameter problem — 3.1 s for a fit and 16.5 s for a `dz` profile against
-13 ms and 49 ms, measured in CPU time over synthetic windows — and its cost
-does not track the number of function evaluations, so the time is going into
-its own machinery rather than the forward model. `_fit` also supplies the two
-exact Jacobian columns (`dr/dzt = -2k/sigma`, `dr/dC = 1/sigma`); `beta` enters
-through the *order* of a Bessel function and `dz` costs the same analytically
-as by difference, so those two stay numerical. Benchmark in
-`time.process_time`, never wall clock — this is a shared machine.
+`minimize`.** Do not put L-BFGS-B back: it needs **2012** evaluations of the
+forward model per vertex where trust-region reflective needs 359, about 3x the
+CPU. `_fit` also supplies the two exact Jacobian columns (`dr/dzt = -2k/sigma`,
+`dr/dC = 1/sigma`); `beta` enters through the *order* of a Bessel function and
+`dz` costs the same analytically as by difference, so those two stay numerical.
+
+**Pin the BLAS before timing anything.**
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python bench.py
+```
+
+L-BFGS-B calls a threaded BLAS whose workers spin-wait. Unpinned on a loaded
+machine it looks 20x to 400x slower than TRF depending on contention, and
+`time.process_time` makes it worse by charging every spinning thread — a
+"3.1 s CPU" fit whose wall clock was 1.7 s. Both numbers were wrong; the truth
+is 3x. Counting `residuals` calls is the measurement that does not lie.
 
 **Tanaka bands have no defaults, deliberately.** Each straight-line limit holds
 only over part of the spectrum: the `zt` band needs wavelengths shorter than

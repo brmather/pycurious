@@ -440,14 +440,27 @@ class CurieOptimiseBouligand(CurieGrid):
         Notes:
             This is `least_squares`, not `minimize`. The problem is a sum of
             squares and `residuals` already exposes the vector, so the
-            trust-region reflective method can use the structure that L-BFGS-B
-            cannot see. The difference is not marginal: measured over eight
-            synthetic windows, L-BFGS-B spent 3.1 s of CPU on the four-parameter
-            fit and 16.5 s on a `dz` profile, against 13 ms and 49 ms here, for
-            the same parameters to four figures and the same intervals. Its
-            cost did not track the number of function evaluations at all, so
-            the time was going into its own machinery rather than the forward
-            model.
+            trust-region reflective method can use structure L-BFGS-B cannot
+            see. Measured over six synthetic 200 km windows with the BLAS
+            pinned to one thread, `optimise` costs 12.5 ms of CPU against
+            5.0 ms and a `dz` profile 102 ms against 33 ms -- about 3x -- on
+            **359** evaluations of the forward model per vertex rather than
+            2012.
+
+            The evaluation count is the durable number; the timings are not.
+            Unpinned, L-BFGS-B calls a threaded BLAS whose workers spin-wait,
+            and on a busy machine the same comparison reads anywhere from 20x
+            to 400x depending on how many cores are already contended. That is
+            an artefact of the measurement, not a property of the algorithms.
+            Pin `OMP_NUM_THREADS` and friends before timing anything here.
+
+            Parameters agree with L-BFGS-B to three or four figures on windows
+            that constrain the fit, and exactly on real band-limited spectra.
+            Where the likelihood is flat they can disagree by much more --
+            `dz` of 310 km against 139 km for a misfit difference of 2e-6 on
+            one 100 km synthetic -- because both answers are equally good and
+            neither optimiser has anything to descend. That is a property of
+            the window, not of the change.
         """
         if free is None:
             free = list(range(len(_PARAMETERS)))
@@ -541,7 +554,12 @@ class CurieOptimiseBouligand(CurieGrid):
         # numerically distinct. That pins the parameter just as effectively,
         # and leaves it near enough the edge that `_warn_on_bounds` still says
         # the uncertainty there is meaningless.
-        collapsed = np.isfinite(lower) & np.isfinite(upper) & (upper <= lower)
+        #
+        # Equality only. An *inverted* bound is a typo, not an intention --
+        # `self.bounds` is documented as reassignable, so it is a typo a user
+        # can make -- and widening it would silently rewrite it into whichever
+        # of the two numbers happened to be first. Let `least_squares` raise.
+        collapsed = np.isfinite(lower) & np.isfinite(upper) & (upper == lower)
         if collapsed.any():
             upper[collapsed] = lower[collapsed] + _DEGENERATE_BOUND * np.maximum(
                 np.abs(lower[collapsed]), 1.0

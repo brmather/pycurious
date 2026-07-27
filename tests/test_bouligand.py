@@ -272,19 +272,118 @@ def test_analytic_jacobian_columns_match_the_finite_difference(bouligand):
         )
 
 
-def test_fit_cost_is_min_func(bouligand):
+def test_profiled_misfit_is_on_the_same_scale_as_min_func(bouligand):
     """
-    `_profiled_misfit` returns `res.cost` where it used to return the value of
-    `min_func`, and the deviance -- so every profile interval -- is differences
-    of those. The two are the same quantity only for as long as `residuals` and
-    `min_func` agree.
+    `_profiled_misfit` returns `res.cost` where it used to return `min_func`,
+    and every profile interval is differences of those against `F_min`, which
+    still comes from `min_func`. A constant factor between the two would put
+    every interval out by that factor while leaving the curve the right shape.
+
+    Holding a parameter at its own fitted value and re-optimising the rest must
+    recover the unconstrained misfit, which pins the scale. Comparing
+    `res.cost` to `min_func(res.x)` does not: both are half the sum of squares
+    of the same vector, so that identity holds however wrong the surrounding
+    code is.
     """
     grid, xc, yc = bouligand
     grid.reset_priors()
     k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
     args = (k, Phi, sigma)
-    res = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args)
-    assert res.cost == pytest.approx(grid.min_func(res.x, *args))
+    x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
+    F_min = grid.min_func(x_hat, *args)
+
+    for target, value in (("dz", x_hat[2]), ("beta", x_hat[0]),
+                          ("CPD", x_hat[1] + x_hat[2])):
+        held = grid._profiled_misfit(target, value, x_hat, args)
+        assert held == pytest.approx(F_min, rel=1e-6), target
+
+
+def _captured_jacobian(grid, monkeypatch, *fit_args, **fit_kwargs):
+    """Run `_fit` and hand back the `(fun, jac, y)` it passed to scipy."""
+    from pycurious import optimise_bouligand as mod
+
+    grabbed = {}
+    real = mod.least_squares
+
+    def spy(fun, y0, jac=None, **kw):
+        grabbed.update(fun=fun, jac=jac, y0=np.asarray(y0, dtype=float))
+        return real(fun, y0, jac=jac, **kw)
+
+    monkeypatch.setattr(mod, "least_squares", spy)
+    grid._fit(*fit_args, **fit_kwargs)
+    return grabbed
+
+
+@pytest.mark.parametrize(
+    "free, fixed, curie",
+    [
+        (None, None, False),  # unconstrained
+        ([0, 1, 3], (2, 25.0), False),  # dz held, as profile("dz") does
+        ([0, 1, 3], (2, 30.0), True),  # dz = CPD - zt, as profile("CPD") does
+    ],
+)
+def test_fit_jacobian_matches_finite_differences(bouligand, monkeypatch, free,
+                                                 fixed, curie):
+    """
+    The Jacobian `_fit` hands scipy must be the derivative of the residual it
+    hands scipy alongside it, in every configuration -- including the Curie
+    one, where `dz = CPD - zt` couples the `zt` and `dz` columns by a chain
+    rule that no other test reaches.
+
+    Checking the fitted answer instead does not work: trust-region reflective
+    converges from a wrong Jacobian too, just by a different route. Dropping
+    the chain-rule term entirely, or flipping its sign, moves the CPD interval
+    not at all and costs a handful of extra evaluations -- so only the
+    derivative itself can be tested.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    grid.add_prior(beta=(3.0, 0.4), C=(5.0, 1.0))
+    try:
+        k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+        args = (k, Phi, sigma)
+        x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
+        y0 = x_hat if free is None else np.asarray(x_hat)[free]
+
+        got = _captured_jacobian(grid, monkeypatch, y0, args, free=free,
+                                 fixed=fixed, curie=curie)
+        fun, jac, y = got["fun"], got["jac"], got["y0"]
+
+        analytic = jac(y)
+        numeric = np.empty_like(analytic)
+        for i in range(y.size):
+            h = 1.0e-6 * max(abs(y[i]), 1.0)
+            yp, ym = y.copy(), y.copy()
+            yp[i] += h
+            ym[i] -= h
+            numeric[:, i] = (fun(yp) - fun(ym)) / (2.0 * h)
+
+        scale = np.maximum(np.abs(numeric).max(axis=0), 1.0)
+        np.testing.assert_allclose(
+            analytic / scale, numeric / scale, atol=1e-6
+        )
+    finally:
+        grid.reset_priors()
+
+
+def test_fit_rejects_an_inverted_bound(bouligand):
+    """
+    A collapsed bound (lb == ub) is widened so trust-region reflective has an
+    interior to work in. An inverted one (lb > ub) is a typo -- `bounds` is
+    documented as reassignable -- and widening it would silently rewrite it
+    into whichever number came first, pinning the parameter somewhere the
+    caller never asked for.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    original = list(grid.bounds)
+    try:
+        grid.bounds[2] = (30.0, 10.0)
+        with pytest.raises(ValueError, match="bound"):
+            grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), (k, Phi, sigma))
+    finally:
+        grid.bounds = original
 
 
 def test_fit_honours_a_held_coordinate(bouligand):
@@ -516,12 +615,10 @@ def test_metropolis_hastings_is_invariant_to_a_constant_misfit(bouligand):
     proposal was rejected.
 
     The chain starts from a `least_squares` fit of `residuals`, which does not
-    go through `min_func`, so the offset moves nothing but the acceptance
-    ratio and the two chains should now agree to the bit. They are compared
-    loosely anyway: the point of the test is that the chain is not frozen by a
-    constant, and pinning it exactly would make the test fail for reasons that
-    have nothing to do with that. Reintroducing exp() would not miss this
-    tolerance narrowly; it would freeze the chain outright.
+    go through `min_func`, so the offset now moves nothing but the acceptance
+    ratio. The comparison is left loose regardless -- what it is here to catch
+    is a chain frozen by a constant, and reintroducing exp() would not miss
+    this tolerance narrowly but freeze the chain outright.
     """
     grid, xc, yc = bouligand
     grid.reset_priors()
