@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import pycurious
+from pycurious.optimise_bouligand import _JACOBIAN_STEP
 
 from conftest import synthetic_grid
 
@@ -266,7 +267,7 @@ def test_analytic_jacobian_columns_match_the_finite_difference(bouligand):
     not re-derived, every fit silently descends a slightly wrong gradient --
     it still converges, just to a worse place, and nothing complains.
     """
-    from pycurious.optimise_bouligand import _ANALYTIC_COLUMNS
+    from pycurious.optimise_bouligand import _ANALYTIC_COLUMNS, _PARAMETERS
 
     grid, xc, yc = bouligand
     grid.reset_priors()
@@ -275,9 +276,10 @@ def test_analytic_jacobian_columns_match_the_finite_difference(bouligand):
     args = (k, Phi, sigma)
     J = grid._jacobian(x, grid.residuals(x, *args), args)
 
-    for index in (1, 3):
+    for name, column in _ANALYTIC_COLUMNS.items():
+        index = _PARAMETERS.index(name)
         np.testing.assert_allclose(
-            _ANALYTIC_COLUMNS[index](k, sigma), J[: k.size, index], rtol=1e-6
+            column(k, sigma), J[: k.size, index], rtol=1e-6, err_msg=name
         )
 
 
@@ -308,28 +310,33 @@ def test_profiled_misfit_is_on_the_same_scale_as_min_func(bouligand):
 
 
 def _captured_jacobian(grid, monkeypatch, *fit_args, **fit_kwargs):
-    """Run `_fit` and hand back the `(fun, jac, y)` it passed to scipy."""
+    """
+    Hand back the `(fun, jac, y)` that `_fit` passes to scipy.
+
+    The spy returns nothing rather than delegating: the caller wants the
+    callables, not the fit, and running one would cost an optimisation whose
+    result is discarded.
+    """
     from pycurious import optimise_bouligand as mod
 
     grabbed = {}
-    real = mod.least_squares
 
     def spy(fun, y0, jac=None, **kw):
         grabbed.update(fun=fun, jac=jac, y0=np.asarray(y0, dtype=float))
-        return real(fun, y0, jac=jac, **kw)
 
     monkeypatch.setattr(mod, "least_squares", spy)
     grid._fit(*fit_args, **fit_kwargs)
-    return grabbed
+    return grabbed["fun"], grabbed["jac"], grabbed["y0"]
 
 
 @pytest.mark.parametrize(
     "free, fixed, curie",
     [
-        (None, None, False),  # unconstrained
-        ([0, 1, 3], (2, 25.0), False),  # dz held, as profile("dz") does
-        ([0, 1, 3], (2, 30.0), True),  # dz = CPD - zt, as profile("CPD") does
+        (None, None, False),
+        ([0, 1, 3], (2, 25.0), False),  # as profile("dz") does
+        ([0, 1, 3], (2, 30.0), True),  # as profile("CPD") does
     ],
+    ids=["unconstrained", "dz-held", "curie"],
 )
 def test_fit_jacobian_matches_finite_differences(bouligand, monkeypatch, free,
                                                  fixed, curie):
@@ -354,14 +361,13 @@ def test_fit_jacobian_matches_finite_differences(bouligand, monkeypatch, free,
         x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
         y0 = x_hat if free is None else np.asarray(x_hat)[free]
 
-        got = _captured_jacobian(grid, monkeypatch, y0, args, free=free,
-                                 fixed=fixed, curie=curie)
-        fun, jac, y = got["fun"], got["jac"], got["y0"]
+        fun, jac, y = _captured_jacobian(grid, monkeypatch, y0, args, free=free,
+                                         fixed=fixed, curie=curie)
 
         analytic = jac(y)
         numeric = np.empty_like(analytic)
         for i in range(y.size):
-            h = 1.0e-6 * max(abs(y[i]), 1.0)
+            h = _JACOBIAN_STEP * max(abs(y[i]), 1.0)
             yp, ym = y.copy(), y.copy()
             yp[i] += h
             ym[i] -= h
@@ -458,7 +464,6 @@ def test_sensitivity_does_not_disturb_priors(bouligand):
             grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
     finally:
         del grid._fit
-    assert calls["n"] > 2
     assert grid.prior == before
 
     grid.reset_priors()

@@ -62,8 +62,12 @@ _OVERFLOW_RESIDUAL = 1.0e3
 # Parameters of bouligand2009, in the order the optimiser sees them.
 _PARAMETERS = ("beta", "zt", "dz", "C")
 
-# Relative step for the finite-difference Jacobian behind the covariance.
+# Relative step for the finite-difference Jacobian, both in `_fit` and behind
+# the covariance.
 _JACOBIAN_STEP = 1.0e-6
+
+# `zt`, which the Curie constraint dz = CPD - zt differentiates through.
+_ZT = _PARAMETERS.index("zt")
 
 # Width given to a bound the caller collapsed to a point. Relative, so it pins
 # a parameter of any magnitude to its own last few bits.
@@ -85,8 +89,8 @@ _DEGENERATE_BOUND = 1.0e-12
 # `kv` call given the recurrence -- but that is exactly what the finite
 # difference it would replace costs, so there is nothing to gain.
 _ANALYTIC_COLUMNS = {
-    1: lambda kh, sigma: -2.0 * kh / sigma,  # zt
-    3: lambda kh, sigma: 1.0 / sigma,  # C
+    "zt": lambda kh, sigma: -2.0 * kh / sigma,
+    "C": lambda kh, sigma: 1.0 / sigma,
 }
 
 # Acceptance rate the burn-in tunes the proposal towards, the usual optimum
@@ -409,6 +413,28 @@ class CurieOptimiseBouligand(CurieGrid):
             **kwargs
         )
 
+    def _bound_arrays(self, free=None):
+        """
+        `self.bounds` as a pair of arrays, with `None` meaning infinite.
+
+        Both the fit and the sampler need the bounds this way, and the `None`
+        sentinel is the sort of convention that goes stale in one copy.
+
+        Args:
+            free : list of int, optional
+                indices of `_PARAMETERS` to include, default all four
+
+        Returns:
+            lower, upper : arrays shape (len(free),)
+        """
+        if free is None:
+            free = range(len(_PARAMETERS))
+        pairs = [self.bounds[i] for i in free]
+        return (
+            np.array([-np.inf if lo is None else lo for lo, _ in pairs], dtype=float),
+            np.array([np.inf if hi is None else hi for _, hi in pairs], dtype=float),
+        )
+
     def _fit(self, y0, args, prior=None, free=None, fixed=None, curie=False):
         """
         Bounded least-squares fit of `residuals`, with the Jacobian supplied.
@@ -470,83 +496,76 @@ class CurieOptimiseBouligand(CurieGrid):
         kh, sigma = args[0], args[2]
         nk = np.size(kh)
 
-        # map from the free coordinates to the full parameter vector, so the
-        # chain rule for a constrained fit is one matrix rather than a special
-        # case in every column
+        # The map from the free coordinates to the full parameter vector is
+        # affine, `x = transform @ y + offset`, in all three cases the callers
+        # use. Writing it as a matrix once means `expand` and the chain rule in
+        # `jacobian` are the same statement rather than two hand-maintained
+        # ones -- an inconsistency between them is close to invisible in the
+        # output, since the fit converges from a wrong Jacobian anyway.
         transform = np.zeros((len(_PARAMETERS), len(free)))
         for column, index in enumerate(free):
             transform[index, column] = 1.0
-        if curie:
-            # dz = CPD - zt, so the dz row differentiates through zt
-            transform[fixed[0], free.index(1)] = -1.0
+        offset = np.zeros(len(_PARAMETERS))
+        if fixed is not None:
+            offset[fixed[0]] = fixed[1]
+            if curie:
+                # dz = CPD - zt, so the dz row differentiates through zt
+                transform[fixed[0], free.index(_ZT)] = -1.0
 
         def expand(y):
-            x = np.empty(len(_PARAMETERS))
-            x[free] = y
-            if fixed is not None:
-                # zt is already in place, which the Curie constraint needs
-                x[fixed[0]] = fixed[1] - x[1] if curie else fixed[1]
-            return x
+            return transform @ y + offset
 
         # `least_squares` evaluates the residual at a point and then asks for
-        # the Jacobian there, so one entry is enough to spare the Jacobian its
-        # base evaluation. A handful are kept rather than exactly one so that a
-        # step which is rejected and retried does not thrash it.
-        cache = {}
+        # the Jacobian there, which is the only reuse there is: a rejected step
+        # is retried somewhere else, never at the same point. One entry.
+        last = [None, None]
 
         def residuals_at(x):
             key = x.tobytes()
-            r = cache.get(key)
-            if r is None:
-                if len(cache) > 3:
-                    cache.clear()
-                r = cache[key] = self.residuals(x, *args, prior=prior)
-            return r
+            if last[0] != key:
+                last[0] = key
+                last[1] = self.residuals(x, *args, prior=prior)
+            return last[1]
 
-        # rows `residuals` appends for the priors, in the order it appends them
+        # Everything in the Jacobian except the differenced columns is constant
+        # over the fit, so build it once. The analytic columns depend only on
+        # `kh` and `sigma`; a prior contributes a row whose derivative is
+        # `1/scale` against its own parameter and zero elsewhere, in the order
+        # `residuals` appends them. Columns the transform discards are filled
+        # anyway -- harmless, and cheaper than deciding not to.
         prior_rows = [
             index
             for index, key in enumerate(_PARAMETERS)
             if prior.get(key) is not None
         ]
-        # a column of the full Jacobian is only worth forming if the transform
-        # carries it through -- the held coordinate of a plain profile does not
-        needed = [i for i in range(len(_PARAMETERS)) if transform[i].any()]
+        constant = np.zeros((nk + len(prior_rows), len(_PARAMETERS)))
+        for index, key in enumerate(_PARAMETERS):
+            analytic = _ANALYTIC_COLUMNS.get(key)
+            if analytic is not None:
+                constant[:nk, index] = analytic(kh, sigma)
+        for row, index in enumerate(prior_rows):
+            constant[nk + row, index] = 1.0 / prior[_PARAMETERS[index]][1]
+
+        # what is left to difference: the free columns with no closed form,
+        # plus the held one when the Curie constraint makes it move with `zt`
+        differenced = [i for i in free if _PARAMETERS[i] not in _ANALYTIC_COLUMNS]
+        if curie:
+            differenced.append(fixed[0])
 
         def jacobian(y):
             x = expand(y)
-            J = np.zeros((nk + len(prior_rows), len(_PARAMETERS)))
-            base = None
-            for index in needed:
-                analytic = _ANALYTIC_COLUMNS.get(index)
-                if analytic is not None:
-                    J[:nk, index] = analytic(kh, sigma)
-                    continue
-                if base is None:
-                    base = residuals_at(x)
+            J = constant.copy()
+            base = residuals_at(x)
+            for index in differenced:
                 step = _JACOBIAN_STEP * max(abs(x[index]), 1.0)
                 xp = x.copy()
                 xp[index] += step
-                # spectral rows only; the prior rows are exact and are filled
-                # below for every column, so differencing them here would
-                # count them twice
+                # spectral rows only -- the prior rows are already exact in
+                # `constant`, and differencing them would count them twice
                 J[:nk, index] = (residuals_at(xp)[:nk] - base[:nk]) / step
-            for row, index in enumerate(prior_rows):
-                J[nk + row, index] = 1.0 / prior[_PARAMETERS[index]][1]
             return J @ transform
 
-        lower = np.array(
-            [
-                self.bounds[i][0] if self.bounds[i][0] is not None else -np.inf
-                for i in free
-            ]
-        )
-        upper = np.array(
-            [
-                self.bounds[i][1] if self.bounds[i][1] is not None else np.inf
-                for i in free
-            ]
-        )
+        lower, upper = self._bound_arrays(free)
 
         # L-BFGS-B accepted an equality bound and simply pinned the parameter.
         # Trust-region reflective needs a box with an interior to reflect
@@ -559,7 +578,9 @@ class CurieOptimiseBouligand(CurieGrid):
         # `self.bounds` is documented as reassignable, so it is a typo a user
         # can make -- and widening it would silently rewrite it into whichever
         # of the two numbers happened to be first. Let `least_squares` raise.
-        collapsed = np.isfinite(lower) & np.isfinite(upper) & (upper == lower)
+        # An infinite bound cannot compare equal to the other, which is always
+        # its opposite sign, so this needs no finiteness test.
+        collapsed = upper == lower
         if collapsed.any():
             upper[collapsed] = lower[collapsed] + _DEGENERATE_BOUND * np.maximum(
                 np.abs(lower[collapsed]), 1.0
@@ -1200,12 +1221,7 @@ class CurieOptimiseBouligand(CurieGrid):
             window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
 
-        lower = np.array(
-            [-np.inf if b[0] is None else b[0] for b in self.bounds], dtype=float
-        )
-        upper = np.array(
-            [np.inf if b[1] is None else b[1] for b in self.bounds], dtype=float
-        )
+        lower, upper = self._bound_arrays()
 
         def log_posterior(x):
             if np.any(x < lower) or np.any(x > upper):
