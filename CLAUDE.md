@@ -15,8 +15,8 @@ returns a bare number without one is a pre-v2 remnant.
 ## Commands
 
 ```bash
-pytest                     # 70 tests, ~40 s
-pytest -m "not slow"       # 67 tests, ~26 s -- skips the calibration tests that
+pytest                     # 111 tests, ~20 s
+pytest -m "not slow"       # 108 tests, ~12 s -- skips the calibration tests that
                            # fit a few hundred realisations
 pytest tests/test_tanaka.py -q
 ```
@@ -77,6 +77,25 @@ depth.
 
 **Depths are positive downwards.** `optimise` returns depths, not the negative
 gradients the fits produce.
+
+**Every Bouligand fit goes through `_fit`, which is `least_squares`, not
+`minimize`.** Do not put L-BFGS-B back: it needs **2012** evaluations of the
+forward model per vertex where trust-region reflective needs 359, about 3x the
+CPU. `_fit` also supplies the two exact Jacobian columns (`dr/dzt = -2k/sigma`,
+`dr/dC = 1/sigma`); `beta` enters through the *order* of a Bessel function and
+`dz` costs the same analytically as by difference, so those two stay numerical.
+
+**Pin the BLAS before timing anything.**
+
+```bash
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python bench.py
+```
+
+L-BFGS-B calls a threaded BLAS whose workers spin-wait. Unpinned on a loaded
+machine it looks 20x to 400x slower than TRF depending on contention, and
+`time.process_time` makes it worse by charging every spinning thread — a
+"3.1 s CPU" fit whose wall clock was 1.7 s. Both numbers were wrong; the truth
+is 3x. Counting `residuals` calls is the measurement that does not lie.
 
 **Tanaka bands have no defaults, deliberately.** Each straight-line limit holds
 only over part of the spectrum: the `zt` band needs wavelengths shorter than
@@ -201,6 +220,17 @@ The `rm` matters. `SOURCES.txt` is regenerated from the *old* manifest if it is
 left in place, which makes a correct `MANIFEST.in` look broken.
 
 ## Known defects
+
+- **`profile` reports one basin of a multimodal deviance.** The scan walks
+  outward from the best node to the first threshold crossing, so where the
+  misfit has two minima it covers the one around the best node and never sees
+  the other, and the interval can then exclude the fitted value. Measured on
+  synthetics at a 200 km window, 2 of 20 intervals did. It does **not** appear
+  in the regime that matters: over cached EMAG2 spectra in `~/Global_CPD` —
+  three window sizes from 1000 to 4000 km, three targets, twelve mesh vertices
+  — 0 of 108 intervals excluded their estimate. Band limiting and the prior
+  pinning `zt` between them seem to remove it. Worth knowing if you profile a
+  small unconstrained synthetic; not worth guarding against.
 
 - **`install_documentation()` fails for an installed package.** It is still
   advertised in the README, but `[tool.setuptools] packages =

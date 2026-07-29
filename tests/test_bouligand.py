@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import pycurious
+from pycurious.optimise_bouligand import _JACOBIAN_STEP
 
 from conftest import synthetic_grid
 
@@ -221,6 +222,214 @@ def test_profile_rejects_unknown_target(bouligand):
         grid.profile(WINDOW, xc, yc, "curie_depth")
 
 
+@pytest.mark.parametrize(
+    "seed, interval",
+    [
+        (1, (11.12, np.inf)),
+        (2, (1.695, 48.17)),
+        (3, (5.094, 32.47)),
+        (4, (24.06, np.inf)),
+    ],
+)
+def test_profile_dz_interval_is_unchanged_by_the_optimiser(seed, interval):
+    """
+    Pinned against the values L-BFGS-B produced before `_fit` moved to
+    `least_squares`, so a change of optimiser cannot quietly move a published
+    interval. A better inner optimiser is not automatically safe here: it
+    finds lower constrained minima, which re-anchors the deviance, and that
+    can move the reported interval.
+
+    The tolerance is 5%, which is loose because the quantity is. An interval
+    endpoint is where `brentq` crosses the threshold on a deviance curve that
+    is nearly flat there -- that flatness is the whole reason `dz` needs a
+    profile rather than a sigma -- so a last-ulp difference in `kv` or in the
+    FFT behind the synthetic moves it far more than it moves the fit. The same
+    four intervals come out up to 1.3% different on macOS from Linux with
+    identical code, which is what set the bound. Pinning tighter tests the
+    platform's libm, not this package.
+
+    Loose as it is, it still bites: it is what catches a sign-flipped or
+    dropped Jacobian column, and a `_profiled_misfit` off by a constant
+    factor. Those move an endpoint by tens of percent, not tenths.
+    """
+    grid, xc, yc = _grid(seed=seed)
+    grid.reset_priors()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        _, _, lower, upper = grid.profile(200e3, xc, yc, "dz")
+    np.testing.assert_allclose([lower, upper], interval, rtol=5e-2)
+
+
+def test_analytic_jacobian_columns_match_the_finite_difference(bouligand):
+    """
+    `_fit` supplies the zt and C columns of the Jacobian in closed form and
+    differences only beta and dz. If the forward model changes and these are
+    not re-derived, every fit silently descends a slightly wrong gradient --
+    it still converges, just to a worse place, and nothing complains.
+    """
+    from pycurious.optimise_bouligand import _ANALYTIC_COLUMNS, _PARAMETERS
+
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    x = np.array([3.0, 1.0, 20.0, 5.0])
+    args = (k, Phi, sigma)
+    J = grid._jacobian(x, grid.residuals(x, *args), args)
+
+    for name, column in _ANALYTIC_COLUMNS.items():
+        index = _PARAMETERS.index(name)
+        np.testing.assert_allclose(
+            column(k, sigma), J[: k.size, index], rtol=1e-6, err_msg=name
+        )
+
+
+def test_profiled_misfit_is_on_the_same_scale_as_min_func(bouligand):
+    """
+    `_profiled_misfit` returns `res.cost` where it used to return `min_func`,
+    and every profile interval is differences of those against `F_min`, which
+    still comes from `min_func`. A constant factor between the two would put
+    every interval out by that factor while leaving the curve the right shape.
+
+    Holding a parameter at its own fitted value and re-optimising the rest must
+    recover the unconstrained misfit, which pins the scale. Comparing
+    `res.cost` to `min_func(res.x)` does not: both are half the sum of squares
+    of the same vector, so that identity holds however wrong the surrounding
+    code is.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    args = (k, Phi, sigma)
+    x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
+    F_min = grid.min_func(x_hat, *args)
+
+    for target, value in (("dz", x_hat[2]), ("beta", x_hat[0]),
+                          ("CPD", x_hat[1] + x_hat[2])):
+        held = grid._profiled_misfit(target, value, x_hat, args)
+        assert held == pytest.approx(F_min, rel=1e-6), target
+
+
+def _captured_jacobian(grid, monkeypatch, *fit_args, **fit_kwargs):
+    """
+    Hand back the `(fun, jac, y)` that `_fit` passes to scipy.
+
+    The spy returns nothing rather than delegating: the caller wants the
+    callables, not the fit, and running one would cost an optimisation whose
+    result is discarded.
+    """
+    from pycurious import optimise_bouligand as mod
+
+    grabbed = {}
+
+    def spy(fun, y0, jac=None, **kw):
+        grabbed.update(fun=fun, jac=jac, y0=np.asarray(y0, dtype=float))
+
+    monkeypatch.setattr(mod, "least_squares", spy)
+    grid._fit(*fit_args, **fit_kwargs)
+    return grabbed["fun"], grabbed["jac"], grabbed["y0"]
+
+
+@pytest.mark.parametrize(
+    "free, fixed, curie",
+    [
+        (None, None, False),
+        ([0, 1, 3], (2, 25.0), False),  # as profile("dz") does
+        ([0, 1, 3], (2, 30.0), True),  # as profile("CPD") does
+    ],
+    ids=["unconstrained", "dz-held", "curie"],
+)
+def test_fit_jacobian_matches_finite_differences(bouligand, monkeypatch, free,
+                                                 fixed, curie):
+    """
+    The Jacobian `_fit` hands scipy must be the derivative of the residual it
+    hands scipy alongside it, in every configuration -- including the Curie
+    one, where `dz = CPD - zt` couples the `zt` and `dz` columns by a chain
+    rule that no other test reaches.
+
+    Checking the fitted answer instead does not work: trust-region reflective
+    converges from a wrong Jacobian too, just by a different route. Dropping
+    the chain-rule term entirely, or flipping its sign, moves the CPD interval
+    not at all and costs a handful of extra evaluations -- so only the
+    derivative itself can be tested.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    grid.add_prior(beta=(3.0, 0.4), C=(5.0, 1.0))
+    try:
+        k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+        args = (k, Phi, sigma)
+        x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
+        y0 = x_hat if free is None else np.asarray(x_hat)[free]
+
+        fun, jac, y = _captured_jacobian(grid, monkeypatch, y0, args, free=free,
+                                         fixed=fixed, curie=curie)
+
+        analytic = jac(y)
+        numeric = np.empty_like(analytic)
+        for i in range(y.size):
+            h = _JACOBIAN_STEP * max(abs(y[i]), 1.0)
+            yp, ym = y.copy(), y.copy()
+            yp[i] += h
+            ym[i] -= h
+            numeric[:, i] = (fun(yp) - fun(ym)) / (2.0 * h)
+
+        scale = np.maximum(np.abs(numeric).max(axis=0), 1.0)
+        np.testing.assert_allclose(
+            analytic / scale, numeric / scale, atol=1e-6
+        )
+    finally:
+        grid.reset_priors()
+
+
+def test_fit_rejects_an_inverted_bound(bouligand):
+    """
+    A collapsed bound (lb == ub) is widened so trust-region reflective has an
+    interior to work in. An inverted one (lb > ub) is a typo -- `bounds` is
+    documented as reassignable -- and widening it would silently rewrite it
+    into whichever number came first, pinning the parameter somewhere the
+    caller never asked for.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    original = list(grid.bounds)
+    try:
+        grid.bounds[2] = (30.0, 10.0)
+        with pytest.raises(ValueError, match="bound"):
+            grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), (k, Phi, sigma))
+    finally:
+        grid.bounds = original
+
+
+def test_fit_honours_a_held_coordinate(bouligand):
+    """
+    A constrained fit must actually hold what it was told to, including the
+    Curie-depth case where the held coordinate is dz = CPD - zt and so moves
+    with a free parameter.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+    args = (k, Phi, sigma)
+    x_hat = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), args).x
+
+    free = [0, 1, 3]
+
+    # dz pinned at 25: the reported cost must be the misfit of the model that
+    # actually has dz = 25, which is what makes the deviance meaningful
+    held = grid._fit(x_hat[free], args, free=free, fixed=(2, 25.0))
+    beta, zt, C = held.x
+    assert held.cost == pytest.approx(grid.min_func([beta, zt, 25.0, C], *args))
+    assert held.cost >= grid._fit(x_hat, args).cost
+
+    # Curie depth pinned at 30: dz is not fixed, zt + dz is
+    curie = grid._fit(x_hat[free], args, free=free, fixed=(2, 30.0), curie=True)
+    beta, zt, C = curie.x
+    assert curie.cost == pytest.approx(
+        grid.min_func([beta, zt, 30.0 - zt, C], *args)
+    )
+
+
 def test_sensitivity_does_not_disturb_priors(bouligand):
     """
     sensitivity used to redraw each prior centre by mutating self.prior in
@@ -235,22 +444,26 @@ def test_sensitivity_does_not_disturb_priors(bouligand):
     grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
     assert grid.prior == before
 
-    # and still intact when a simulation blows up part way through
+    # and still intact when a simulation blows up part way through. The count
+    # is of fits rather than of objective evaluations: the first is the
+    # unresampled solution the simulations start from, so raising on the third
+    # lands inside the loop, which is where the prior is copied and where a
+    # leak would show.
     calls = {"n": 0}
-    original = grid.min_func
+    original = grid._fit
 
     def exploding(*args, **kwargs):
         calls["n"] += 1
-        if calls["n"] > 5:
+        if calls["n"] > 2:
             raise RuntimeError("boom")
         return original(*args, **kwargs)
 
-    grid.min_func = exploding
+    grid._fit = exploding
     try:
         with pytest.raises(RuntimeError, match="boom"):
             grid.sensitivity(300e3, xc, yc, 4, taper=np.hanning, seed=1)
     finally:
-        del grid.min_func
+        del grid._fit
     assert grid.prior == before
 
     grid.reset_priors()
@@ -415,12 +628,11 @@ def test_metropolis_hastings_is_invariant_to_a_constant_misfit(bouligand):
     once F grew to a few hundred: exp(-F) underflowed to zero and every
     proposal was rejected.
 
-    Agreement is close but not bit-exact, and the reason is not the acceptance
-    rule. min_func also drives the search for the mode the chain starts from,
-    and scipy's convergence tolerance is relative to the value of the
-    objective, so offsetting it moves where the minimiser stops -- by about
-    3e-06 here. Reintroducing exp() would not miss this tolerance narrowly; it
-    would freeze the chain outright.
+    The chain starts from a `least_squares` fit of `residuals`, which does not
+    go through `min_func`, so the offset now moves nothing but the acceptance
+    ratio. The comparison is left loose regardless -- what it is here to catch
+    is a chain frozen by a constant, and reintroducing exp() would not miss
+    this tolerance narrowly but freeze the chain outright.
     """
     grid, xc, yc = bouligand
     grid.reset_priors()
