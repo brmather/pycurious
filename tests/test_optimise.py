@@ -336,3 +336,69 @@ def test_residuals_do_not_swallow_unrelated_warnings():
         )
     finally:
         pycurious.optimise_bouligand.bouligand2009 = real
+
+
+def test_supplied_spectrum_from_another_window_warns():
+    """
+    A supplied spectrum makes `window`, `xc` and `yc` dead arguments, so
+    passing the one from a different window answers a question the caller did
+    not ask -- and it answers it plausibly. Measured on a 600-cell synthetic, a
+    128 km spectrum passed to a 512 km call returns dz = 222.8 km where that
+    window really gives 21.7.
+    """
+    grid, xc, yc, extent = _shared_spectrum_grid()
+
+    grid.optimise(100e3, xc, yc)
+    ours = grid.last_spectrum
+
+    with pytest.warns(RuntimeWarning, match="different window"):
+        grid.optimise(200e3, xc, yc, spectrum=ours)
+
+    grid.optimise(100e3, xc, yc)
+    with pytest.warns(RuntimeWarning, match="different xc"):
+        grid.optimise(100e3, xc + 40e3, yc, spectrum=grid.last_spectrum)
+
+
+def test_supplied_spectrum_at_matching_arguments_is_silent():
+    """The documented idiom must not warn, or the guard is worse than useless."""
+    import warnings
+
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid.optimise(200e3, xc, yc)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        grid.profile(200e3, xc, yc, "dz", npoints=7, spectrum=grid.last_spectrum)
+    assert not [w for w in caught if "supplied spectrum" in str(w.message)]
+
+
+def test_spectrum_of_unknown_provenance_is_taken_at_face_value():
+    """
+    Only a spectrum this instance computed can be checked. One built by the
+    caller -- Global_CPD reads its archived spectra out of zarr as float32 --
+    has nothing to compare against, so it must be accepted without a warning
+    rather than guessed at.
+    """
+    import warnings
+
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid.optimise(100e3, xc, yc)
+    foreign = tuple(np.asarray(a).astype(np.float32) for a in grid.last_spectrum)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        grid.optimise(200e3, xc, yc, spectrum=foreign)
+    assert not [w for w in caught if "supplied spectrum" in str(w.message)]
+
+
+def test_provenance_survives_being_passed_along():
+    """
+    Reusing a spectrum must not relabel it with the arguments of whichever call
+    reused it, or the guard would go blind after one hop.
+    """
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid.optimise(100e3, xc, yc)
+    grid.profile(100e3, xc, yc, "dz", npoints=7, spectrum=grid.last_spectrum)
+
+    with pytest.warns(RuntimeWarning, match="different window"):
+        grid.optimise(200e3, xc, yc, spectrum=grid.last_spectrum)

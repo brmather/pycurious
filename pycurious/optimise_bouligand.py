@@ -216,8 +216,10 @@ class CurieOptimiseBouligand(CurieGrid):
         self.bounds = list(zip(lb, ub))
 
         # the spectrum most recently computed or supplied, ready to be handed
-        # to another routine at the same centroid -- see `_resolve_spectrum`
+        # to another routine at the same centroid -- see `_resolve_spectrum`,
+        # which uses `_spectrum_key` to catch it being handed to a different one
         self.last_spectrum = None
+        self._spectrum_key = None
 
         self.max_processors = kwargs.pop("max_processors", cpu_count())
 
@@ -452,11 +454,27 @@ class CurieOptimiseBouligand(CurieGrid):
         `optimise` just used straight to `profile` without having to
         reconstruct it -- and reconstructing it is easy to get wrong, since
         `power` must be 2 and any `process_subgrid` must match.
+
+        Nothing is reused implicitly: a routine given no `spectrum` always
+        computes one, and the library never reads `last_spectrum` itself. But a
+        supplied spectrum makes `window`, `xc` and `yc` dead arguments, so
+        handing over the one from a *different* window is accepted in silence
+        and answers a question the caller did not ask -- measured at a 128 km
+        spectrum passed to a 512 km call, dz came back 222.8 km against the
+        21.7 km that window really gives.
+
+        `_spectrum_key` guards the case that can be guarded. When the spectrum
+        handed back is the one this instance last computed -- which is what the
+        documented `spectrum=grid.last_spectrum` idiom passes -- the arguments
+        it was computed from are known, and disagreeing with them is a warning.
+        A spectrum from anywhere else has no provenance to check, so it is
+        taken at face value and the key is cleared rather than guessed at.
         """
         if spectrum is None:
             spectrum = self._spectrum(
                 window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
             )
+            key = (window, xc, yc, taper, process_subgrid, dof_factor)
         else:
             k, Phi, sigma_Phi = (np.asarray(a, dtype=float) for a in spectrum)
             if not (k.shape == Phi.shape == sigma_Phi.shape):
@@ -466,7 +484,41 @@ class CurieOptimiseBouligand(CurieGrid):
                 )
             spectrum = (k, Phi, sigma_Phi)
 
+            # `asarray` hands back the same object for an array that is already
+            # float64, so the arrays of `last_spectrum` survive the conversion
+            # by identity even though the tuple around them does not.
+            ours = self.last_spectrum is not None and all(
+                new is old for new, old in zip(spectrum, self.last_spectrum)
+            )
+            key = self._spectrum_key if ours else None
+            if ours and key is not None:
+                mismatched = [
+                    name
+                    for name, was, now in zip(
+                        ("window", "xc", "yc", "taper", "process_subgrid",
+                         "dof_factor"),
+                        key,
+                        (window, xc, yc, taper, process_subgrid, dof_factor),
+                    )
+                    if was is not now and was != now
+                ]
+                if mismatched:
+                    warnings.warn(
+                        "the supplied spectrum was computed with a different "
+                        "{}, and a supplied spectrum is used as given -- "
+                        "{} of this call {} ignored, so the result describes "
+                        "the window the spectrum came from, not the one asked "
+                        "for here.".format(
+                            ", ".join(mismatched),
+                            ", ".join(mismatched),
+                            "is" if len(mismatched) == 1 else "are",
+                        ),
+                        RuntimeWarning,
+                        stacklevel=3,
+                    )
+
         self.last_spectrum = spectrum
+        self._spectrum_key = key
         return spectrum
 
     def _bound_arrays(self, free=None):
