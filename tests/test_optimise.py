@@ -216,3 +216,123 @@ def test_valid_numbers(load_magnetic_anomaly):
 
     for i in range(res.x.size):
         assert np.isfinite(res.x[i]), err_msg.format(parameters[i], res.x[i])
+
+
+def _shared_spectrum_grid():
+    from conftest import synthetic_grid
+
+    return synthetic_grid(pycurious.CurieOptimiseBouligand, n=256, dx=2.0)
+
+
+@pytest.mark.parametrize("target", ["dz", "CPD"])
+def test_supplied_spectrum_reproduces_the_computed_one(target):
+    """
+    `spectrum=` must be the same fit, not merely a similar one.
+
+    The point of routing it through `optimise`/`profile` rather than giving it
+    its own code path is that the two cannot drift apart. Assert to the bit, so
+    that they cannot.
+    """
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    window = 200e3
+
+    stock = grid.optimise(window, xc, yc)
+    shared = grid.optimise(window, xc, yc, spectrum=grid.last_spectrum)
+    assert stock == shared
+
+    a = grid.profile(window, xc, yc, target, npoints=9)
+    b = grid.profile(window, xc, yc, target, npoints=9, spectrum=grid.last_spectrum)
+    for lhs, rhs in zip(a, b):
+        assert np.array_equal(lhs, rhs)
+
+
+def test_supplied_spectrum_bypasses_the_spectrum_hook():
+    """
+    A supplied spectrum must not be routed through `_spectrum`.
+
+    Subclasses override `_spectrum` to band limit or to reweight `sigma` (the
+    Global_CPD workflow does both). Whatever they did was already applied to
+    the array the caller is holding, so doing it again would compound it.
+    """
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    calls = []
+    original = grid._spectrum
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    grid._spectrum = counting
+    try:
+        grid.optimise(200e3, xc, yc)
+        assert len(calls) == 1
+        grid.optimise(200e3, xc, yc, spectrum=grid.last_spectrum)
+        assert len(calls) == 1, "_spectrum was called for a supplied spectrum"
+    finally:
+        grid._spectrum = original
+
+
+def test_last_spectrum_tracks_both_paths():
+    # a fresh instance, because `synthetic_grid` is cached and a grid that has
+    # already been fitted carries the spectrum from whichever test got there
+    # first
+    data, extent = pycurious.fractal_anomaly(n=128, dx=2.0, beta=3.0, zt=1.0,
+                                             dz=20.0, C=5.0, seed=1)
+    grid = pycurious.CurieOptimiseBouligand(data, *extent)
+    xc = 0.5 * (extent[0] + extent[1])
+    yc = 0.5 * (extent[2] + extent[3])
+    assert grid.last_spectrum is None
+
+    grid.optimise(200e3, xc, yc)
+    computed = grid.last_spectrum
+    assert computed is not None and len(computed) == 3
+
+    grid.optimise(200e3, xc, yc, spectrum=computed)
+    for lhs, rhs in zip(grid.last_spectrum, computed):
+        assert np.array_equal(lhs, rhs)
+
+
+def test_supplied_spectrum_rejects_mismatched_shapes():
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    bad = (np.ones(5), np.ones(4), np.ones(5))
+    with pytest.raises(ValueError, match="same shape"):
+        grid.optimise(200e3, xc, yc, spectrum=bad)
+
+
+def test_residuals_do_not_swallow_unrelated_warnings():
+    """
+    `residuals` silences the forward model's floating-point errors, which it
+    must -- the fit legitimately probes dz <= 0 -- but it used to do so with a
+    blanket `catch_warnings`, which ate every other warning raised in the
+    block as well.
+    """
+    import warnings
+
+    grid, xc, yc, extent = _shared_spectrum_grid()
+    k, Phi, sigma = grid.window_spectrum(200e3, xc, yc, power=2.0)
+
+    # dz < 0 is what the Curie profile evaluates below zt, and what raises
+    # 'invalid value encountered in power' inside bouligand2009
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        r = grid.residuals(np.array([3.0, 1.0, -1.0, 5.0]), k, Phi, sigma)
+    assert np.all(np.isfinite(r)), "a non-finite residual escaped the fallback"
+    assert not [w for w in caught if "invalid value" in str(w.message)]
+
+    # ... while a genuine warning from elsewhere still gets through
+    real = pycurious.optimise_bouligand.bouligand2009
+
+    def noisy(*args, **kwargs):
+        warnings.warn("a real warning", RuntimeWarning)
+        return real(*args, **kwargs)
+
+    pycurious.optimise_bouligand.bouligand2009 = noisy
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            grid.residuals(np.array([3.0, 1.0, 10.0, 5.0]), k, Phi, sigma)
+        assert [w for w in caught if "a real warning" in str(w.message)], (
+            "residuals is still swallowing warnings it did not raise"
+        )
+    finally:
+        pycurious.optimise_bouligand.bouligand2009 = real
