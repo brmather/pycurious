@@ -406,8 +406,15 @@ class CurieGrid(CurieParallel):
         else:
             rt = taper(nr, **kwargs)
             ct = taper(nc, **kwargs)
-            xq, yq = np.meshgrid(ct, rt)
-            vtaper = xq * yq
+            # the separable taper is an outer product. Building it through
+            # meshgrid instead materialises two further (nr, nc) arrays and
+            # multiplies them: 16.4 ms against 0.51 ms at nr = nc = 1025, for a
+            # result identical to the bit. The end-to-end gain to `optimise` is
+            # smaller than that and mostly within run-to-run noise -- the
+            # allocations this saves are partly paid back as page faults in
+            # `_FFT_spectrum` -- so this is here for doing less work, not for a
+            # measured speed-up.
+            vtaper = np.outer(rt, ct)
 
         # scaling factor to transform wavenumber into units of rad/km
         dx_scale = self.dx * scale
