@@ -180,3 +180,81 @@ def test_CurieOptimiseTanaka_routines(load_magnetic_anomaly):
     CPD, sigma_CPD = grid.calculate_CPD(zt, z0, sigma_zt, sigma_z0)
     assert CPD.shape == (len(xc_list),)
     assert np.all(sigma_CPD > 0.0)
+
+
+def test_supplied_spectrum_reproduces_the_computed_one(tanaka):
+    """
+    `spectrum=` must be the same fit, not merely a similar one.
+
+    Both routines route it through the same `_resolve_spectrum` the Bouligand
+    side uses, rather than getting their own code path, so the two cannot drift
+    apart. Assert to the bit, so that they cannot.
+    """
+    grid, xc, yc = tanaka
+    window = 300e3
+
+    stock = grid.optimise(window, xc, yc, ZT_RANGE, Z0_RANGE)
+    shared = grid.optimise(
+        window, xc, yc, ZT_RANGE, Z0_RANGE, spectrum=grid.last_spectrum
+    )
+    assert stock == shared
+
+    a = grid.sensitivity(window, xc, yc, 20, ZT_RANGE, Z0_RANGE, seed=1)
+    b = grid.sensitivity(
+        window, xc, yc, 20, ZT_RANGE, Z0_RANGE, seed=1, spectrum=grid.last_spectrum
+    )
+    for lhs, rhs in zip(a, b):
+        assert np.array_equal(lhs, rhs)
+
+
+def test_last_spectrum_carries_all_four_arrays(tanaka):
+    """
+    Tanaka's `_spectrum` returns `(k, Phi, Phi_n, sigma)`, not the triple the
+    Bouligand side returns. The shared machinery must not have assumed three.
+    """
+    grid, xc, yc = tanaka
+    assert grid.last_spectrum is None
+
+    grid.optimise(300e3, xc, yc, ZT_RANGE, Z0_RANGE)
+    assert len(grid.last_spectrum) == 4
+
+    bad = (np.ones(5), np.ones(5), np.ones(5))
+    with pytest.raises(ValueError, match="4 arrays of the same shape"):
+        grid.optimise(300e3, xc, yc, ZT_RANGE, Z0_RANGE, spectrum=bad)
+
+
+def test_a_spectrum_from_a_different_beta_warns(tanaka):
+    """
+    `beta` subtracts the fractal contribution from `Phi`, so a spectrum
+    computed at one beta is the wrong data for a fit at another -- which makes
+    it provenance, exactly like the window and the centroid.
+    """
+    grid, xc, yc = tanaka
+    grid.optimise(300e3, xc, yc, ZT_RANGE, Z0_RANGE, beta=3.0)
+
+    with pytest.warns(RuntimeWarning, match="different beta"):
+        grid.optimise(
+            300e3, xc, yc, ZT_RANGE, Z0_RANGE, beta=2.0, spectrum=grid.last_spectrum
+        )
+
+    grid.optimise(300e3, xc, yc, ZT_RANGE, Z0_RANGE, beta=3.0)
+    with pytest.warns(RuntimeWarning, match="different window"):
+        grid.optimise(
+            200e3, xc, yc, ZT_RANGE, Z0_RANGE, beta=3.0, spectrum=grid.last_spectrum
+        )
+
+
+def test_bands_are_not_provenance(tanaka, recwarn):
+    """
+    The spectrum does not depend on the fitting bands, so sweeping them while
+    reusing one spectrum -- the whole point of the idiom `optimise` documents
+    -- must not warn.
+    """
+    grid, xc, yc = tanaka
+    grid.optimise(300e3, xc, yc, ZT_RANGE, Z0_RANGE)
+
+    grid.check_bands(grid.last_spectrum[0], ZT_RANGE, Z0_RANGE, verbose=False)
+    grid.optimise(
+        300e3, xc, yc, (1.3, 1.8), (0.0, 0.5), spectrum=grid.last_spectrum
+    )
+    assert not [w for w in recwarn if "supplied spectrum" in str(w.message)]

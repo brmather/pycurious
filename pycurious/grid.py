@@ -190,6 +190,34 @@ def _dof_factor(taper, counts=None, dof_factor=None):
     return dof_inf * counts / np.maximum(counts - lost, 1.0)
 
 
+class _Spectrum(tuple):
+    """
+    A spectrum that remembers what it was computed from.
+
+    It is an ordinary tuple everywhere it matters -- it unpacks, indexes, zips
+    and pickles like the one `CurieGrid.window_spectrum` returns -- so
+    `spectrum=` still takes a plain tuple and `last_spectrum` still hands one
+    back. Carrying the provenance on the spectrum rather than beside it means
+    it survives being passed from routine to routine, and that a tuple built
+    anywhere else simply has none, which is exactly the "nothing to check, take
+    it as given" case.
+
+    The arity is whatever the subclass's `_spectrum` returns: three arrays on
+    the Bouligand side, four on the Tanaka one.
+    """
+
+    def __new__(cls, arrays, provenance):
+        spectrum = super(_Spectrum, cls).__new__(cls, arrays)
+        spectrum.provenance = provenance
+        return spectrum
+
+    def __getnewargs__(self):
+        # a tuple subclass with a two-argument `__new__` cannot be unpickled
+        # without this, and a grid carrying a `last_spectrum` is pickled every
+        # time `parallelise_routine` sends one to a worker
+        return (tuple(self), self.provenance)
+
+
 class CurieGrid(CurieParallel):
     """
     Accepts a 2D array and Cartesian coordinates specifying the
@@ -251,6 +279,10 @@ class CurieGrid(CurieParallel):
         self.ycoords, dy = np.linspace(ymin, ymax, ny, retstep=True)
         self.nx, self.ny = nx, ny
         self.dx, self.dy = dx, dy
+
+        # the spectrum most recently computed or supplied, ready to be handed
+        # to another routine at the same centroid -- see `_resolve_spectrum`
+        self.last_spectrum = None
 
         if not np.allclose(dx, dy, 1.0):
             raise ValueError("node spacing should be identical {}".format((dx, dy)))
@@ -678,6 +710,89 @@ class CurieGrid(CurieParallel):
         sigma = sigma_Phi / np.sqrt(counts / _dof_factor(taper, counts, dof_factor))
 
         return k, Phi, sigma
+
+    def _resolve_spectrum(self, spectrum, *args, **kwargs):
+        """
+        The spectrum a fitting routine should use: the caller's, or a fresh one.
+
+        Every fitting routine in both optimisers begins by turning a window
+        into a spectrum, and computing it is most of what a call at a large
+        window costs -- 30% of a Bouligand `optimise` plus `profile` pair at a
+        1025-cell window, 41% at 2049, and 81% of a single Tanaka `optimise`,
+        whose two straight-line fits cost almost nothing beside it. Passing one
+        spectrum to several routines removes that entirely.
+
+        `args` are `_spectrum`'s own positional arguments, in its own order, so
+        a routine forwards exactly what it would have forwarded anyway. A
+        subclass that defines `_spectrum` also defines the three names below;
+        they are what lets one implementation serve signatures that differ:
+
+        - `_SPECTRUM_ARGS` -- names of those positional arguments, in order
+        - `_SPECTRUM_PROVENANCE` -- the subset a reused spectrum is checked
+          against. `taper` and `process_subgrid` are deliberately excluded:
+          they are callables, and holding one on the instance both keeps its
+          captured scope alive and makes the bound routine unpicklable, which
+          drops `pycurious.parallel.CurieParallel.parallelise_routine` back to
+          serial with a warning that blames the wrong thing. Anything that
+          changes the *values* of the spectrum belongs here -- including
+          Tanaka's `beta`, which subtracts the fractal contribution.
+        - `_SPECTRUM_RETURNS` -- names of the arrays `_spectrum` returns, which
+          fixes the arity and names them in the error when it is wrong
+
+        A supplied spectrum bypasses `_spectrum` rather than being routed
+        through it. A subclass that overrides `_spectrum` to band limit, or to
+        reweight `sigma`, has already applied that to the array the caller is
+        holding; applying it a second time would compound it.
+
+        Nothing is reused implicitly: a routine given no `spectrum` always
+        computes one, and the library never reads `last_spectrum` itself. But a
+        supplied spectrum makes `window`, `xc` and `yc` dead arguments, so
+        handing over the one from a *different* window is accepted in silence
+        and answers a question the caller did not ask. `_Spectrum.provenance`
+        guards the case that can be guarded: a spectrum this library computed
+        knows what it came from, and disagreeing with it is a warning. One
+        built anywhere else -- read from an archive, cast to float32 -- has no
+        provenance, so it is taken at face value rather than guessed at.
+        """
+        named = dict(zip(self._SPECTRUM_ARGS, args))
+        provenance = tuple(named[name] for name in self._SPECTRUM_PROVENANCE)
+
+        if spectrum is None:
+            spectrum = _Spectrum(self._spectrum(*args, **kwargs), provenance)
+        else:
+            was = getattr(spectrum, "provenance", None)
+
+            arrays = tuple(np.asarray(a, dtype=float) for a in spectrum)
+            names = self._SPECTRUM_RETURNS
+            if len(arrays) != len(names) or len({a.shape for a in arrays}) != 1:
+                raise ValueError(
+                    "spectrum must be {} arrays of the same shape, ({}), got "
+                    "{}".format(
+                        len(names),
+                        ", ".join(names),
+                        ", ".join(str(a.shape) for a in arrays),
+                    )
+                )
+            spectrum = _Spectrum(arrays, was)
+
+            mismatched = [] if was is None else [
+                name
+                for name, then, now in zip(self._SPECTRUM_PROVENANCE, was, provenance)
+                if then != now
+            ]
+            if mismatched:
+                names = ", ".join(mismatched)
+                warnings.warn(
+                    "the supplied spectrum was computed with a different {0}; "
+                    "a supplied spectrum is used as given, so the {0} of this "
+                    "call is ignored and the result describes the window the "
+                    "spectrum came from, not the one asked for here.".format(names),
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+
+        self.last_spectrum = spectrum
+        return spectrum
 
     def reduce_to_pole(self, data, inc, dec, sinc=None, sdec=None):
         """

@@ -151,6 +151,12 @@ class CurieOptimiseTanaka(CurieGrid):
         Usage:
             >>> k, Phi, sigma_Phi = grid.radial_spectrum(subgrid, power=1)
             >>> grid.check_bands(k, (0.2, 0.6), (0.0, 0.05), thickness=20.0)
+
+            After an `optimise` at the same centroid, take `k` from the
+            spectrum it already computed rather than building another::
+
+                >>> grid.check_bands(grid.last_spectrum[0], (0.2, 0.6),
+                ...                  (0.0, 0.05), thickness=20.0)
         """
         k = np.asarray(k)
         _warn_if_cycles_per_km(zt_range, k)
@@ -310,6 +316,15 @@ class CurieOptimiseTanaka(CurieGrid):
         stdev = np.sqrt(np.diag(cov))[0]
         return stdev if np.isfinite(stdev) else fallback
 
+    # see `pycurious.grid.CurieGrid._resolve_spectrum`. `beta` is provenance
+    # because it subtracts the fractal contribution from `Phi`, so a spectrum
+    # computed at one `beta` is the wrong data for a fit at another.
+    _SPECTRUM_ARGS = (
+        "window", "xc", "yc", "taper", "beta", "process_subgrid", "dof_factor"
+    )
+    _SPECTRUM_PROVENANCE = ("window", "xc", "yc", "beta", "dof_factor")
+    _SPECTRUM_RETURNS = ("k", "Phi", "Phi_n", "sigma")
+
     def _spectrum(self, window, xc, yc, taper, beta, process_subgrid, dof_factor,
                   **kwargs):
         """
@@ -354,6 +369,7 @@ class CurieOptimiseTanaka(CurieGrid):
         process_subgrid=None,
         absolute_sigma=True,
         dof_factor=None,
+        spectrum=None,
         **kwargs
     ):
         """
@@ -388,6 +404,11 @@ class CurieOptimiseTanaka(CurieGrid):
             dof_factor : float, optional
                 override the effective-degrees-of-freedom deflation applied to
                 the spectral uncertainties (see Notes)
+            spectrum : tuple (k, Phi, Phi_n, sigma), optional
+                a spectrum already in hand, typically `last_spectrum` from an
+                earlier call at this same centroid. Skips computing one, and
+                `window`, `xc`, `yc`, `taper`, `beta`, `process_subgrid` and
+                `dof_factor` are then unused -- see Notes.
             kwargs : keyword arguments
                 passed to `radial_spectrum`
 
@@ -419,6 +440,22 @@ class CurieOptimiseTanaka(CurieGrid):
             only. They do not include the systematic error from the choice of
             band, which is usually larger -- see `sensitivity`.
 
+            Choosing those bands means fitting the same spectrum several times,
+            and the spectrum does not depend on them: `check_bands` needs `k`,
+            then `optimise` and `sensitivity` need all of it, then a revised
+            band needs it again. Two straight-line fits cost almost nothing
+            beside computing it -- 24.8 ms of a 25.9 ms `optimise` at a
+            1025-cell window, 96% -- so compute it once and pass it along::
+
+                >>> grid.optimise(200e3, xc, yc, (0.2, 0.6), (0.0, 0.05))
+                >>> spectrum = grid.last_spectrum
+                >>> grid.check_bands(spectrum[0], (0.2, 0.6), (0.0, 0.05))
+                >>> grid.optimise(200e3, xc, yc, (0.25, 0.6), (0.0, 0.04),
+                ...               spectrum=spectrum)
+
+            which halves that sweep, 51.9 ms to 26.6. `sensitivity` takes the
+            same spectrum, and each further revision is then free.
+
             `radial_spectrum` returns the scatter of the FFT cells within each
             annulus, whereas the fit needs the uncertainty of the annulus
             mean. That is the standard error, except that the cells are not
@@ -449,8 +486,8 @@ class CurieOptimiseTanaka(CurieGrid):
             covariance by the reduced chi-squared afterwards, which the profile
             construction does not do.
         """
-        k, Phi, Phi_n, sigma = self._spectrum(
-            window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs
+        k, Phi, Phi_n, sigma = self._resolve_spectrum(
+            spectrum, window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs
         )
 
         _warn_if_cycles_per_km(zt_range, k)
@@ -526,6 +563,7 @@ class CurieOptimiseTanaka(CurieGrid):
         absolute_sigma=True,
         dof_factor=None,
         seed=None,
+        spectrum=None,
         **kwargs
     ):
         """
@@ -554,6 +592,10 @@ class CurieOptimiseTanaka(CurieGrid):
                 spectrum, which recovers the analytic covariance.
             seed : int, optional
                 seed for reproducibility
+            spectrum : tuple (k, Phi, Phi_n, sigma), optional
+                a spectrum already in hand, typically `last_spectrum` from the
+                `optimise` at this same centroid -- see `optimise`. The bands
+                being sampled do not enter it, so one spectrum serves both.
 
         Returns:
             zt : 1D array shape (nsim,)
@@ -580,8 +622,8 @@ class CurieOptimiseTanaka(CurieGrid):
 
         # the spectrum is computed once and resampled, as in
         # CurieOptimiseBouligand.sensitivity
-        k, Phi, Phi_n, sigma = self._spectrum(
-            window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs
+        k, Phi, Phi_n, sigma = self._resolve_spectrum(
+            spectrum, window, xc, yc, taper, beta, process_subgrid, dof_factor, **kwargs
         )
 
         _warn_if_cycles_per_km(zt_range, k)

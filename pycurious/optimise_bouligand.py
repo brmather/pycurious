@@ -215,12 +215,6 @@ class CurieOptimiseBouligand(CurieGrid):
         ub = [None, None, self._max_thickness(), None]
         self.bounds = list(zip(lb, ub))
 
-        # the spectrum most recently computed or supplied, ready to be handed
-        # to another routine at the same centroid -- see `_resolve_spectrum`,
-        # which uses `_spectrum_key` to catch it being handed to a different one
-        self.last_spectrum = None
-        self._spectrum_key = None
-
         self.max_processors = kwargs.pop("max_processors", cpu_count())
 
     def _max_thickness(self):
@@ -361,9 +355,8 @@ class CurieOptimiseBouligand(CurieGrid):
             This is `numpy.errstate` rather than `warnings.catch_warnings`
             deliberately. Both silence those, but `catch_warnings` swallows
             *every* warning raised in the block, including real ones from
-            elsewhere in the library, and it rewrites a global filter on each
-            of the several hundred evaluations a fit makes, which is not
-            thread safe.
+            elsewhere in the library, and it is the more expensive of the two
+            to enter several hundred times per fit.
         """
         beta, zt, dz, C = x
 
@@ -415,6 +408,11 @@ class CurieOptimiseBouligand(CurieGrid):
         """
         return 0.5 * np.sum(self.residuals(x, kh, Phi, sigma_Phi, prior) ** 2)
 
+    # see `pycurious.grid.CurieGrid._resolve_spectrum`
+    _SPECTRUM_ARGS = ("window", "xc", "yc", "taper", "process_subgrid", "dof_factor")
+    _SPECTRUM_PROVENANCE = ("window", "xc", "yc", "dof_factor")
+    _SPECTRUM_RETURNS = ("k", "Phi", "sigma_Phi")
+
     def _spectrum(self, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs):
         """
         Radial power spectrum of one window, weighted ready for fitting.
@@ -432,94 +430,6 @@ class CurieOptimiseBouligand(CurieGrid):
             dof_factor=dof_factor,
             **kwargs
         )
-
-    def _resolve_spectrum(
-        self, spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
-    ):
-        """
-        The spectrum a fitting routine should use: the caller's, or a fresh one.
-
-        `optimise`, `profile`, `sensitivity` and `metropolis_hastings` all begin
-        by turning a window into a spectrum, and computing it is most of what a
-        call at a large window costs -- 30% of an `optimise` plus `profile` pair
-        at a 1025-cell window, 41% at 2049. Passing the same spectrum to both
-        removes that entirely.
-
-        A supplied spectrum bypasses `_spectrum` rather than being routed
-        through it. A subclass that overrides `_spectrum` to band limit, or to
-        reweight `sigma`, has already applied that to the array the caller is
-        holding; applying it a second time would compound it.
-
-        `self.last_spectrum` is set either way, so a caller can hand what
-        `optimise` just used straight to `profile` without having to
-        reconstruct it -- and reconstructing it is easy to get wrong, since
-        `power` must be 2 and any `process_subgrid` must match.
-
-        Nothing is reused implicitly: a routine given no `spectrum` always
-        computes one, and the library never reads `last_spectrum` itself. But a
-        supplied spectrum makes `window`, `xc` and `yc` dead arguments, so
-        handing over the one from a *different* window is accepted in silence
-        and answers a question the caller did not ask -- measured at a 128 km
-        spectrum passed to a 512 km call, dz came back 222.8 km against the
-        21.7 km that window really gives.
-
-        `_spectrum_key` guards the case that can be guarded. When the spectrum
-        handed back is the one this instance last computed -- which is what the
-        documented `spectrum=grid.last_spectrum` idiom passes -- the arguments
-        it was computed from are known, and disagreeing with them is a warning.
-        A spectrum from anywhere else has no provenance to check, so it is
-        taken at face value and the key is cleared rather than guessed at.
-        """
-        if spectrum is None:
-            spectrum = self._spectrum(
-                window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
-            )
-            key = (window, xc, yc, taper, process_subgrid, dof_factor)
-        else:
-            k, Phi, sigma_Phi = (np.asarray(a, dtype=float) for a in spectrum)
-            if not (k.shape == Phi.shape == sigma_Phi.shape):
-                raise ValueError(
-                    "spectrum must be three arrays of the same shape, got "
-                    "{}, {} and {}".format(k.shape, Phi.shape, sigma_Phi.shape)
-                )
-            spectrum = (k, Phi, sigma_Phi)
-
-            # `asarray` hands back the same object for an array that is already
-            # float64, so the arrays of `last_spectrum` survive the conversion
-            # by identity even though the tuple around them does not.
-            ours = self.last_spectrum is not None and all(
-                new is old for new, old in zip(spectrum, self.last_spectrum)
-            )
-            key = self._spectrum_key if ours else None
-            if ours and key is not None:
-                mismatched = [
-                    name
-                    for name, was, now in zip(
-                        ("window", "xc", "yc", "taper", "process_subgrid",
-                         "dof_factor"),
-                        key,
-                        (window, xc, yc, taper, process_subgrid, dof_factor),
-                    )
-                    if was is not now and was != now
-                ]
-                if mismatched:
-                    warnings.warn(
-                        "the supplied spectrum was computed with a different "
-                        "{}, and a supplied spectrum is used as given -- "
-                        "{} of this call {} ignored, so the result describes "
-                        "the window the spectrum came from, not the one asked "
-                        "for here.".format(
-                            ", ".join(mismatched),
-                            ", ".join(mismatched),
-                            "is" if len(mismatched) == 1 else "are",
-                        ),
-                        RuntimeWarning,
-                        stacklevel=3,
-                    )
-
-        self.last_spectrum = spectrum
-        self._spectrum_key = key
-        return spectrum
 
     def _bound_arrays(self, free=None):
         """
@@ -845,7 +755,8 @@ class CurieOptimiseBouligand(CurieGrid):
 
                 >>> beta, zt, dz, C = grid.optimise(2000e3, xc, yc)[:4]
                 >>> _, _, lo, hi = grid.profile(
-                ...     2000e3, xc, yc, "CPD", spectrum=grid.last_spectrum)
+                ...     2000e3, xc, yc, "CPD", spectrum=grid.last_spectrum,
+                ...     beta=beta, zt=zt, dz=dz, C=C)
 
             which takes 41% off the pair at a 2049-cell window.
         """
@@ -1047,10 +958,8 @@ class CurieOptimiseBouligand(CurieGrid):
             dof_factor : float, optional
                 see `pycurious.grid.CurieGrid.window_spectrum`
             spectrum : tuple (k, Phi, sigma_Phi), optional
-                a spectrum already in hand -- typically `last_spectrum` from
-                the `optimise` at this same centroid, which saves recomputing
-                it. See `optimise` for the idiom. `window`, `xc`, `yc`,
-                `taper`, `process_subgrid` and `dof_factor` are then unused.
+                a spectrum already in hand, typically `last_spectrum` from the
+                `optimise` at this same centroid -- see `optimise`
             kwargs : keyword arguments
                 passed to `radial_spectrum`
 
@@ -1290,9 +1199,8 @@ class CurieOptimiseBouligand(CurieGrid):
                 also return a dict of `acceptance`, `burnin_acceptance`,
                 `x_scale`
             spectrum : tuple (k, Phi, sigma_Phi), optional
-                a spectrum already in hand, e.g. `last_spectrum` from the
-                `optimise` at this centroid. `window`, `xc`, `yc`, `taper`,
-                `process_subgrid` and `dof_factor` are then unused.
+                a spectrum already in hand, typically `last_spectrum` from
+                the `optimise` at this same centroid -- see `optimise`
 
         Returns:
             beta : ndarray shape (nsim,)
@@ -1508,9 +1416,8 @@ class CurieOptimiseBouligand(CurieGrid):
             seed : int, optional
                 seed for reproducibility
             spectrum : tuple (k, Phi, sigma_Phi), optional
-                a spectrum already in hand, e.g. `last_spectrum` from the
-                `optimise` at this centroid. `window`, `xc`, `yc`, `taper`,
-                `process_subgrid` and `dof_factor` are then unused.
+                a spectrum already in hand, typically `last_spectrum` from
+                the `optimise` at this same centroid -- see `optimise`
 
         Returns:
             beta : ndarray shape (nsim,)

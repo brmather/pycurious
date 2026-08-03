@@ -441,3 +441,29 @@ def test_remove_trend_linear():
         detrended = grid.remove_trend_linear(line)
         assert np.all(np.isfinite(detrended))
         np.testing.assert_allclose(detrended, lstsq_detrend(line), atol=1e-9)
+
+
+@pytest.mark.parametrize(
+    "cls", [pycurious.CurieOptimiseBouligand, pycurious.CurieOptimiseTanaka]
+)
+def test_spectrum_arg_names_match_the_signature(cls):
+    """
+    `_resolve_spectrum` names `_spectrum`'s positional arguments so it can pick
+    the provenance out of them by name. That is a second list to keep in step
+    with the signature, and a silent slip in it would put the wrong value under
+    the wrong name -- so pin it rather than trusting it.
+    """
+    import inspect
+
+    declared = list(cls._SPECTRUM_ARGS)
+    # drop `self`, and any keyword-only tail `_resolve_spectrum` never passes
+    actual = list(inspect.signature(cls._spectrum).parameters)[1:]
+
+    assert actual[: len(declared)] == declared
+    assert set(cls._SPECTRUM_PROVENANCE) <= set(declared)
+    for callable_arg in ("taper", "process_subgrid"):
+        assert callable_arg not in cls._SPECTRUM_PROVENANCE, (
+            "a callable in the provenance is retained on the instance, which "
+            "makes the bound routine unpicklable and drops parallelise_routine "
+            "to serial"
+        )

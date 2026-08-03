@@ -15,8 +15,8 @@ returns a bare number without one is a pre-v2 remnant.
 ## Commands
 
 ```bash
-pytest                     # 111 tests, ~20 s
-pytest -m "not slow"       # 108 tests, ~12 s -- skips the calibration tests that
+pytest                     # 129 tests, ~13 s
+pytest -m "not slow"       # 126 tests, ~6 s -- skips the calibration tests that
                            # fit a few hundred realisations
 pytest tests/test_tanaka.py -q
 ```
@@ -117,6 +117,20 @@ The interesting machinery, and where most of the subtlety lives.
 annulus**. That is not what a fit needs. `window_spectrum` converts it to the
 **uncertainty of the annulus mean** and is what both optimisers call (through
 their private `_spectrum`). Prefer it over `radial_spectrum` for anything fitted.
+
+Computing that spectrum is most of what a fit costs — 96% of a Tanaka
+`optimise` at a 1025-cell window — so every fitting routine takes `spectrum=`
+and sets `last_spectrum`, and one spectrum serves a whole sweep at a centroid.
+`CurieGrid._resolve_spectrum` is the single seam: it calls the subclass's
+`_spectrum` or takes the caller's, never both. A subclass supplying `_spectrum`
+also supplies `_SPECTRUM_ARGS`, `_SPECTRUM_PROVENANCE` and `_SPECTRUM_RETURNS`,
+which is what lets one implementation serve Bouligand's 3-array return and
+Tanaka's 4-array one. Two rules that look arbitrary and are not: **callables
+never go in the provenance** (holding a `process_subgrid` on the instance makes
+the bound routine unpicklable, which silently drops `parallelise_routine` to
+serial), and **anything that changes the spectrum's values does** — including
+Tanaka's `beta`, which subtracts the fractal contribution. `parallelise_routine`
+rejects `spectrum` outright; one spectrum cannot describe a list of centroids.
 
 Two corrections, both measured by Monte Carlo rather than assumed:
 
