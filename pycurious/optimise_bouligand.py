@@ -107,40 +107,6 @@ _PROFILE_XTOL = 1.0e-3
 # forward model but a sum of two of them.
 _CPD = "CPD"
 
-# The arguments a reused spectrum is checked against, in the order
-# `_Spectrum.provenance` stores them. `taper` and `process_subgrid` are
-# deliberately absent: they are callables, and holding one on the instance both
-# keeps its captured scope alive and makes `grid.optimise` unpicklable, which
-# drops `pycurious.parallel.CurieParallel.parallelise_routine` back to serial
-# with a warning that blames the wrong thing. The misuse worth catching is a
-# spectrum from a different window or centroid anyway.
-_SPECTRUM_ARGS = ("window", "xc", "yc", "dof_factor")
-
-
-class _Spectrum(tuple):
-    """
-    A `(k, Phi, sigma_Phi)` triple that remembers what it was computed from.
-
-    It is an ordinary tuple everywhere it matters -- it unpacks, indexes, zips
-    and pickles like the one `pycurious.grid.CurieGrid.window_spectrum`
-    returns -- so `spectrum=` still takes a plain triple and `last_spectrum`
-    still hands one back. Carrying the provenance on the spectrum rather than
-    beside it means it survives being passed from routine to routine, and that
-    a triple built anywhere else simply has none, which is exactly the
-    "nothing to check, take it as given" case.
-    """
-
-    def __new__(cls, arrays, provenance):
-        spectrum = super(_Spectrum, cls).__new__(cls, arrays)
-        spectrum.provenance = provenance
-        return spectrum
-
-    def __getnewargs__(self):
-        # a tuple subclass with a two-argument `__new__` cannot be unpickled
-        # without this, and a grid carrying a `last_spectrum` is pickled every
-        # time `parallelise_routine` sends one to a worker
-        return (tuple(self), self.provenance)
-
 
 def _prior_loc_scale(pdf):
     """
@@ -248,10 +214,6 @@ class CurieOptimiseBouligand(CurieGrid):
         lb = [0.0, 0.0, 0.0, None]
         ub = [None, None, self._max_thickness(), None]
         self.bounds = list(zip(lb, ub))
-
-        # the spectrum most recently computed or supplied, ready to be handed
-        # to another routine at the same centroid -- see `_resolve_spectrum`
-        self.last_spectrum = None
 
         self.max_processors = kwargs.pop("max_processors", cpu_count())
 
@@ -446,6 +408,11 @@ class CurieOptimiseBouligand(CurieGrid):
         """
         return 0.5 * np.sum(self.residuals(x, kh, Phi, sigma_Phi, prior) ** 2)
 
+    # see `pycurious.grid.CurieGrid._resolve_spectrum`
+    _SPECTRUM_ARGS = ("window", "xc", "yc", "taper", "process_subgrid", "dof_factor")
+    _SPECTRUM_PROVENANCE = ("window", "xc", "yc", "dof_factor")
+    _SPECTRUM_RETURNS = ("k", "Phi", "sigma_Phi")
+
     def _spectrum(self, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs):
         """
         Radial power spectrum of one window, weighted ready for fitting.
@@ -463,73 +430,6 @@ class CurieOptimiseBouligand(CurieGrid):
             dof_factor=dof_factor,
             **kwargs
         )
-
-    def _resolve_spectrum(
-        self, spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
-    ):
-        """
-        The spectrum a fitting routine should use: the caller's, or a fresh one.
-
-        `optimise`, `profile`, `sensitivity` and `metropolis_hastings` all begin
-        by turning a window into a spectrum, and computing it is most of what a
-        call at a large window costs -- 30% of an `optimise` plus `profile` pair
-        at a 1025-cell window, 41% at 2049. Passing the same spectrum to both
-        removes that entirely.
-
-        A supplied spectrum bypasses `_spectrum` rather than being routed
-        through it. A subclass that overrides `_spectrum` to band limit, or to
-        reweight `sigma`, has already applied that to the array the caller is
-        holding; applying it a second time would compound it.
-
-        Nothing is reused implicitly: a routine given no `spectrum` always
-        computes one, and the library never reads `last_spectrum` itself. But a
-        supplied spectrum makes `window`, `xc` and `yc` dead arguments, so
-        handing over the one from a *different* window is accepted in silence
-        and answers a question the caller did not ask. `_Spectrum.provenance`
-        guards the case that can be guarded: a spectrum this library computed
-        knows the `_SPECTRUM_ARGS` it came from, and disagreeing with them is a
-        warning. One built anywhere else -- read from an archive, cast to
-        float32 -- has no provenance, so it is taken at face value rather than
-        guessed at.
-        """
-        provenance = (window, xc, yc, dof_factor)
-
-        if spectrum is None:
-            spectrum = _Spectrum(
-                self._spectrum(
-                    window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
-                ),
-                provenance,
-            )
-        else:
-            was = getattr(spectrum, "provenance", None)
-
-            k, Phi, sigma_Phi = (np.asarray(a, dtype=float) for a in spectrum)
-            if not (k.shape == Phi.shape == sigma_Phi.shape):
-                raise ValueError(
-                    "spectrum must be three arrays of the same shape, got "
-                    "{}, {} and {}".format(k.shape, Phi.shape, sigma_Phi.shape)
-                )
-            spectrum = _Spectrum((k, Phi, sigma_Phi), was)
-
-            mismatched = [] if was is None else [
-                name
-                for name, then, now in zip(_SPECTRUM_ARGS, was, provenance)
-                if then != now
-            ]
-            if mismatched:
-                names = ", ".join(mismatched)
-                warnings.warn(
-                    "the supplied spectrum was computed with a different {0}; "
-                    "a supplied spectrum is used as given, so the {0} of this "
-                    "call is ignored and the result describes the window the "
-                    "spectrum came from, not the one asked for here.".format(names),
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
-
-        self.last_spectrum = spectrum
-        return spectrum
 
     def _bound_arrays(self, free=None):
         """
