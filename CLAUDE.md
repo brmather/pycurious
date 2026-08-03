@@ -15,8 +15,8 @@ returns a bare number without one is a pre-v2 remnant.
 ## Commands
 
 ```bash
-pytest                     # 111 tests, ~20 s
-pytest -m "not slow"       # 108 tests, ~12 s -- skips the calibration tests that
+pytest                     # 123 tests, ~13 s
+pytest -m "not slow"       # 120 tests, ~6 s -- skips the calibration tests that
                            # fit a few hundred realisations
 pytest tests/test_tanaka.py -q
 ```

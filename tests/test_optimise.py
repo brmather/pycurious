@@ -1,9 +1,11 @@
+import warnings
+
 import pytest
 import pycurious
 import numpy as np
 from scipy.optimize import minimize
 
-from conftest import load_magnetic_anomaly
+from conftest import load_magnetic_anomaly, synthetic_grid
 
 
 def test_optimisation_smoke(load_magnetic_anomaly):
@@ -219,9 +221,7 @@ def test_valid_numbers(load_magnetic_anomaly):
 
 
 def _shared_spectrum_grid():
-    from conftest import synthetic_grid
-
-    return synthetic_grid(pycurious.CurieOptimiseBouligand, n=256, dx=2.0)
+    return synthetic_grid(pycurious.CurieOptimiseBouligand, n=256, dx=2.0)[:3]
 
 
 @pytest.mark.parametrize("target", ["dz", "CPD"])
@@ -233,7 +233,7 @@ def test_supplied_spectrum_reproduces_the_computed_one(target):
     its own code path is that the two cannot drift apart. Assert to the bit, so
     that they cannot.
     """
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     window = 200e3
 
     stock = grid.optimise(window, xc, yc)
@@ -246,7 +246,7 @@ def test_supplied_spectrum_reproduces_the_computed_one(target):
         assert np.array_equal(lhs, rhs)
 
 
-def test_supplied_spectrum_bypasses_the_spectrum_hook():
+def test_supplied_spectrum_bypasses_the_spectrum_hook(monkeypatch):
     """
     A supplied spectrum must not be routed through `_spectrum`.
 
@@ -254,7 +254,7 @@ def test_supplied_spectrum_bypasses_the_spectrum_hook():
     Global_CPD workflow does both). Whatever they did was already applied to
     the array the caller is holding, so doing it again would compound it.
     """
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     calls = []
     original = grid._spectrum
 
@@ -262,25 +262,20 @@ def test_supplied_spectrum_bypasses_the_spectrum_hook():
         calls.append(1)
         return original(*args, **kwargs)
 
-    grid._spectrum = counting
-    try:
-        grid.optimise(200e3, xc, yc)
-        assert len(calls) == 1
-        grid.optimise(200e3, xc, yc, spectrum=grid.last_spectrum)
-        assert len(calls) == 1, "_spectrum was called for a supplied spectrum"
-    finally:
-        grid._spectrum = original
+    monkeypatch.setattr(grid, "_spectrum", counting)
+    grid.optimise(200e3, xc, yc)
+    assert len(calls) == 1
+    grid.optimise(200e3, xc, yc, spectrum=grid.last_spectrum)
+    assert len(calls) == 1, "_spectrum was called for a supplied spectrum"
 
 
 def test_last_spectrum_tracks_both_paths():
-    # a fresh instance, because `synthetic_grid` is cached and a grid that has
-    # already been fitted carries the spectrum from whichever test got there
-    # first
-    data, extent = pycurious.fractal_anomaly(n=128, dx=2.0, beta=3.0, zt=1.0,
-                                             dz=20.0, C=5.0, seed=1)
-    grid = pycurious.CurieOptimiseBouligand(data, *extent)
-    xc = 0.5 * (extent[0] + extent[1])
-    yc = 0.5 * (extent[2] + extent[3])
+    # `__wrapped__` is the uncached `synthetic_grid`. A fresh instance is the
+    # point of the test: the cached one carries the spectrum from whichever
+    # test reached it first, so it would never start at None
+    grid, xc, yc = synthetic_grid.__wrapped__(
+        pycurious.CurieOptimiseBouligand, n=128, dx=2.0
+    )[:3]
     assert grid.last_spectrum is None
 
     grid.optimise(200e3, xc, yc)
@@ -292,23 +287,40 @@ def test_last_spectrum_tracks_both_paths():
         assert np.array_equal(lhs, rhs)
 
 
+def test_a_used_grid_still_pickles():
+    """
+    `parallelise_routine` pickles the bound method, and so the instance behind
+    it, to reach a worker. Anything `optimise` leaves on the instance therefore
+    has to survive a round trip -- including the provenance riding on
+    `last_spectrum`, and including a `process_subgrid` the caller passed, which
+    must not be retained at all.
+    """
+    import pickle
+
+    grid, xc, yc = _shared_spectrum_grid()
+    grid.optimise(200e3, xc, yc, process_subgrid=lambda subgrid: subgrid)
+
+    restored = pickle.loads(pickle.dumps(grid))
+    for lhs, rhs in zip(restored.last_spectrum, grid.last_spectrum):
+        assert np.array_equal(lhs, rhs)
+    assert restored.last_spectrum.provenance == grid.last_spectrum.provenance
+
+
 def test_supplied_spectrum_rejects_mismatched_shapes():
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     bad = (np.ones(5), np.ones(4), np.ones(5))
     with pytest.raises(ValueError, match="same shape"):
         grid.optimise(200e3, xc, yc, spectrum=bad)
 
 
-def test_residuals_do_not_swallow_unrelated_warnings():
+def test_residuals_do_not_swallow_unrelated_warnings(monkeypatch):
     """
     `residuals` silences the forward model's floating-point errors, which it
     must -- the fit legitimately probes dz <= 0 -- but it used to do so with a
     blanket `catch_warnings`, which ate every other warning raised in the
     block as well.
     """
-    import warnings
-
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     k, Phi, sigma = grid.window_spectrum(200e3, xc, yc, power=2.0)
 
     # dz < 0 is what the Curie profile evaluates below zt, and what raises
@@ -326,16 +338,9 @@ def test_residuals_do_not_swallow_unrelated_warnings():
         warnings.warn("a real warning", RuntimeWarning)
         return real(*args, **kwargs)
 
-    pycurious.optimise_bouligand.bouligand2009 = noisy
-    try:
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            grid.residuals(np.array([3.0, 1.0, 10.0, 5.0]), k, Phi, sigma)
-        assert [w for w in caught if "a real warning" in str(w.message)], (
-            "residuals is still swallowing warnings it did not raise"
-        )
-    finally:
-        pycurious.optimise_bouligand.bouligand2009 = real
+    monkeypatch.setattr(pycurious.optimise_bouligand, "bouligand2009", noisy)
+    with pytest.warns(RuntimeWarning, match="a real warning"):
+        grid.residuals(np.array([3.0, 1.0, 10.0, 5.0]), k, Phi, sigma)
 
 
 def test_supplied_spectrum_from_another_window_warns():
@@ -346,7 +351,7 @@ def test_supplied_spectrum_from_another_window_warns():
     128 km spectrum passed to a 512 km call returns dz = 222.8 km where that
     window really gives 21.7.
     """
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
 
     grid.optimise(100e3, xc, yc)
     ours = grid.last_spectrum
@@ -359,36 +364,28 @@ def test_supplied_spectrum_from_another_window_warns():
         grid.optimise(100e3, xc + 40e3, yc, spectrum=grid.last_spectrum)
 
 
-def test_supplied_spectrum_at_matching_arguments_is_silent():
+def test_supplied_spectrum_at_matching_arguments_is_silent(recwarn):
     """The documented idiom must not warn, or the guard is worse than useless."""
-    import warnings
-
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     grid.optimise(200e3, xc, yc)
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        grid.profile(200e3, xc, yc, "dz", npoints=7, spectrum=grid.last_spectrum)
-    assert not [w for w in caught if "supplied spectrum" in str(w.message)]
+    grid.profile(200e3, xc, yc, "dz", npoints=7, spectrum=grid.last_spectrum)
+    assert not [w for w in recwarn if "supplied spectrum" in str(w.message)]
 
 
-def test_spectrum_of_unknown_provenance_is_taken_at_face_value():
+def test_spectrum_of_unknown_provenance_is_taken_at_face_value(recwarn):
     """
-    Only a spectrum this instance computed can be checked. One built by the
+    Only a spectrum this library built carries provenance. One assembled by the
     caller -- Global_CPD reads its archived spectra out of zarr as float32 --
     has nothing to compare against, so it must be accepted without a warning
     rather than guessed at.
     """
-    import warnings
-
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     grid.optimise(100e3, xc, yc)
     foreign = tuple(np.asarray(a).astype(np.float32) for a in grid.last_spectrum)
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        grid.optimise(200e3, xc, yc, spectrum=foreign)
-    assert not [w for w in caught if "supplied spectrum" in str(w.message)]
+    grid.optimise(200e3, xc, yc, spectrum=foreign)
+    assert not [w for w in recwarn if "supplied spectrum" in str(w.message)]
 
 
 def test_provenance_survives_being_passed_along():
@@ -396,7 +393,7 @@ def test_provenance_survives_being_passed_along():
     Reusing a spectrum must not relabel it with the arguments of whichever call
     reused it, or the guard would go blind after one hop.
     """
-    grid, xc, yc, extent = _shared_spectrum_grid()
+    grid, xc, yc = _shared_spectrum_grid()
     grid.optimise(100e3, xc, yc)
     grid.profile(100e3, xc, yc, "dz", npoints=7, spectrum=grid.last_spectrum)
 

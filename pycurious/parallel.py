@@ -135,6 +135,10 @@ class CurieParallel(object):
                   were used. `func` must accept a `seed` keyword if this is
                   supplied.
 
+                `spectrum` is rejected outright: one spectrum describes one
+                window at one centroid, so it cannot mean anything for a list
+                of them.
+
         Returns:
             out : list of lists
                 (depends on output of `func` - see notes)
@@ -183,6 +187,18 @@ class CurieParallel(object):
         on_error = kwargs.pop("on_error", "raise")
         if on_error not in ("raise", "ignore"):
             raise ValueError("on_error must be 'raise' or 'ignore'")
+
+        # forwarding this would hand every centroid the same spectrum, which
+        # returns the same answer at each of them -- a flat map that looks like
+        # a result. The per-centroid provenance warning only fires on the
+        # serial path, so whether the user is told would depend on nprocs.
+        if "spectrum" in kwargs:
+            raise ValueError(
+                "spectrum describes a single window at a single centroid, so "
+                "it cannot be shared across a list of them. Drop it and let "
+                "each centroid compute its own."
+            )
+
         seed = kwargs.pop("seed", None)
 
         if seed is not None and not getattr(func, "wants_seed", False):

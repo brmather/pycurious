@@ -59,3 +59,27 @@ def test_CurieOptimiseBouligand_routines(load_magnetic_anomaly):
     assert time_routine(cpd.optimise_routine, 0.5 * max_window, xc_list, yc_list)
     assert time_routine(cpd.metropolis_hastings, 0.5 * max_window, xc, yc, 100, 10)
     assert time_routine(cpd.sensitivity, 0.5 * max_window, xc, yc, 100)
+
+
+def test_a_routine_refuses_a_shared_spectrum(load_magnetic_anomaly):
+    """
+    One spectrum cannot describe a list of centroids.
+
+    Forwarded, it would give every centroid the same answer -- a flat map that
+    looks like a result -- and the per-call provenance warning fires only on
+    the serial path, so whether the user was told would depend on how many
+    processors happened to be available.
+    """
+    d = load_magnetic_anomaly["mag_data"]
+    xc = load_magnetic_anomaly["xc"]
+    yc = load_magnetic_anomaly["yc"]
+    xmin, xmax, ymin, ymax = load_magnetic_anomaly["extent"]
+    max_window = load_magnetic_anomaly["max_window"]
+
+    cpd = pycurious.CurieOptimiseBouligand(d, xmin, xmax, ymin, ymax)
+    cpd.optimise(0.5 * max_window, xc, yc)
+
+    with pytest.raises(ValueError, match="single window at a single centroid"):
+        cpd.optimise_routine(
+            0.5 * max_window, [xc, xc], [yc, yc], spectrum=cpd.last_spectrum
+        )
