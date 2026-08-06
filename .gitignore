@@ -28,6 +28,16 @@ Examples/data/*
 *.npz
 !tests/*.npz
 
+# The measurement harnesses behind notes/ are tracked; what they cache is not.
+# Every number quoted in notes/ comes from a script in notes/bench, so those
+# scripts are source. Their output is spectra and fitted ladders that run to
+# hundreds of megabytes and are reproducible by re-running them -- and a
+# `git add -A` that swept 412 MB of it into a commit is why the split is
+# spelled out here rather than left to judgement.
+notes/bench/*/
+notes/bench/*.npy
+notes/bench/*.zarr
+
 # Sphinx build output, and the tutorial notebooks + data fixture that
 # docs/copy_notebooks.py stages into the source tree on every build. These are
 # regenerated from Examples/, so they are never committed.
