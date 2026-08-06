@@ -85,13 +85,13 @@ widening further changes nothing. On WDMAM it does not. **The difference is not
 the estimator** — the whitened arm reproduces the same table to within 1–2 km at
 every rung — **it is the data.**
 
-And the signature matches finding 2 above exactly: a spectrum whose high-`k`
-band cannot locate the rolloff returns a `dz` that grows with the window. WDMAM's
-high-`k` band carries an unmodelled ~4.2 km resolution rolloff
-(`notes/spectrum-binning-weighting-multitaper.md`), which is a reduction of the
-*effective* `k_max`. Every layer on that map is therefore behaving like the
-synthetic `dz = 5` case: nominally inside the band by the `k_min` criterion, and
-outside it by the `k_max` one.
+The signature looks like finding 2 above — a spectrum whose high-`k` band
+cannot locate the rolloff returns a `dz` that grows with the window — and WDMAM's
+high-`k` band does carry an unmodelled ~4.2 km resolution rolloff
+(`notes/spectrum-binning-weighting-multitaper.md`), which reduces the *effective*
+`k_max`. **That was the proposed cause, and it was tested below. It is half
+right: the band cut modulates the drift but does not produce it.** Read the
+"Tested" section before relying on the paragraph above.
 
 ## What this means
 
@@ -101,26 +101,90 @@ outside it by the `k_max` one.
 - **1500 km is the turning point**, not an optimum: it is where the monotone
   growth from above meets the erratic regime from below. Both sides of it are
   failure modes, of different kinds.
-- **The band cut is doing more than protecting against gridding artefacts.**
-  `SRC_KMAX = 0.25` discards the high-`k` band that would otherwise locate the
-  rolloff. It is defensible because that band is corrupted — but it is also what
-  puts every vertex on the wrong side of the `k_max·dz` condition, and the
-  window-dependence above is the price.
+- **The band cut is a real lever on the drift**, measured below: lowering
+  `kmax` from 0.25 to 0.10 takes the growth from ×2.84 to ×4.20. It is not the
+  cause, but it is the one knob that demonstrably moves it.
 - **This is upstream of the interval question.** Whitening the objective fixes
   under-coverage on synthetics and changes nothing here. A calibrated interval
   around a number that moves by a factor of two with an arbitrary choice of
   window is still not a measurement of anything.
 
-## What would test it
+## Tested, and the diagnosis is half wrong
 
-The diagnosis says the `k_max` end is the problem. Two things follow that have
-not been done:
+Both experiments below were run. The second supports the `k_max` story; the
+first refutes it as a sufficient explanation, so the section above overstates
+the case and this is the correction.
 
-1. **Degrade a synthetic by WDMAM's resolution rolloff and repeat the L2 table.**
-   `notes/bench/run_experiments.py:degrade` already applies `exp(-k² σ_r²)`. If
-   the prediction holds, a degraded synthetic of known `dz` should reproduce the
-   monotone growth with window, and an undegraded one should not.
-2. **Raise `kmax` and watch the drift.** If the window-dependence comes from the
-   missing high-`k` band, relaxing the cut should reduce it — at the cost of
-   admitting the artefact the cut exists to exclude. The trade would then be
-   measurable rather than assumed.
+### Experiment 1: degrade a synthetic — **refuted**
+
+A synthetic of known `dz`, blurred by `exp(-k² σ_r²)` and fitted with
+`~/Global_CPD`'s own configuration (`kmax = 0.25`, `zt` pinned to ±0.05, a
+`beta` prior of 0.15, the `sigma` inflation), swept over the same windows. 12
+realisations. `growth` is the 10,000 km median over the 1500 km one, so the L2
+observation is 2.2–2.8:
+
+| truth | clean | degraded 4.2 km | degraded 8 km |
+|---|---|---|---|
+| dz 20, zt 1.0 | ×0.84 | ×0.90 | ×0.78 |
+| dz 20, zt 4.4 (pin wrong) | ×0.87 | ×0.84 | ×0.73 |
+| dz 40, zt 1.0 | ×0.85 | ×0.77 | ×0.69 |
+| dz 40, zt 4.4 (pin wrong) | ×0.72 | ×0.69 | ×0.66 |
+
+**Every combination is flat or slightly falling — none rises.** The rolloff and
+a mis-specified `zt` pin both produce large *biases*: at `dz = 20` and 10,000 km,
+degradation takes the answer from 18.5 to 25.7 (4.2 km) and 32.3 (8 km), and
+pinning `zt` at 1.0 when the truth is 4.4 takes it from 18.5 to 28.5. Stacked,
++89% over the truth. But a bias is not a drift, and **no stationary synthetic
+reproduced the window dependence.**
+
+Worth being clear about what that rules out: the effect is not a band-limit
+artefact of the forward model, because a synthetic that obeys the model exactly
+and is band-limited exactly the same way does not show it.
+
+### Experiment 2: lower the band cut — **supported, in direction**
+
+Refitting the cached L2 spectra with `kmax` reduced (they are already cut at
+0.25, so it can only be lowered without recomputing them). Median `dz`, 162
+vertices:
+
+| kmax | 10000 | 6000 | 4000 | 2500 | 1500 | growth |
+|---|---|---|---|---|---|---|
+| 0.25 (archived) | 42.76 | 28.15 | 22.31 | 19.67 | 15.04 | **×2.84** |
+| 0.20 | 45.72 | 28.38 | 22.20 | 19.41 | 14.72 | ×3.11 |
+| 0.15 | 48.39 | 28.42 | 21.82 | 19.10 | 14.14 | ×3.42 |
+| 0.10 | 52.76 | 28.28 | 21.27 | 18.01 | 12.56 | ×4.20 |
+
+**Taking the high-`k` band away makes the drift monotonically worse**, 2.84 →
+4.20, and it acts almost entirely on the long-window end: the 10,000 km median
+rises 23% while the 1500 km one falls 17%. So the band cut is a real lever on
+how much `dz` depends on the window, exactly as the diagnosis predicts —
+extrapolating, *raising* `kmax` above 0.25 should reduce the drift below 2.84.
+
+### What the two together say
+
+The high-`k` band **modulates** the drift but does not **cause** it. The cause
+has to be something a stationary synthetic cannot have, and the obvious
+candidate is the one the geometry forces: **a 10,000 km window averages over
+genuinely different lithosphere.** `notes/bouligand-rederivation.md` already
+records that a mixture of base depths produces a spectrum that still looks like
+a single layer — so a window spanning thin oceanic and thick cratonic crust
+returns one `dz`, and which one it returns need not be the mean, nor stable as
+the mixture changes.
+
+That reframes the whole thing. The window dependence would then not be an
+artefact to remove but a statement that a single-layer `dz` is not a
+well-defined property of a large window, which no improvement to the estimator
+can fix.
+
+### What would test *that*
+
+1. **A synthetic with spatially varying `dz`.** Build a field whose thickness
+   varies across the grid — say oceanic 10 km against cratonic 40 km in blocks
+   — and sweep the window. If heterogeneity is the cause, the drift appears
+   here and only here, and its size should scale with the contrast.
+2. **Split the L2 drift by how heterogeneous each window is.** `qc/land_fraction`
+   already measures how mixed a window is. If the drift is heterogeneity, the
+   vertices whose windows stay within one province should drift least.
+3. **Raise `kmax` above 0.25**, which needs pass A re-run to recompute the
+   spectra (~2 hours at L2). Experiment 2 says this should help; it is the only
+   one of the three that is a lever rather than a diagnosis.
