@@ -1513,6 +1513,70 @@ def test_taper_none_rejects_unknown_keywords(bouligand):
 
 
 @pytest.mark.slow
+def test_the_correction_makes_beta_cover_what_optimise_claims():
+    """
+    The measurement the whole correction exists for, and the only kind that can
+    settle it: how often a nominal interval actually contains a known truth.
+
+    The number to beat is what `optimise`'s own GLS-corrected sigma covers,
+    because the complaint was never that the intervals were wide or narrow in
+    the abstract -- it was that they disagreed with the uncertainty the same
+    fit already reported. Measured over 120 realisations at a 1000 km window,
+    `notes/bench/score_intervals.py`:
+
+    | target | nominal | scan off | scan **on** | mesh off | mesh **on** |
+    |---|---|---|---|---|---|
+    | beta | 0.6827 | 0.533 | **0.650** | 0.592 | **0.683** |
+    | beta | 0.95 | 0.850 | **0.925** | 0.875 | **0.933** |
+    | dz | 0.6827 | 0.467 | 0.567 | 0.433 | 0.583 |
+
+    `beta` becomes calibrated outright. `dz` improves by about half the gap and
+    does not close it, because the rest is skew -- a long upper tail that
+    intervals centred on the mode and on the median both miss on the same side.
+    Recorded rather than tuned away.
+
+    This test runs 40 realisations, not 120, so it is a guard rather than the
+    measurement: it asserts the corrected coverage beats the uncorrected one and
+    lands near what `optimise` claims. Re-measure with the harness before
+    quoting a number from it.
+    """
+    hits = {True: 0, False: 0}
+    sigma_hits = 0
+    trials = 40
+
+    for seed in range(trials):
+        data, extent = pycurious.fractal_anomaly(
+            n=601, dx=4.0, beta=3.0, zt=1.0, dz=20.0, C=5.0, seed=seed
+        )
+        grid = pycurious.CurieOptimiseBouligand(data, *extent)
+        xc = 0.5 * (extent[0] + extent[1])
+        yc = 0.5 * (extent[2] + extent[3])
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            fit = grid.optimise(1000e3, xc, yc, taper=np.hanning)
+            spectrum = grid.last_spectrum
+            if abs(fit[0] - 3.0) <= fit[4]:
+                sigma_hits += 1
+            for calibrate in (False, True):
+                _, _, lower, upper = grid.profile(
+                    1000e3, xc, yc, "beta", level=0.6827,
+                    calibrate=calibrate, spectrum=spectrum,
+                )
+                if lower <= 3.0 <= upper:
+                    hits[calibrate] += 1
+
+    corrected = hits[True] / trials
+    plain = hits[False] / trials
+    claimed = sigma_hits / trials
+
+    assert corrected > plain, (plain, corrected)
+    # within sampling noise of what optimise's own sigma covers -- at 40
+    # trials the standard error on a rate near 0.65 is about 0.075
+    assert abs(corrected - claimed) < 0.20, (corrected, claimed)
+
+
+@pytest.mark.slow
 def test_reported_sigma_matches_the_spread_over_realisations():
     """
     The calibration that matters, and the only one that can catch a wrong
