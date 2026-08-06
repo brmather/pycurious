@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import pycurious
-from pycurious.optimise_bouligand import _JACOBIAN_STEP
+from pycurious.optimise_bouligand import _CPD, _JACOBIAN_STEP
 
 from conftest import synthetic_grid
 
@@ -214,6 +214,250 @@ def test_profile_unbounded_returns_inf():
         _, _, lower, upper = grid.profile(60e3, xc, yc, "dz", taper=np.hanning)
     assert np.isinf(upper)
     assert np.isfinite(lower)
+
+
+def test_posterior_conditional_mean_is_the_linear_solve(bouligand):
+    """
+    The mesh stores the conditional mean of (C, zt) at each node, and that must
+    be the same quantity `_solve_linear` returns -- otherwise the posterior is
+    over a different model from the one `optimise` fits.
+
+    Unclamped, because a bound on a Bayesian conditional is a truncation
+    carried as the mass below it (`Posterior.mass`), not a wall to push a point
+    estimate against.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    p = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
+
+    for i, j in ((0, 0), (5, 7), (17, 3), (31, 31)):
+        C, zt, _ = grid._solve_linear(
+            *spectrum, p.beta[i], p.dz[j], clamp=False
+        )
+        np.testing.assert_allclose(p.mean[i, j], [C, zt], rtol=1e-12)
+
+    # and the conditional covariance is one matrix for the whole mesh, which is
+    # the fact that makes the marginal exactly the reduced misfit
+    A, inverse = grid._linear_precision(spectrum[0], spectrum[2])
+    np.testing.assert_allclose(p.cov, inverse, rtol=1e-12)
+    np.testing.assert_allclose(A @ inverse, np.eye(2), atol=1e-9)
+
+
+def test_posterior_moments_have_converged_at_the_default_mesh(bouligand):
+    """
+    A mesh that has not converged is wrong in a way no comparison against a
+    sampler would reveal, because the sampler is the noisy one. Check it
+    against a finer version of itself.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+
+    coarse = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
+    fine = grid.posterior(WINDOW, xc, yc, nodes=128, spectrum=spectrum)
+
+    for p, axis in ((coarse, "beta"), (fine, "beta")):
+        assert p.density.sum() == pytest.approx(1.0, rel=1e-9)
+
+    def moments(p):
+        beta = p.density.sum(axis=1)
+        dz = p.density.sum(axis=0)
+        return (
+            float((beta * p.beta).sum()), float((dz * p.dz).sum()),
+            float(np.sqrt((dz * (p.dz - (dz * p.dz).sum()) ** 2).sum())),
+        )
+
+    a, b = moments(coarse), moments(fine)
+    assert a[0] == pytest.approx(b[0], abs=1e-3), "beta mean moved"
+    assert a[1] == pytest.approx(b[1], abs=1e-2), "dz mean moved"
+    assert a[2] == pytest.approx(b[2], rel=1e-2), "dz sd moved"
+
+
+def test_curie_depth_marginal_is_a_convolution_not_a_marginal(bouligand):
+    """
+    CPD = zt + dz, so E[CPD] = E[zt] + E[dz] whatever the correlation between
+    them. It is the one identity here that cannot be argued away, and it is
+    what catches the two ways of getting the Curie depth wrong: propagating it
+    from `dz` alone, which drops `zt`'s conditional spread, and treating the
+    mesh nodes as atoms, which puts one narrow spike per node where a density
+    belongs.
+
+    The second is not hypothetical. `zt`'s conditional width is 0.007 km
+    against a 2 km node spacing here, so the atoms version failed this by 0.5,
+    against a truth of zero.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    p = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
+
+    trapezoid = getattr(np, "trapezoid", None) or np.trapz
+    mean = {}
+    for target in ("zt", "dz", _CPD):
+        values, density, cdf = grid._mesh_marginal(p, target)
+        assert trapezoid(density, values) == pytest.approx(1.0, rel=1e-3)
+        assert cdf[0] < 1e-6 and cdf[-1] == pytest.approx(1.0, abs=1e-9)
+        assert np.all(np.diff(cdf) >= -1e-12), "the CDF must not decrease"
+        mean[target] = float(trapezoid(values * density, values))
+
+    assert mean[_CPD] == pytest.approx(mean["zt"] + mean["dz"], abs=5e-3)
+
+
+def test_mesh_interval_is_stable_under_refinement(bouligand):
+    """
+    The endpoints must be set by the posterior, not by how finely it was
+    resampled. A density-based (highest-density) interval failed this: it moved
+    1.5 km between a 192-node and a 768-node refinement and reported spurious
+    multimodality below that, because it differentiates an interpolated
+    cumulative. Inverting the CDF does not.
+    """
+    from pycurious import optimise_bouligand as ob
+
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    p = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
+
+    original = ob._MARGINAL_REFINE
+    ends = []
+    try:
+        for refine in (96, 192, 384):
+            ob._MARGINAL_REFINE = refine
+            values, _, cdf = grid._mesh_marginal(p, _CPD)
+            ends.append(grid._mesh_interval(values, cdf, 0.6827))
+    finally:
+        ob._MARGINAL_REFINE = original
+
+    lower = [e[0] for e in ends]
+    upper = [e[1] for e in ends]
+    assert max(lower) - min(lower) < 0.5, lower
+    assert max(upper) - min(upper) < 0.5, upper
+
+
+@pytest.mark.parametrize("target", ["beta", "zt", "C"])
+def test_scan_and_mesh_agree_where_the_posterior_is_near_gaussian(
+    bouligand, target
+):
+    """
+    The two constructions coincide on a Gaussian, so where a parameter is well
+    determined they must agree -- which is what says they are describing the
+    same posterior rather than two different ones.
+
+    `dz` and CPD are deliberately not here. Their posterior is skewed, and an
+    equal-tailed interval sits on the median where a deviance level set sits on
+    the mode, so the two genuinely differ. Which one covers the truth at its
+    nominal rate is a question for `notes/bench/score_intervals.py`, not for a
+    tolerance.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+
+    scan = grid.profile(
+        WINDOW, xc, yc, target, level=0.6827, taper=np.hanning,
+        spectrum=spectrum,
+    )
+    mesh = grid.profile(
+        WINDOW, xc, yc, target, level=0.6827, method="mesh", spectrum=spectrum,
+    )
+
+    width = scan[3] - scan[2]
+    assert abs(mesh[2] - scan[2]) < 0.15 * width, (target, scan[2], mesh[2])
+    assert abs(mesh[3] - scan[3]) < 0.15 * width, (target, scan[3], mesh[3])
+
+
+def test_mesh_profile_reuses_a_supplied_posterior(bouligand):
+    """
+    One density serves every target, the way one spectrum serves every routine.
+    Recomputing it per target would make five intervals cost five meshes.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+
+    calls = {"n": 0}
+    original = grid._mesh_density
+
+    def counted(*args, **kwargs):
+        calls["n"] += 1
+        return original(*args, **kwargs)
+
+    p = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
+    grid._mesh_density = counted
+    try:
+        for target in ("beta", "dz", _CPD):
+            grid.profile(WINDOW, xc, yc, target, method="mesh", posterior=p,
+                         spectrum=spectrum)
+    finally:
+        del grid._mesh_density
+
+    assert calls["n"] == 0, "a supplied posterior was recomputed"
+    assert grid.last_posterior is not None
+
+    import pickle
+    restored = pickle.loads(pickle.dumps(grid))
+    np.testing.assert_array_equal(
+        restored.last_posterior.density, grid.last_posterior.density
+    )
+
+
+def test_mesh_profile_returns_inf_where_the_data_do_not_constrain_dz():
+    """
+    The same failure the scan has, reported the same way: a window too small to
+    bound `dz` has no upper endpoint, and saying so beats returning the edge of
+    the mesh dressed up as an answer.
+
+    Here the mesh has an advantage worth keeping honest about -- it knows *how
+    much* mass escaped, where the scan only knows it never crossed a threshold.
+    """
+    grid, xc, yc = _grid(n=256)
+    grid.reset_priors()
+    with pytest.warns(RuntimeWarning, match="unbounded"):
+        _, _, lower, upper = grid.profile(
+            60e3, xc, yc, "dz", method="mesh", taper=np.hanning
+        )
+    assert np.isinf(upper)
+    assert np.isfinite(lower)
+
+
+def test_mesh_widens_a_box_the_curvature_underestimated(bouligand):
+    """
+    The first box comes from the curvature at the mode, which is the Gaussian
+    approximation `profile` exists because it distrusts. So it is a starting
+    box: any edge still carrying mass is widened.
+
+    Forced here by handing in a box far too tight, which cannot expand, and
+    comparing against the adaptive default, which can.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+
+    adaptive = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
+    assert np.all(adaptive.edge_mass < 1e-4), adaptive.edge_mass
+
+    hat = grid._fit(grid._initial_guess(spectrum), spectrum).x
+    pinched = grid.posterior(
+        WINDOW, xc, yc, spectrum=spectrum,
+        bracket=((hat[0] - 0.01, hat[0] + 0.01), (hat[2] - 0.5, hat[2] + 0.5)),
+    )
+    assert pinched.edge_mass.max() > adaptive.edge_mass.max()
+    assert pinched.dz[-1] - pinched.dz[0] < adaptive.dz[-1] - adaptive.dz[0]
+
+
+def test_mesh_rejects_a_one_dimensional_bracket(bouligand):
+    """
+    `profile`'s bracket is a range in the target; the mesh needs a box in the
+    two parameters the posterior lives in. A range in CPD cannot say where
+    `beta` should be evaluated, so silently reinterpreting one as the other
+    would evaluate a box nobody asked for.
+    """
+    grid, xc, yc = bouligand
+    with pytest.raises(ValueError, match="box in the two parameters"):
+        grid.profile(WINDOW, xc, yc, "dz", method="mesh", bracket=(5.0, 40.0))
+    with pytest.raises(ValueError, match="method must be"):
+        grid.profile(WINDOW, xc, yc, "dz", method="quadrature")
 
 
 def test_profile_rejects_unknown_target(bouligand):

@@ -180,40 +180,69 @@ Bouligand uses finite differences.
 
 Beyond the covariance: `CurieOptimiseBouligand.profile()` gives profile-deviance
 intervals, which matter because `dz` and `CPD` are genuinely asymmetric;
-`metropolis_hastings()` samples the posterior; `sensitivity()` resamples the
-spectrum. `CurieOptimiseTanaka.sensitivity()`
+`posterior()` evaluates the posterior itself; `metropolis_hastings()` samples
+it; `sensitivity()` resamples the spectrum. `CurieOptimiseTanaka.sensitivity()`
 additionally jitters the band edges, since band placement usually dominates
 spectral scatter. There is deliberately no `profile` on the Tanaka side — each
 band is a straight-line fit, where profile and covariance intervals are provably
 identical.
 
-**`profile`'s interval is not calibrated, and it is not `profile`'s fault.**
-`_gls_covariance` corrects the covariance for correlation between neighbouring
-bins; `min_func` does not, so the likelihood the deviance is read off is too
-sharp. Over 200 synthetics a nominal 68.27% interval on `beta` covers **0.510**
-and a 95% one **0.850**, where `optimise`'s GLS-corrected sigma covers 0.650 and
-0.920 — and the correction's inflation factor of **1.298** predicts exactly
-that. The split (OLS point estimate, GLS uncertainty) was a deliberate, measured
-choice for the *fit*; what was missed is that it leaves the *deviance*
-uncorrected. Read a `profile` interval as a lower bound. This is the same
-0.5–0.6 that `sensitivity` reports against independent fields and that
-`sigma_dz`'s "understates by 40%" records.
+**The posterior is two-dimensional.** `Phi = C·1 + zt·(-2k) + h(beta, dz)`, so
+`C` and `zt` are linear coefficients on basis vectors that do not involve the
+other two. Their conditional posterior is an exact Gaussian, and its precision
+`A = GᵀG` is built from `k`, `sigma` and the prior widths **only** — nothing in
+it depends on `(beta, dz)`. So `½ log det A` is an additive constant, and the
+marginal posterior of `(beta, dz)` *is* the reduced misfit `_solve_linear`
+already returns. `posterior()` evaluates it on a mesh; two dimensions is small
+enough to integrate rather than sample.
 
-Putting `R^-1` in the objective was measured but **not** made
-(`notes/collapsed-posterior.md`, `posterior-mesh` branch): it takes `beta`
-coverage to 0.640/0.945, but `R` then has to be tabulated per taper rather than
-estimated — `_banded_correlation` reads model mismatch as correlation, giving
-`rho_1` from 0.24 to 0.42 depending where it is asked — `_covariance` must drop
-`_gls_covariance` or correct twice, and `_ANALYTIC_COLUMNS` must be whitened
-too, which unwhitened sent a `dz = 10` layer to 60.9.
+`profile(..., method="mesh")` returns the same 4-tuple from that density. Three
+things about it are easy to get wrong and are all guarded by tests:
 
-**`sensitivity`'s warm start is measured, not assumed.** Every realisation
-begins at one fit to the unresampled spectrum. Re-deriving a start per
-realisation costs 1.4x and moves the reported spread not at all — 13.28 against
-13.28 — because resampling `Phi` within `sigma_Phi` does not carry a realisation
-across a basin boundary. What *did* strand the ensemble was the old `dz = 10`
-constant, which put its median at 10.3 against a truth of 45. Do not re-derive
-per realisation again without a case the warm start demonstrably gets wrong.
+- **The mesh is a quadrature rule, not a discrete distribution.** `zt`'s
+  conditional width is 0.007 km against a 2 km node spacing, so summing one
+  narrow Gaussian per node gives a picket fence. Interpolate first
+  (`_MARGINAL_REFINE`); it costs no forward-model evaluations.
+- **`CPD = zt + dz` is a convolution along the mesh, not a marginal of it.**
+  Propagating it from `dz` drops `zt`'s conditional spread. `E[CPD] = E[zt] +
+  E[dz]` holds whatever the correlation, and is the identity that catches both
+  mistakes — the atoms version failed it by 0.5 km.
+- **An interval running past `1/k_min` is not a measurement.** Beyond that the
+  rolloff is below the longest wavelength the window measured and `dz` is
+  degenerate with `C`; the endpoint is then set by where `bouligand2009`
+  overflows. At a 250 km window that produced `(190, 943)` km before the guard.
+  It returns `inf`, as the scan does by never crossing its threshold.
+
+The two interval constructions are genuinely different objects — a likelihood
+level set centred on the mode against an equal-tailed credible interval centred
+on the median — so they agree on `beta`, `zt` and `C` and differ on the skewed
+`dz`.
+
+**Neither is calibrated, and it is not their fault.** `_gls_covariance` corrects
+the covariance for correlation between neighbouring bins; `min_func` does not,
+so the likelihood underneath both is too sharp. Over 100 synthetics a nominal
+68.27% interval on `beta` covers **0.52 (scan) and 0.58 (mesh)** where
+`optimise`'s GLS-corrected sigma covers **0.65**, and the correction's inflation
+factor of **1.298** predicts exactly that. The split — OLS point estimate, GLS
+uncertainty — was a deliberate and measured choice for the *fit*; what was
+missed is that it leaves the *deviance* uncorrected, so every interval inherits
+it. Fixing it means putting `R^-1` in the objective or tempering the deviance;
+until then read a `profile` interval as a lower bound. This is the same ~0.5-0.6
+that `sensitivity` reports and that `sigma_dz`'s "understates by 40%" records.
+
+**`sensitivity` reports about half the spread an independent repeat would
+find** — 0.50 to 0.62 of the scatter over independent realisations of the
+field, measured across three regimes. That is the bin-independence assumption
+above and no choice of starting point touches it.
+
+**Its warm start is measured, not assumed.** Every realisation begins at one
+fit to the unresampled spectrum. Re-deriving a start per realisation costs 1.4x
+and moves the reported spread not at all — 13.28 against 13.28 — because
+resampling `Phi` within `sigma_Phi` does not carry a realisation across a basin
+boundary. What *did* strand the ensemble was the old `dz = 10` constant, which
+put its median at 10.3 against a truth of 45; deriving the start fixed that.
+Do not re-derive per realisation again without a case the warm start demonstrably
+gets wrong.
 
 ## Synthetics
 
@@ -348,9 +377,10 @@ each was resolved — including two whose prescribed fix turned out to be wrong 
 measurement. Worth reading before trusting any of them.
 `notes/derived-starting-values.md` records what deriving the starting point cost
 and bought, including where it is a straight regression.
-`notes/dz-recoverability.md` maps where `dz` is recoverable at all, and finds
-that on WDMAM it never converges — it tracks the window size by a factor of
-two. The `posterior-mesh` branch carries an unmerged second use of the same
-linear identity, evaluating the posterior on a mesh rather than seeding one
-fit with it; `notes/collapsed-posterior.md` there records what it measured.
+`notes/collapsed-posterior.md` records what `posterior()` and
+`profile(method="mesh")` measured: the 2-D density converges on a **24x24 mesh,
+576 forward-model evaluations against a chain's 24,000**, and neither interval
+construction is calibrated. Read its "what is still needed" before trusting
+either on real data. `notes/dz-recoverability.md` maps where `dz` is
+recoverable at all, and finds it never converges on WDMAM.
 Everything in `notes/` stays out of the Sphinx build, unlike `docs/`.
