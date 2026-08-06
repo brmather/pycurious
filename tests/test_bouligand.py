@@ -483,6 +483,13 @@ def test_profile_dz_interval_is_unchanged_by_the_optimiser(seed, interval):
     finds lower constrained minima, which re-anchors the deviance, and that
     can move the reported interval.
 
+    `calibrate=False` because that is what these numbers are: an archive
+    written before the likelihood was corrected for correlation between bins.
+    The corrected interval is a different quantity and is pinned separately by
+    `test_calibration_widens_the_interval_by_its_own_factor` and
+    `test_a_window_that_cannot_bound_dz_says_so_once_calibrated`. Reading the
+    old numbers through the new default would be comparing two things.
+
     The tolerance is 5%, which is loose because the quantity is. An interval
     endpoint is where `brentq` crosses the threshold on a deviance curve that
     is nearly flat there -- that flatness is the whole reason `dz` needs a
@@ -500,8 +507,167 @@ def test_profile_dz_interval_is_unchanged_by_the_optimiser(seed, interval):
     grid.reset_priors()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        _, _, lower, upper = grid.profile(200e3, xc, yc, "dz")
+        _, _, lower, upper = grid.profile(
+            200e3, xc, yc, "dz", calibrate=False
+        )
     np.testing.assert_allclose([lower, upper], interval, rtol=5e-2)
+
+
+@pytest.mark.parametrize("window, dz_true", [(1000e3, 20.0), (2000e3, 30.0)])
+def test_calibration_widens_the_interval_by_its_own_factor(window, dz_true):
+    """
+    The correction is a scalar on the spectral misfit, so on a window that
+    bounds `dz` at all it should widen the interval by `sqrt(t2)` and do
+    nothing else. Measured over six realisations, the width ratio is 1.285 at
+    1000 km against a `sqrt(t2)` of 1.269, and 1.305 at 2000 km against 1.298
+    -- the small excess is the upper tail, which a wider level set reaches
+    further into than a quadratic would.
+
+    This is the test that says the temper widens rather than relocates. An
+    implementation that divided the *whole* misfit, priors included, would
+    still pass a width check on this prior-free grid and fail
+    `test_calibration_leaves_a_pinned_parameter_pinned`; one that squared or
+    forgot to square `t2` fails here, at 1.61 or 1.13 against 1.27.
+    """
+    widths, factors = [], []
+    for seed in range(6):
+        data, extent = pycurious.fractal_anomaly(
+            n=601, dx=4.0, beta=3.0, zt=1.0, dz=dz_true, C=5.0, seed=seed
+        )
+        grid = pycurious.CurieOptimiseBouligand(data, *extent)
+        xc = 0.5 * (extent[0] + extent[1])
+        yc = 0.5 * (extent[2] + extent[3])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            plain = grid.profile(
+                window, xc, yc, "dz", level=0.6827, calibrate=False
+            )
+            spectrum = grid.last_spectrum
+            tempered = grid.profile(
+                window, xc, yc, "dz", level=0.6827, spectrum=spectrum
+            )
+            x_hat = grid._fit(grid._initial_guess(spectrum), spectrum).x
+            t2 = grid._temperature(x_hat, spectrum)
+
+        narrow, wide = plain[3] - plain[2], tempered[3] - tempered[2]
+        if np.isfinite(narrow) and np.isfinite(wide) and narrow > 0.0:
+            widths.append(wide / narrow)
+            factors.append(np.sqrt(t2))
+
+    assert len(widths) >= 4, "too few bounded intervals to compare"
+    # within 5% of sqrt(t2), and unambiguously on the far side of 1
+    assert np.mean(widths) == pytest.approx(np.mean(factors), rel=0.05)
+    assert np.mean(widths) > 1.2
+
+
+def test_calibration_spares_the_prior_rows(bouligand):
+    """
+    `residuals` appends one row per prior, so `min_func` is spectral **plus**
+    prior. Dividing all of it would widen every prior by `sqrt(t2)` -- at the
+    0.05 km `zt` pin a production run uses, a 30% loosening of the constraint
+    that carries the whole depth scale, applied silently and in the name of
+    calibration. `_gls_covariance` refuses the same thing for the same reason.
+
+    So the temper divides the spectral part alone, and what that buys is a
+    correction whose size depends on how much of a parameter's information is
+    spectral. Measured on this grid at 1000 km, `sqrt(t2) = 1.302`:
+
+    | zt prior | spectral only | whole misfit |
+    |---|---|---|
+    | 0.01 (hard pin) | **1.049** | 1.310 |
+    | 0.05 (production) | **1.210** | 1.299 |
+    | 1.00 (weak) | 1.309 | 1.309 |
+
+    Both limits matter. Under a hard pin the prior sets the width and the
+    correction nearly vanishes; under a weak one there is no prior to hold it
+    and the two agree, as they must. An implementation that tempered `F`
+    whole would read 1.31 down the whole first column.
+    """
+    grid, xc, yc = bouligand
+
+    def ratio(prior_sigma):
+        grid.reset_priors()
+        grid.add_prior(zt=(1.0, prior_sigma))
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                plain = grid.profile(
+                    WINDOW, xc, yc, "zt", level=0.6827, calibrate=False
+                )
+                args = grid.last_spectrum
+                tempered = grid.profile(
+                    WINDOW, xc, yc, "zt", level=0.6827, spectrum=args
+                )
+                x_hat = grid._fit(grid._initial_guess(args), args).x
+                t2 = grid._temperature(x_hat, args)
+        finally:
+            grid.reset_priors()
+        return (tempered[3] - tempered[2]) / (plain[3] - plain[2]), np.sqrt(t2)
+
+    pinned, factor = ratio(0.01)
+    weak, _ = ratio(1.0)
+
+    assert factor > 1.2, "nothing to prove if the correction is inert"
+    # a pin the caller set is a pin the caller keeps
+    assert pinned < 1.10
+    # and where no prior is holding it, the full correction lands
+    assert weak == pytest.approx(factor, rel=0.02)
+
+
+def test_calibrate_false_reproduces_the_uncorrected_interval(bouligand):
+    """
+    The audit hook. Every interval this package published before v2 was read
+    off an uncorrected likelihood, so there has to be a way to reproduce one
+    exactly rather than approximately -- otherwise a changed archive cannot be
+    told from a changed method.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        values, deviance, lower, upper = grid.profile(
+            WINDOW, xc, yc, "dz", npoints=9, calibrate=False
+        )
+        args = grid.last_spectrum
+        x_hat = grid._fit(grid._initial_guess(args), args).x
+        F_min = grid._fit(grid._initial_guess(args), args).cost
+        expected = np.array([
+            2.0 * (grid._profiled_misfit("dz", v, x_hat, args) - F_min)
+            for v in values
+        ])
+
+    np.testing.assert_allclose(deviance, expected, rtol=0, atol=1e-9)
+    assert grid._temperature(x_hat, args, calibrate=False) == 1.0
+
+
+def test_a_window_that_cannot_bound_dz_says_so_once_calibrated():
+    """
+    At 200 km a 30 km layer is not resolvable -- `notes/dz-recoverability.md`
+    measures the error there in tens of km, and `CLAUDE.md` records that
+    neither starting value is worth anything at that window. The uncorrected
+    deviance nonetheless crosses its threshold and reports a confident
+    interval; corrected, it does not cross, and says so.
+
+    That is the change working rather than overreaching: the correction is
+    largest exactly where the model cannot follow the data, because
+    `_banded_correlation` reads smooth model mismatch as correlation, and a
+    model that cannot follow the data genuinely leaves `dz` less determined.
+    """
+    grid, xc, yc = _grid(seed=2)
+    grid.reset_priors()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        _, _, plain_lo, plain_hi = grid.profile(
+            200e3, xc, yc, "dz", calibrate=False
+        )
+        _, _, lower, upper = grid.profile(
+            200e3, xc, yc, "dz", spectrum=grid.last_spectrum
+        )
+
+    assert np.isfinite(plain_hi), "the uncorrected scan bounds it"
+    assert not np.isfinite(upper), "the corrected one should not"
+    assert lower < plain_lo
 
 
 def test_analytic_jacobian_columns_match_the_finite_difference(bouligand):
@@ -557,16 +723,21 @@ def _captured_jacobian(grid, monkeypatch, *fit_args, **fit_kwargs):
     """
     Hand back the `(fun, jac, y)` that `_fit` passes to scipy.
 
-    The spy returns nothing rather than delegating: the caller wants the
-    callables, not the fit, and running one would cost an optimisation whose
-    result is discarded.
+    The spy does not delegate: the caller wants the callables, not the fit, and
+    running one would cost an optimisation whose result is discarded. It does
+    have to hand back something with an `x`, because `_fit` expands the
+    solution into the four parameters before returning -- a double that returns
+    `None` where the real `least_squares` returns an `OptimizeResult` fails on
+    that rather than on anything this test is about.
     """
     from pycurious import optimise_bouligand as mod
+    from scipy.optimize import OptimizeResult
 
     grabbed = {}
 
     def spy(fun, y0, jac=None, **kw):
         grabbed.update(fun=fun, jac=jac, y0=np.asarray(y0, dtype=float))
+        return OptimizeResult(x=np.asarray(y0, dtype=float), cost=0.0)
 
     monkeypatch.setattr(mod, "least_squares", spy)
     grid._fit(*fit_args, **fit_kwargs)

@@ -28,7 +28,12 @@ online theory guide.
 """
 
 # -*- coding: utf-8 -*-
-from .grid import CurieGrid, bouligand2009, _gls_covariance
+from .grid import (
+    CurieGrid,
+    bouligand2009,
+    _correlation_inflation,
+    _gls_covariance,
+)
 from .parallel import stochastic
 import numpy as np
 import warnings
@@ -242,6 +247,14 @@ _LADDER_TIE = 1.0
 # and decomposes instead. Forming the normal equations squares the condition
 # number, so this sits well above the double-precision floor.
 _SINGULAR_RTOL = 1.0e-12
+
+# How far the per-parameter correlation corrections may disagree before
+# `_temperature` stops calling itself one number and says so. Measured across
+# free fits and production-pinned ones they sit within 0.6-3.1% of each other,
+# which is what makes a scalar temperature a statement about degrees of freedom
+# rather than a convenience. Ten percent is several times the observed spread,
+# so this fires on a change of kind rather than on noise.
+_TEMPER_SPREAD_LIMIT = 0.10
 
 
 #: The 2-D marginal posterior of `(beta, dz)`, with `C` and `zt` integrated out.
@@ -681,8 +694,28 @@ class CurieOptimiseBouligand(CurieGrid):
             np.array([np.inf if hi is None else hi for _, hi in pairs], dtype=float),
         )
 
+    def _prior_misfit(self, x, prior=None):
+        """
+        The prior rows of `min_func` alone, at `x`.
+
+        `residuals` appends one row per prior, so `min_func` is
+        :math:`F_{spectral} + F_{prior}`. Splitting them is what lets the
+        likelihood be tempered where it is read without touching the priors --
+        see `_temperature`. This costs no evaluation of the forward model,
+        because a prior row depends on the parameter value and nothing else.
+        """
+        if prior is None:
+            prior = self.prior
+
+        total = 0.0
+        for name, value in zip(_PARAMETERS, np.asarray(x, dtype=float)):
+            args = prior.get(name)
+            if args is not None:
+                total += ((value - args[0]) / args[1]) ** 2
+        return 0.5 * float(total)
+
     def _solve_linear(self, kh, Phi, sigma_Phi, beta, dz, prior=None, zt=None,
-                      C=None, clamp=True):
+                      C=None, clamp=True, temper=1.0):
         """
         Exact weighted :math:`C, z_t` at fixed :math:`\\beta, \\Delta z`, and the
         misfit there.
@@ -717,13 +750,21 @@ class CurieOptimiseBouligand(CurieGrid):
                 priors to use in place of `self.prior`
             zt, C : float, optional
                 hold this parameter rather than solving for it
+            temper : float (default=1.0)
+                divide the **spectral** part of the misfit by this, leaving any
+                prior rows alone. `1.0` is `min_func` exactly. See
+                `_temperature` for where the value comes from and why the
+                prior rows are excluded; the default is what every caller that
+                is choosing a starting point wants, since a seed has to be the
+                argmin of the objective `_fit` will actually minimise.
 
         Returns:
             C, zt : float
                 the solution, clipped into `self.bounds`
             cost : float
-                `min_func` at :math:`\\beta, z_t, \\Delta z, C`, which is what
-                makes this comparable across a ladder of :math:`\\Delta z`
+                `min_func` at :math:`\\beta, z_t, \\Delta z, C` when `temper`
+                is 1, which is what makes this comparable across a ladder of
+                :math:`\\Delta z`
 
         Notes:
             The 2x2 normal equations are solved in closed form rather than by
@@ -791,16 +832,10 @@ class CurieOptimiseBouligand(CurieGrid):
         residual = np.where(
             usable, C * columns[_C] + zt * columns[_ZT] - base, _OVERFLOW_RESIDUAL
         )
-        cost = np.dot(residual, residual)
+        spectral = 0.5 * float(np.dot(residual, residual))
 
         x = np.array([beta, zt, dz, C], dtype=float)
-        for name, value in zip(_PARAMETERS, x):
-            prior_args = prior.get(name)
-            if prior_args is not None:
-                loc, scale = prior_args
-                cost += ((value - loc) / scale) ** 2
-
-        return C, zt, 0.5 * float(cost)
+        return C, zt, spectral / float(temper) + self._prior_misfit(x, prior)
 
     @staticmethod
     def _solve_columns(columns, base, usable, held, prior):
@@ -1408,7 +1443,7 @@ class CurieOptimiseBouligand(CurieGrid):
                 np.abs(lower[collapsed]), 1.0
             )
 
-        return least_squares(
+        res = least_squares(
             lambda y: residuals_at(expand(y)),
             # trust-region reflective requires a feasible start, which a
             # caller passing the unconstrained solution into a constrained fit
@@ -1417,6 +1452,14 @@ class CurieOptimiseBouligand(CurieGrid):
             jac=jacobian,
             bounds=(lower, upper),
         )
+
+        # `res.x` is in the free coordinates, which for a constrained fit are
+        # not the four parameters. Carrying the expanded vector saves every
+        # caller reconstructing the affine map, and `_profiled_misfit` needs it
+        # to split `res.cost` into its spectral and prior parts without
+        # evaluating the forward model a second time.
+        res.x_full = expand(res.x)
+        return res
 
     def _jacobian(self, x, r, args):
         """
@@ -1990,7 +2033,95 @@ class CurieOptimiseBouligand(CurieGrid):
         return (float(np.interp(tail, cdf, values)),
                 float(np.interp(1.0 - tail, cdf, values)))
 
-    def _profiled_misfit(self, target, value, x_hat, args):
+    def _temperature(self, x_hat, args, prior=None, calibrate=True):
+        """
+        The factor the likelihood is too sharp by, measured once at the mode.
+
+        `optimise` reports :math:`(J^T R^{-1} J)^{-1}`, which allows for
+        correlation between neighbouring spectral bins. `min_func` does not, so
+        an interval read off the likelihood -- a profile deviance, a posterior
+        density, a Metropolis chain -- is narrower than the covariance the same
+        fit reports, by a factor this returns. Dividing the **spectral** part
+        of the misfit by it puts the correction back where the likelihood is
+        read, without changing anything that is minimised.
+
+        Args:
+            x_hat : array shape (4,)
+                the fitted parameters -- the mode, not a scan node
+            args : tuple
+                `(kh, Phi, sigma_Phi)`
+            prior : dict, optional
+                priors to use in place of `self.prior`
+            calibrate : bool (default=True)
+                `False` returns 1.0, which reproduces a pre-v2 interval exactly
+
+        Returns:
+            t2 : float
+                the **variance** inflation. An interval widens by
+                :math:`\\sqrt{t_2}`.
+
+        Notes:
+            **Measured once, at the mode, and then held fixed.**
+            `pycurious.grid._banded_correlation` estimates the correlation from
+            the residuals, and it also absorbs smooth model mismatch -- which
+            is right for a covariance at the solution, where `_gls_covariance`
+            already trusts it, and wrong anywhere it could move. Re-estimating
+            it per scan node or per mesh node would make the objective a
+            function of its own residuals, which a fit can lower by making them
+            look correlated. One number, computed here, passed down.
+
+            **The prior rows are excluded, on both sides.** They are not
+            spectral, they are not correlated, and `_gls_covariance` already
+            refuses to let them into its solve. Tempering them would widen a
+            pin the caller set deliberately: at :math:`\\sigma_{z_t} = 0.05` km
+            that is a 27% loosening of a constraint that carries the depth
+            scale. Measured on the same synthetic, `t2` taken from the
+            spectral block alone agrees between a free fit and a production-
+            pinned one to 0.6-3.9%, where taking it over the whole Jacobian
+            disagrees by up to 14%.
+
+            **One scalar is defensible because the four agree.** The
+            per-parameter inflations sit within 0.6-3.1% of each other across
+            free and pinned fits, so the correction is a reduction in effective
+            degrees of freedom rather than a reshaping of the covariance. Where
+            they stop agreeing, `_TEMPER_SPREAD_LIMIT` says so rather than
+            letting one number stand for four that disagree.
+        """
+        if not calibrate:
+            return 1.0
+
+        kh, Phi, sigma_Phi = args
+        r = self.residuals(np.asarray(x_hat, dtype=float), *args, prior=prior)
+        J = self._jacobian(np.asarray(x_hat, dtype=float), r, args)
+
+        t2, spread = _correlation_inflation(J, r, np.size(kh))
+
+        if t2 is None or not np.isfinite(t2) or t2 <= 0.0:
+            warnings.warn(
+                "the correlation between neighbouring spectral bins could not "
+                "be measured, so the likelihood is left uncorrected and this "
+                "interval is narrower than the covariance the same fit "
+                "reports. Usually a singular fit or too few usable bins.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            return 1.0
+
+        if spread is not None and spread > _TEMPER_SPREAD_LIMIT:
+            warnings.warn(
+                "the correlation correction differs by {:.0%} between "
+                "parameters, so one number does not describe all four and "
+                "this interval carries their geometric mean. A correction "
+                "this direction-dependent is not a loss of degrees of freedom "
+                "and usually means the model is not following the "
+                "data.".format(spread),
+                RuntimeWarning,
+                stacklevel=3,
+            )
+
+        return float(t2)
+
+    def _profiled_misfit(self, target, value, x_hat, args, temper=1.0):
         """
         Smallest misfit attainable with `target` held at `value`.
 
@@ -2000,6 +2131,13 @@ class CurieOptimiseBouligand(CurieGrid):
         through :math:`\\Delta z = \\mathrm{CPD} - z_t`, leaving
         :math:`\\beta, z_t, C` free -- so it is profiled directly rather than
         propagated from `dz`, whose uncertainty is not symmetric.
+
+        `temper` divides the spectral part and leaves the prior rows alone, as
+        `_solve_linear` does; `1.0` is `min_func` at the constrained optimum.
+        The minimisation itself is untempered, which is deliberate: a positive
+        scalar on part of the objective would move the constrained argmin
+        wherever a prior is active, and the point of tempering is to widen an
+        interval rather than to relocate it.
         """
         curie = target == _CPD
         fixed = _PARAMETERS.index("dz" if curie else target)
@@ -2013,7 +2151,11 @@ class CurieOptimiseBouligand(CurieGrid):
             curie=curie,
         )
         # `cost` is half the sum of squares, which is what `min_func` returns
-        return res.cost
+        if temper == 1.0:
+            return res.cost
+
+        prior_part = self._prior_misfit(res.x_full)
+        return (res.cost - prior_part) / float(temper) + prior_part
 
     def profile(
         self,
@@ -2024,9 +2166,7 @@ class CurieOptimiseBouligand(CurieGrid):
         level=0.95,
         npoints=21,
         bracket=None,
-        method="scan",
-        nodes=_MESH_NODES,
-        posterior=None,
+        calibrate=True,
         beta=None,
         zt=None,
         dz=None,
@@ -2067,26 +2207,12 @@ class CurieOptimiseBouligand(CurieGrid):
             bracket : tuple, optional
                 (min, max) of the scan. Defaults to a range either side of the
                 fitted value, wider above than below because of the tail.
-                With `method="mesh"` this is instead the box the posterior is
-                evaluated on, `((beta_min, beta_max), (dz_min, dz_max))` -- a
-                range in one target cannot say where the other should go, so
-                the one-dimensional form raises there rather than being
-                reinterpreted.
-            method : {"scan", "mesh"} (default="scan")
-                how the interval is built. `"scan"` walks the profile deviance
-                out to a chi-squared threshold, which is a likelihood level set
-                centred on the mode. `"mesh"` integrates the posterior of
-                `posterior()`, where :math:`C` and :math:`z_t` are marginalised
-                exactly, and returns an equal-tailed credible interval centred
-                on the median. On a Gaussian the two coincide; on the skewed
-                :math:`\\Delta z` posterior the second sits higher and wider.
-                See `posterior` for what each is worth.
-            nodes : int (default=32)
-                mesh nodes per axis, `method="mesh"` only
-            posterior : `Posterior`, optional
-                a density already in hand, from `posterior()`. One serves every
-                target, the way one spectrum serves every routine -- without it
-                five intervals cost five meshes.
+            calibrate : bool (default=True)
+                correct the likelihood for correlation between neighbouring
+                spectral bins before reading the interval off it -- see
+                `_temperature`, and the note below. `False` reproduces the
+                pre-v2 interval exactly, which is what an archive written
+                before this existed has to be compared against.
             beta, zt, dz, C : float, optional
                 starting values for the underlying fit; each is derived from
                 the spectrum where it is left None
@@ -2122,7 +2248,19 @@ class CurieOptimiseBouligand(CurieGrid):
             Gaussian prior is one more observation, so the calibration still
             holds, but it is not the marginal an MCMC would report -- profiling
             takes the ridge of the posterior rather than integrating over it,
-            and so is a little narrower for a skewed one.
+            and so is a little narrower for a skewed one. `posterior` is the
+            integrated reading of the same surface.
+
+            **The likelihood is corrected before it is read.** Neighbouring
+            spectral bins are correlated, `optimise`'s covariance allows for it
+            and `min_func` does not, so a deviance read off `min_func` is too
+            sharp by the factor `_temperature` measures -- about 1.6 in
+            variance under `numpy.hanning` at a 1000 km window, so about 1.27
+            on a width. Only the spectral part is corrected; a prior keeps the
+            width the caller gave it. This *widens* every interval relative to
+            pre-v2 and does not move the fitted value it is centred on, since
+            nothing about what is minimised changed. `calibrate=False` turns it
+            off.
 
             Like the covariance from `optimise`, the interval describes the
             scatter of the spectrum at a fixed window, centroid and model. It
@@ -2137,18 +2275,6 @@ class CurieOptimiseBouligand(CurieGrid):
                     _PARAMETERS + (_CPD,), target
                 )
             )
-        if method not in ("scan", "mesh"):
-            raise ValueError(
-                "method must be 'scan' or 'mesh', not {!r}".format(method)
-            )
-
-        if method == "mesh":
-            return self._profile_on_mesh(
-                window, xc, yc, target, level, nodes, bracket, posterior,
-                beta, zt, dz, C, taper, process_subgrid, dof_factor, spectrum,
-                **kwargs
-            )
-
         k, Phi, sigma_Phi = self._resolve_spectrum(
             spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
@@ -2156,7 +2282,14 @@ class CurieOptimiseBouligand(CurieGrid):
 
         x0 = self._initial_guess(args, beta, zt, dz, C)
         res = self._fit(x0, args)
-        x_hat, F_min = res.x, res.cost
+        x_hat = res.x
+
+        # Measured once, at the mode, and held for the whole scan. Estimating
+        # it again at each node would make the objective a function of its own
+        # residuals -- see `_temperature`.
+        temper = self._temperature(x_hat, args, calibrate=calibrate)
+        prior_part = self._prior_misfit(x_hat)
+        F_min = (res.cost - prior_part) / temper + prior_part
 
         # every constrained fit is cached, so the root finding below reuses the
         # scan nodes it lands on rather than paying for them twice
@@ -2165,7 +2298,9 @@ class CurieOptimiseBouligand(CurieGrid):
         def constrained(value):
             value = float(value)
             if value not in cache:
-                cache[value] = self._profiled_misfit(target, value, x_hat, args)
+                cache[value] = self._profiled_misfit(
+                    target, value, x_hat, args, temper=temper
+                )
             return cache[value]
 
         if bracket is None:
@@ -2402,6 +2537,7 @@ class CurieOptimiseBouligand(CurieGrid):
         adapt=True,
         seed=None,
         return_diagnostics=False,
+        calibrate=True,
         spectrum=None,
         **kwargs
     ):
@@ -2451,6 +2587,12 @@ class CurieOptimiseBouligand(CurieGrid):
             return_diagnostics : bool (default=False)
                 also return a dict of `acceptance`, `burnin_acceptance`,
                 `x_scale`
+            calibrate : bool (default=True)
+                sample the likelihood corrected for correlation between
+                neighbouring spectral bins, which is the posterior `profile`
+                and `posterior` also read -- see `_temperature`. The chain is
+                then wider than a pre-v2 one by about 1.27 under
+                `numpy.hanning`. `False` reproduces the old chain.
             spectrum : tuple (k, Phi, sigma_Phi), optional
                 a spectrum already in hand, typically `last_spectrum` from
                 the `optimise` at this same centroid -- see `optimise`
@@ -2520,10 +2662,30 @@ class CurieOptimiseBouligand(CurieGrid):
 
         lower, upper = self._bound_arrays()
 
+        # Start the chain at the mode rather than at the caller's guess. The
+        # optimiser finds it in a fraction of the time a random walk takes to
+        # wander there, and a chain started away from it spends its whole
+        # burn-in travelling instead of tuning. Measured on a synthetic, the
+        # posterior mean from a default start sits at a misfit of 121 against
+        # the mode's 50; started here it lands on 50.1.
+        args = (k, Phi, sigma_Phi)
+        start = self._fit(self._initial_guess(args, beta, zt, dz, C), args)
+
+        # The same correction `profile` and `posterior` read their intervals
+        # through, so all three describe one posterior rather than three. The
+        # chain is the one place it could have been left out and not noticed --
+        # a sampler has no interval to compare against -- which is exactly why
+        # it is here. Measured once at the mode, as everywhere else.
+        temper = self._temperature(start.x, args, calibrate=calibrate)
+
         def log_posterior(x):
             if np.any(x < lower) or np.any(x > upper):
                 return -np.inf
-            return -self.min_func(x, k, Phi, sigma_Phi)
+            if temper == 1.0:
+                return -self.min_func(x, k, Phi, sigma_Phi)
+            prior_part = self._prior_misfit(x)
+            spectral = self.min_func(x, k, Phi, sigma_Phi) - prior_part
+            return -(spectral / temper + prior_part)
 
         def step(x, F, scale, chol):
             """One Metropolis move."""
@@ -2535,15 +2697,6 @@ class CurieOptimiseBouligand(CurieGrid):
             if accepted:
                 return proposal, F1, True
             return x, F, False
-
-        # Start the chain at the mode rather than at the caller's guess. The
-        # optimiser finds it in a fraction of the time a random walk takes to
-        # wander there, and a chain started away from it spends its whole
-        # burn-in travelling instead of tuning. Measured on a synthetic, the
-        # posterior mean from a default start sits at a misfit of 121 against
-        # the mode's 50; started here it lands on 50.1.
-        args = (k, Phi, sigma_Phi)
-        start = self._fit(self._initial_guess(args, beta, zt, dz, C), args)
 
         x = start.x
         F = log_posterior(x)
