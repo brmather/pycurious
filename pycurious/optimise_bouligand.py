@@ -37,7 +37,6 @@ from .grid import (
 from .parallel import stochastic
 import numpy as np
 import warnings
-from collections import namedtuple
 from scipy.optimize import least_squares, brentq
 from scipy import stats
 from multiprocessing import cpu_count
@@ -130,21 +129,46 @@ _CPD = "CPD"
 # matters more than the tuning does.
 _MESH_NODES = 32
 
-# Half-width of the first mesh box, in marginal standard deviations, and the
-# extra stretch given to the upper `dz` edge because that tail is the long one.
+# Half-width of the grid `Posterior._marginal` reads a CDF off, in standard
+# deviations of that marginal.
 _MESH_SPAN = 6.0
-_MESH_SKEW = 2.0
 
-# Posterior mass allowed outside the mesh before an edge is widened. A mesh that
-# has clipped a tail is wrong in the direction of a *tighter* interval, and
-# silently, which is the one failure mode a sampler does not have -- so this is
-# checked rather than assumed.
-_MESH_EDGE_TOL = 1.0e-6
+# Half-width of the mesh box, in standard deviations of the coarse density it
+# is measured from. Not the same number as `_MESH_SPAN` and not the same kind
+# of quantity: the coarse spread is deliberately conservative -- it is measured
+# over every node within `_MESH_TAIL` of the peak, so it runs about 2.5x the
+# posterior's own -- and multiplying one safety margin by another only spends
+# resolution.
+#
+# Measured against a 192-node reference at a 1000 km window, `dz` mean error
+# and `sd` ratio at the default 32 nodes:
+#
+#   span 3   5.4 sigma wide   -0.32 km   0.839    <- clips the tail
+#   span 4  11.5 sigma        -0.05 km   0.972
+#   span 5  18.6 sigma        -0.01 km   1.012
+#   span 6  25.3 sigma        +0.00 km   1.036    <- too coarse per node
+#
+# Below 4 the box truncates the upper tail and the spread comes back a sixth
+# too small; above 5 the box is wider than the posterior and the same 32 nodes
+# resolve it less well. There is no wide plateau of safe values here, which is
+# why this is measured rather than chosen.
+_MESH_BOX_SPAN = 5.0
 
-# How many times an edge may be widened before the posterior is declared
-# unbounded on that side. Each doubling costs one whole mesh, and a posterior
-# that is still spilling after four is not one a wider box would contain.
-_MESH_EXPANSIONS = 4
+# A coarse node counts towards the box if its density is at least this fraction
+# of the peak. A thousandth is well below anything a reported interval cuts, so
+# the selection keeps the whole posterior while excluding the degenerate
+# plateau, whose density is lower still however far it reaches.
+_MESH_TAIL = 1.0e-3
+
+# Nodes in the coarse sweep that locates the mass, and how far past the fit's
+# own curvature it reaches in `beta`. The two axes get different budgets on
+# purpose: `beta` is near Gaussian and already bracketed by the curvature, so a
+# handful of nodes place it, while the thickness is swept across four orders of
+# magnitude and is the one that needs resolution. 6 x 20 is 120 evaluations
+# against the fine mesh's 1024.
+_MESH_COARSE_BETA = 6
+_MESH_COARSE_DZ = 20
+_MESH_COARSE_SPAN = 2.0
 
 # Beyond this many conditional standard deviations above the `zt` bound, the
 # truncated mass is 1 to double precision and the normal CDF is pure overhead.
@@ -256,32 +280,509 @@ _SINGULAR_RTOL = 1.0e-12
 # so this fires on a change of kind rather than on noise.
 _TEMPER_SPREAD_LIMIT = 0.10
 
+# Level at which `Posterior.moments` decides the thickness is bounded well
+# enough for a mean to mean anything. A moment is an integral over the whole
+# density rather than out to a quantile, so it has no level of its own; this
+# stands in for one, and is deliberately looser than any interval a caller
+# would ask for -- a mean is refused only where the density is running off the
+# resolvable range outright, not merely where a 95% tail does.
+_MOMENT_LEVEL = 0.5
 
-#: The 2-D marginal posterior of `(beta, dz)`, with `C` and `zt` integrated out.
-#:
-#: * `beta`, `dz` -- the mesh axes, shape (n,) each
-#: * `density`    -- shape (n, n), indexed [beta, dz], summing to 1
-#: * `mean`       -- shape (n, n, 2), the conditional mean of `(C, zt)` at each
-#:   node. Not a marginal: `(C, zt)` are Gaussian *given* a node, and their
-#:   posterior is the mixture of those Gaussians weighted by `density`.
-#: * `cov`        -- shape (2, 2), the conditional covariance of `(C, zt)`. One
-#:   matrix for the whole mesh, because it does not depend on `(beta, dz)` --
-#:   which is the fact the whole construction rests on.
-#: * `edge_mass`  -- mass on each of the four edges, in the order
-#:   (beta low, beta high, dz low, dz high). What says whether the mesh
-#:   contained the posterior.
-#:
-#: A plain namedtuple so it pickles, which `parallelise_routine` needs.
-#: * `mass`       -- shape (n, n), the fraction of each node's conditional that
-#:   survives the bound on `zt`. `density` already carries it; it is kept so an
-#:   interval on `zt` or on the Curie depth can undo it and integrate the
-#:   untruncated Gaussian over the half line instead.
-#: * `kmin`       -- the smallest wavenumber the spectrum carries. `1/kmin` is
-#:   the thickest layer whose rolloff is still inside the measured band, and so
-#:   the largest `dz` the data can say anything about at all.
-Posterior = namedtuple(
-    "Posterior", "beta dz density mean cov mass edge_mass kmin"
-)
+# How close a restricted lower endpoint may sit to the bottom of its own range
+# before it is reported as no bound at all. Where nearly all the mass is above
+# `1/kmin`, the CDF restricted to the identifiable part is a sliver and its low
+# quantile lands on the floor of the box -- 0.05 km against a fitted 368 km at a
+# 200 km window, which `~/Global_CPD` would then archive as a real bound.
+_BOX_FLOOR_RTOL = 1.0e-3
+_BOX_FLOOR_ATOL = 1.0e-6
+
+
+class Interval(tuple):
+    """
+    A `(lower, upper)` pair that remembers whether it is conditional.
+
+    An ordinary two-tuple everywhere it matters, so `lo, hi = p.interval(...)`
+    reads the way it always did, with `conditional` alongside for a caller that
+    needs to know. That flag is the difference between "the data put
+    :math:`\\beta` here" and "the data put :math:`\\beta` here *given* a
+    thickness they cannot themselves determine", and an archive that stores the
+    number without it cannot tell the two apart later.
+
+    The same idiom as `pycurious.grid._Spectrum`, for the same reason: carrying
+    the qualifier on the value means it survives being passed along.
+    """
+
+    def __new__(cls, pair, conditional=False, restriction=None):
+        interval = super(Interval, cls).__new__(cls, pair)
+        interval.conditional = bool(conditional)
+        #: what the other parameter was restricted to, or None
+        interval.restriction = restriction
+        return interval
+
+    def __getnewargs__(self):
+        return (tuple(self), self.conditional, self.restriction)
+
+
+class Posterior(object):
+    """
+    The joint posterior of the four Bouligand parameters, on a mesh.
+
+    :math:`C` and :math:`z_t` enter the forward model as linear coefficients on
+    basis vectors that do not involve the other two, so their conditional
+    posterior is an exact Gaussian and integrates out in closed form. What is
+    left is a density over :math:`(\\beta, \\Delta z)` alone -- two dimensions,
+    small enough to evaluate rather than sample. `CurieOptimiseBouligand.posterior`
+    builds one; this reads it.
+
+    Attributes:
+        beta, dz : 1D array shape (n,)
+            the mesh axes
+        density : 2D array shape (n, n)
+            indexed `[beta, dz]`, summing to 1
+        mean : 3D array shape (n, n, 2)
+            the **conditional** mean of :math:`(C, z_t)` at each node. Not a
+            marginal: those two are Gaussian *given* a node, and their
+            posterior is the mixture of those Gaussians weighted by `density`.
+        cov : 2D array shape (2, 2)
+            their conditional covariance -- one matrix for the whole mesh,
+            because it does not depend on :math:`(\\beta, \\Delta z)`, which is
+            the fact the whole construction rests on
+        mass : 2D array shape (n, n)
+            fraction of each node's conditional surviving the bound on
+            :math:`z_t`
+        edge_mass : 1D array shape (4,)
+            mass on each edge, ordered (beta low, beta high, dz low, dz high).
+            What says whether the mesh contained the posterior.
+        kmin : float
+            smallest wavenumber the spectrum carries. `1 / kmin` is the
+            thickest layer whose rolloff is still inside the measured band.
+        temper : float
+            the correlation correction the density was built with -- see
+            `CurieOptimiseBouligand._temperature`. It rides on the posterior
+            because it depends on the taper, which `provenance` cannot carry.
+        provenance : tuple or None
+            what this was computed from, checked when it is reused
+
+    Notes:
+        A plain object with `__getstate__`/`__setstate__`, so it pickles --
+        `parallelise_routine` sends grids to workers and one may be holding a
+        `last_posterior`.
+    """
+
+    __slots__ = (
+        "beta", "dz", "density", "mean", "cov", "mass", "edge_mass",
+        "kmin", "zt_floor", "temper", "provenance",
+    )
+
+    def __init__(self, beta, dz, density, mean, cov, mass, edge_mass, kmin,
+                 zt_floor=0.0, temper=1.0, provenance=None):
+        self.beta = beta
+        self.dz = dz
+        self.density = density
+        self.mean = mean
+        self.cov = cov
+        self.mass = mass
+        self.edge_mass = edge_mass
+        self.kmin = kmin
+        self.zt_floor = zt_floor
+        self.temper = temper
+        self.provenance = provenance
+
+    def __getstate__(self):
+        return {name: getattr(self, name) for name in self.__slots__}
+
+    def __setstate__(self, state):
+        for name, value in state.items():
+            setattr(self, name, value)
+
+    # ------------------------------------------------------------------
+    # what the data can speak about at all
+
+    @property
+    def identifiable_dz(self):
+        """
+        The largest :math:`\\Delta z` this window can distinguish from a
+        larger one, in km.
+
+        The layer rolloff sits at :math:`|k| \\Delta z \\sim 1`, so past
+        :math:`1/k_{min}` it lies below the longest wavelength the window
+        measured and :math:`\\Delta z` survives only as :math:`2 \\ln \\Delta z`
+        inside the constant, degenerate with :math:`C`. An interval running
+        past this is not a measurement -- its endpoint is set by where
+        `pycurious.grid.bouligand2009` overflows. At a 250 km window that
+        produced `(190, 943)` km before this was checked.
+        """
+        if not np.isfinite(self.kmin) or self.kmin <= 0.0:
+            return np.inf
+        return _MESH_IDENTIFIABLE / self.kmin
+
+    def _spilled(self, target, restricted=False):
+        """
+        Mass that escaped the mesh in the directions `target` depends on.
+
+        :math:`\\beta` and :math:`\\Delta z` are mesh coordinates, so each is
+        bounded by its own axis. The Curie depth moves with :math:`\\Delta z`.
+        :math:`C` and :math:`z_t` are conditional means read *everywhere* on the
+        mesh, so either axis running out of box leaves them describing a region
+        rather than a posterior.
+
+        `restricted` says the integration was already cut at the identifiable
+        thickness, which is the escape the :math:`\\Delta z` edge was reporting
+        -- counting it twice would turn every conditional interval into an
+        infinity.
+        """
+        beta_edges = (self.edge_mass[0], self.edge_mass[1])
+        dz_edges = (0.0, 0.0) if restricted else (
+            self.edge_mass[2], self.edge_mass[3]
+        )
+
+        if target == "beta":
+            return beta_edges
+        if target in ("dz", _CPD):
+            return dz_edges
+        return (max(beta_edges[0], dz_edges[0]),
+                max(beta_edges[1], dz_edges[1]))
+
+    @staticmethod
+    def _invert(cdf, values, level):
+        """
+        Read a quantile off a CDF, using only where it actually rises.
+
+        A marginal is evaluated on a grid wide enough to hold its tails, so the
+        cumulative is exactly 0 across the first stretch and exactly 1 across
+        the last. `numpy.interp` needs increasing `xp` and resolves those ties
+        by position, which puts an endpoint wherever the flat run happens to
+        start -- reading a `dz` of -0.71 km off a posterior that has no support
+        below zero at all.
+        """
+        rising = np.concatenate(([True], np.diff(cdf) > 0.0))
+        if np.count_nonzero(rising) < 2:
+            return np.nan
+        return float(np.interp(level, cdf[rising], values[rising]))
+
+    def _dz_is_bounded(self, level):
+        """
+        Whether :math:`\\Delta z` is bounded above at all, at this level.
+
+        Every other target is a marginal *over* :math:`\\Delta z`, so this
+        decides whether any of them is a measurement or a statement about where
+        the mesh was put. See `interval`.
+        """
+        escaped = 0.5 * (1.0 - float(level))
+        spilled = self.edge_mass[3]
+        if np.isfinite(spilled) and spilled > escaped:
+            return False
+
+        values, _, cdf = self._marginal("dz")
+        if cdf.size == 0 or cdf[-1] <= 0.0:
+            return False
+        upper = float(np.interp(1.0 - escaped, cdf, values))
+        return upper <= self.identifiable_dz
+
+    # ------------------------------------------------------------------
+    # the mesh as a weighted sample
+
+    def _samples(self, target, dz_limit=None):
+        """
+        The mesh as a weighted sample of one target, plus the conditional width.
+
+        Every target is a function of position on the mesh: :math:`\\beta` and
+        :math:`\\Delta z` are the coordinates themselves, :math:`C` and
+        :math:`z_t` are the conditional mean there, and the Curie depth is
+        :math:`\\bar z_t + \\Delta z`. The first two are exact at a node; the
+        rest carry a Gaussian of fixed width on top.
+
+        The mesh is refined by interpolation first. It is a quadrature rule
+        over a continuous posterior, not a discrete distribution, and treating
+        its nodes as atoms puts one spike per node where a density belongs --
+        :math:`z_t`'s conditional width is 0.007 km against a 2 km node
+        spacing, so the difference is a picket fence. The refinement costs no
+        evaluation of the forward model, because both the density and the
+        conditional mean are smooth in :math:`(\\beta, \\Delta z)`.
+
+        `dz_limit` restricts the integration to thicknesses the window can
+        resolve, which is what makes a marginal over :math:`\\Delta z`
+        meaningful when :math:`\\Delta z` itself is not bounded.
+        """
+        fine_beta = np.linspace(self.beta[0], self.beta[-1], _MARGINAL_REFINE)
+        fine_dz = np.linspace(self.dz[0], self.dz[-1], _MARGINAL_REFINE)
+        weight = _bilinear(self.beta, self.dz, self.density, fine_beta, fine_dz)
+
+        if dz_limit is not None:
+            weight = np.where(fine_dz[None, :] <= dz_limit, weight, 0.0)
+
+        if target == "beta":
+            return np.broadcast_to(fine_beta[:, None], weight.shape), weight, 0.0
+        if target == "dz":
+            return np.broadcast_to(fine_dz[None, :], weight.shape), weight, 0.0
+
+        index = 0 if target == "C" else 1
+        scale = float(np.sqrt(self.cov[index, index]))
+        centre = self.mean[..., index]
+        if target == _CPD:
+            centre = centre + self.dz[None, :]
+        values = _bilinear(self.beta, self.dz, centre, fine_beta, fine_dz)
+
+        if target in ("zt", _CPD):
+            # A node the bound has truncated has its conditional mean below the
+            # bound, and a Gaussian truncated well below its mean piles up at
+            # the boundary -- so that is where its mass goes. Exact in the limit
+            # and inert wherever this has been measured; `mass` says when it is
+            # not.
+            limit = (self.zt_floor if target == "zt"
+                     else self.zt_floor + fine_dz[None, :])
+            values = np.maximum(values, limit)
+
+        return values, weight, scale
+
+    def _marginal(self, target, dz_limit=None):
+        """
+        The 1-D posterior of one target: values, density and CDF.
+
+        Built from the **exact** weighted pushforward -- sort the target's
+        value over the refined mesh, accumulate the weights, and interpolate
+        that cumulative onto a uniform grid. No binning, and so none of a
+        histogram's noise: a binned density needed a 1536-node refinement
+        before its interval stopped moving, and reported spurious multimodality
+        below that, which is the one diagnostic here that has to be
+        trustworthy.
+
+        The conditional Gaussian is applied afterwards, and only where it is
+        resolvable. On a 1000 km window `z_t`'s conditional width is 0.007 km
+        against a 2 km node spacing, so for the Curie depth it is far below the
+        grid and smearing by it would invent structure rather than represent
+        it.
+
+        Returns `(values, density, cdf)`.
+        """
+        values, weight, scale = self._samples(target, dz_limit)
+
+        weight = np.clip(np.asarray(weight, dtype=float).ravel(), 0.0, None)
+        values = np.asarray(values, dtype=float).ravel()
+        good = np.isfinite(values) & np.isfinite(weight) & (weight > 0.0)
+        if not good.any():
+            blank = np.zeros(_INTERVAL_POINTS)
+            return blank, blank, blank
+        values, weight = values[good], weight[good]
+        weight = weight / weight.sum()
+
+        order = np.argsort(values)
+        sorted_values = values[order]
+        # midpoint of each step, so the empirical CDF is centred rather than
+        # biased half a step high
+        cumulative = np.cumsum(weight[order])
+        cumulative = cumulative - 0.5 * weight[order]
+
+        # The grid is the range the target actually takes over the mesh, widened
+        # only by the reach of the conditional Gaussian sitting on top of it.
+        # For `beta` and `dz` that Gaussian has no width -- they are mesh
+        # coordinates, exact at a node -- so the grid is exactly their support.
+        #
+        # Widening by a multiple of the *spread* instead put the grid where the
+        # posterior is not: on a window that cannot bound the thickness the
+        # spread is most of the mesh, and `mean - 6 * spread` reached -537 km
+        # on a parameter with no support below zero, which the quantile then
+        # read back as an endpoint.
+        low = float(sorted_values[0]) - 4.0 * scale
+        high = float(sorted_values[-1]) + 4.0 * scale
+        if not (high > low):
+            low, high = low - 1.0, high + 1.0
+
+        grid = np.linspace(low, high, _INTERVAL_POINTS)
+        cdf = np.interp(grid, sorted_values, cumulative, left=0.0, right=1.0)
+
+        spacing = grid[1] - grid[0]
+        if scale > 0.5 * spacing:
+            half = int(np.ceil(4.0 * scale / spacing))
+            offsets = np.arange(-half, half + 1) * spacing
+            kernel = np.exp(-0.5 * (offsets / scale) ** 2)
+            kernel /= kernel.sum()
+            padded = np.concatenate([np.zeros(half), cdf, np.ones(half)])
+            cdf = np.convolve(padded, kernel, mode="same")[half:half + grid.size]
+
+        cdf = np.clip(cdf, 0.0, 1.0)
+        cdf = np.maximum.accumulate(cdf)
+        density = np.gradient(cdf, grid)
+        return grid, np.clip(density, 0.0, None), cdf
+
+    @staticmethod
+    def _check_target(target):
+        if target not in _PARAMETERS + (_CPD,):
+            raise ValueError(
+                "target must be one of {}, not {!r}".format(
+                    _PARAMETERS + (_CPD,), target
+                )
+            )
+
+    # ------------------------------------------------------------------
+    # public readings
+
+    def marginal(self, target):
+        """
+        The 1-D posterior density of one target.
+
+        Args:
+            target : str
+                one of `"beta"`, `"zt"`, `"dz"`, `"C"` or `"CPD"`
+
+        Returns:
+            values : 1D array
+                where the density was evaluated
+            density : 1D array
+                the marginal posterior there, normalised to integrate to 1
+
+        Notes:
+            Unlike `interval` this does not restrict the integration when
+            :math:`\\Delta z` is unbounded -- a density is what it is, and
+            truncating it silently would be worse than showing the tail running
+            off. Check `interval(target).conditional` before reading much into
+            one whose thickness is not determined.
+        """
+        self._check_target(target)
+        values, density, _ = self._marginal(target)
+        return values, density
+
+    def moments(self, target):
+        """
+        Posterior mean and standard deviation of one target.
+
+        Args:
+            target : str
+                one of `"beta"`, `"zt"`, `"dz"`, `"C"` or `"CPD"`
+
+        Returns:
+            mean, sd : float
+                `nan` where :math:`\\Delta z` is not bounded, because the
+                integral is then over the box rather than over the posterior
+
+        Notes:
+            :math:`E[CPD] = E[z_t] + E[\\Delta z]` holds whatever the
+            correlation between them, and is the identity that catches a
+            marginal built the wrong way -- taking CPD from `dz` alone drops
+            :math:`z_t`'s conditional spread, and an earlier version failed it
+            by 0.5 km.
+        """
+        self._check_target(target)
+        if not self._dz_is_bounded(_MOMENT_LEVEL):
+            return np.nan, np.nan
+
+        values, weight, scale = self._samples(target)
+        weight = np.clip(np.asarray(weight, dtype=float).ravel(), 0.0, None)
+        values = np.asarray(values, dtype=float).ravel()
+        good = np.isfinite(values) & np.isfinite(weight) & (weight > 0.0)
+        if not good.any():
+            return np.nan, np.nan
+        values, weight = values[good], weight[good]
+        weight = weight / weight.sum()
+
+        mean = float(np.dot(weight, values))
+        # law of total variance: the mesh sees the conditional mean move, but
+        # not the conditional spread, so that has to be added back
+        variance = float(np.dot(weight, (values - mean) ** 2)) + scale ** 2
+        return mean, float(np.sqrt(variance))
+
+    def interval(self, target, level=0.95):
+        """
+        Equal-tailed credible interval for one target.
+
+        Args:
+            target : str
+                one of `"beta"`, `"zt"`, `"dz"`, `"C"` or `"CPD"`
+            level : float (default=0.95)
+                credible level
+
+        Returns:
+            interval : `Interval`
+                a `(lower, upper)` tuple carrying `conditional`. Either end is
+                infinite where the data do not bound it.
+
+        Notes:
+            **Equal-tailed rather than highest-density,** and the reason is
+            numerical rather than philosophical: a highest-density region is
+            read off the density, which here is a derivative of an interpolated
+            cumulative and is noisy enough that the endpoints move with the
+            refinement -- 1.5 km between a 192-node and a 768-node refinement,
+            against 0.05 km for inverting the CDF.
+
+            **This is not `profile`'s interval and is not meant to be.** That
+            one is a likelihood level set centred on the mode; this is a
+            credible interval centred on the median. They coincide on a
+            Gaussian and differ on the skewed :math:`\\Delta z`, where this one
+            sits higher. Both read the same corrected likelihood.
+
+            **Every target except** :math:`\\Delta z` **is a marginal over**
+            :math:`\\Delta z`. So where the thickness is not bounded, an
+            interval on :math:`\\beta`, :math:`z_t` or :math:`C` is a statement
+            about where the mesh was put rather than about the data -- measured
+            at 44% of its own width across three defensible boxes. Those are
+            therefore integrated over the resolvable thicknesses only, and come
+            back with `conditional` set. A number, but a narrower question than
+            the one asked.
+        """
+        self._check_target(target)
+        escaped = 0.5 * (1.0 - float(level))
+        bounded = self._dz_is_bounded(level)
+
+        # A marginal over an unbounded thickness is the box's answer, not the
+        # data's, unless it is restricted to the part the window resolves.
+        dz_limit = None
+        conditional = False
+        if not bounded and target not in ("dz", _CPD):
+            limit = self.identifiable_dz
+            if np.isfinite(limit):
+                dz_limit, conditional = limit, True
+                warnings.warn(
+                    "this window does not bound the layer thickness, and the "
+                    "{} posterior is an integral over it, so the interval "
+                    "returned is conditional on dz <= {:.4g} km -- the "
+                    "thickest layer whose rolloff is still inside the measured "
+                    "band. Read `.conditional` before storing it.".format(
+                        target, limit
+                    ),
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+
+        values, _, cdf = self._marginal(target, dz_limit)
+        if cdf.size == 0 or cdf[-1] <= 0.0:
+            return Interval((np.nan, np.nan), conditional, dz_limit)
+
+        lower = self._invert(cdf, values, escaped)
+        upper = self._invert(cdf, values, 1.0 - escaped)
+
+        # An endpoint is only a number if the mesh contained the tail it sits
+        # in. What matters is not the accounting tolerance but whether more
+        # mass escaped than this endpoint is placed to cut off, because then it
+        # is set by the edge of the box rather than by the data.
+        low_edge, high_edge = self._spilled(target, restricted=dz_limit is not None)
+        if np.isfinite(low_edge) and low_edge > escaped:
+            lower = -np.inf
+        if np.isfinite(high_edge) and high_edge > escaped:
+            upper = np.inf
+
+        if target in ("dz", _CPD) and not bounded:
+            upper = np.inf
+            # The lower end is then a quantile of a posterior most of whose
+            # mass sits where the data cannot speak, so take it from the part
+            # they can. Where that part is a sliver the quantile lands on the
+            # bottom of the box, which is the box's number and not a bound --
+            # at a 200 km window that came back as 0.05 km against a fitted
+            # 368 km. Report nothing rather than that.
+            limit = self.identifiable_dz
+            inside = values <= limit
+            lower = np.nan
+            if np.count_nonzero(inside) > 1 and cdf[inside][-1] > 0.0:
+                lower = self._invert(
+                    cdf[inside] / cdf[inside][-1], values[inside], escaped
+                )
+                floor = float(values[inside][0])
+                if not np.isfinite(lower) or lower <= (
+                    floor + _BOX_FLOOR_RTOL * abs(floor) + _BOX_FLOOR_ATOL
+                ):
+                    lower = np.nan
+            conditional = True
+
+        return Interval((lower, upper), conditional, dz_limit)
 
 
 def _bilinear(x, y, values, fine_x, fine_y):
@@ -1196,41 +1697,171 @@ class CurieOptimiseBouligand(CurieGrid):
 
         return A, np.linalg.inv(A)
 
-    def _mesh_box(self, args, x_hat, bracket):
+    def _mesh_box(self, args, x_hat, bracket, prior=None, sd_zt=0.0,
+                  temper=1.0):
         """
-        First guess at a box containing the posterior, in `(beta, dz)`.
+        A box containing the posterior, in `(beta, dz)`, found by looking.
 
-        Taken from the curvature at the mode, stretched further above in
-        :math:`\\Delta z` because that tail is the long one -- which is a
-        Gaussian approximation to a posterior that `profile` exists precisely
-        because it distrusts. It is a *starting* box for that reason: `posterior`
-        widens whichever edge is still carrying mass, and says so when widening
-        stops helping.
+        Two stages, doing two different jobs:
+
+        1. a **coarse, logarithmically spaced** sweep in :math:`\\Delta z` over
+           everything the parameter is allowed to be. Log because that range
+           spans orders of magnitude -- the same reasoning as
+           `_thickness_ladder`, which is log spaced for the same reason -- and
+           over the whole *bound* rather than the identifiable range, so the
+           mode is inside the box even where the data cannot pin it down.
+           Whether a thickness is identifiable is a question for
+           `Posterior.interval`, not for where to evaluate.
+        2. a **fine, uniformly spaced** box sized from the spread of that
+           coarse density itself.
+
+        The previous version took the box from the curvature at the mode --
+        the Gaussian approximation `profile` exists because it distrusts -- and
+        it was wrong in both directions at once. At a 200 km window the fitted
+        :math:`\\Delta z` was 54 km against a `1/k_min` of 26.6; at 1000 km and
+        beyond, a range that reached `1/k_min` was 38 to 240 standard
+        deviations across, where the moments need 24 nodes over about six to be
+        exact. Measuring the spread instead of assuming it removes both.
+
+        It also removes a dependence that had gone unnoticed: correcting the
+        likelihood (`_temperature`) widens the posterior by about 1.27, so a
+        box scaled from the *uncorrected* curvature no longer contained it, and
+        the mesh silently stopped being converged.
         """
         if bracket is not None:
             (beta_lo, beta_hi), (dz_lo, dz_hi) = bracket
             return [float(beta_lo), float(beta_hi)], [float(dz_lo), float(dz_hi)]
 
+        lower, upper = self._bound_arrays()
+        kh = args[0]
+        finite_k = kh[np.isfinite(kh) & (kh > 0.0)]
+
+        # `beta` is the well behaved direction -- near Gaussian, tightly
+        # determined, and bounded to a sane range whatever happens -- so the
+        # curvature is a reasonable guide there, with `_BETA_SANE` to fall back
+        # on when the fit is singular.
         covariance = self._covariance(x_hat, *args)
         sigma = np.sqrt(np.abs(np.diag(covariance)))
-        if not np.all(np.isfinite(sigma)) or np.any(sigma <= 0.0):
-            # a singular fit says nothing about where the posterior is; fall
-            # back to a wide box and let the expansion do the work
-            sigma = np.array([1.0, 1.0, max(x_hat[_DZ], 1.0), 1.0])
+        if not np.isfinite(sigma[_BETA]) or sigma[_BETA] <= 0.0:
+            beta_span = 0.5 * (_BETA_SANE[1] - _BETA_SANE[0])
+        else:
+            beta_span = _MESH_BOX_SPAN * sigma[_BETA] * _MESH_COARSE_SPAN
+        beta_box = [
+            max(x_hat[_BETA] - beta_span, lower[_BETA], _BETA_SANE[0]),
+            min(x_hat[_BETA] + beta_span, upper[_BETA], _BETA_SANE[1]),
+        ]
 
-        lower, upper = self._bound_arrays()
-        beta = [x_hat[_BETA] - _MESH_SPAN * sigma[_BETA],
-                x_hat[_BETA] + _MESH_SPAN * sigma[_BETA]]
-        dz = [x_hat[_DZ] - _MESH_SPAN * sigma[_DZ],
-              x_hat[_DZ] + _MESH_SKEW * _MESH_SPAN * sigma[_DZ]]
+        # `dz` is not. Sweep everything it is allowed to be.
+        dz_low = max(lower[_DZ], _MIN_THICKNESS * 0.1)
+        dz_high = upper[_DZ]
+        if not np.isfinite(dz_high) or dz_high <= dz_low:
+            dz_high = max(
+                10.0 * x_hat[_DZ],
+                (_MESH_COARSE_SPAN / finite_k.min()) if finite_k.size else 1.0,
+            )
+        coarse_dz = np.geomspace(dz_low, dz_high, _MESH_COARSE_DZ)
+        coarse_beta = np.linspace(beta_box[0], beta_box[1], _MESH_COARSE_BETA)
 
-        beta[0] = max(beta[0], lower[_BETA])
-        beta[1] = min(beta[1], upper[_BETA])
-        dz[0] = max(dz[0], lower[_DZ], _MIN_THICKNESS * 0.1)
-        dz[1] = min(dz[1], upper[_DZ])
-        return beta, dz
+        _, _, density, _, _, _ = self._mesh_density(
+            args, coarse_beta, coarse_dz, prior, sd_zt, temper
+        )
+        if not np.all(np.isfinite(density)):
+            # nothing to measure; hand back the widest box there is and let
+            # `edge_mass` report what that cost
+            return beta_box, [dz_low, dz_high]
 
-    def _mesh_density(self, args, beta_box, dz_box, nodes, prior, sd_zt):
+        return (
+            self._axis_box(coarse_beta, density.sum(axis=1),
+                           beta_box[0], beta_box[1]),
+            self._axis_box(coarse_dz, density.sum(axis=0), dz_low, dz_high),
+        )
+
+    @staticmethod
+    def _axis_box(axis, weight, floor, ceiling):
+        """
+        Where one axis of a coarse density keeps its mass, as `[low, high]`.
+
+        The weighted mean and standard deviation, widened to `_MESH_SPAN` of
+        them and clipped. A coarse sweep resolves a *location* long before it
+        resolves a shape, which is all this is asked for -- the fine mesh does
+        the resolving.
+
+        **Each node is weighted by how much of the axis it stands for.**
+        `_mesh_density` normalises per node, which is a quadrature rule only on
+        a uniform grid; the coarse :math:`\\Delta z` axis is logarithmic, so its
+        top nodes are hundreds of times further apart than its bottom ones and
+        counting them equally puts the mass where the *spacing* is, not where
+        the density is.
+
+        **The range is where the density is appreciable, not a multiple of its
+        standard deviation.** A window that cannot resolve the thickness leaves
+        a plateau stretched over hundreds of km -- the degenerate region where
+        :math:`\\Delta z` survives only inside the constant. It carries almost
+        no mass, but it reaches so far that a standard deviation computed
+        through it came back at 14 km on a posterior whose own spread is four,
+        putting a box 30 standard deviations across and leaving the fine mesh a
+        node spacing of almost one. Quantiles were no better: on twelve nodes
+        spanning four orders of magnitude there is no resolution to place one.
+
+        Comparing each node against the peak asks the question that actually
+        decides the box -- is there anything here worth resolving -- and it
+        degrades the right way. Where the posterior does not decay, every node
+        passes, the box is the whole range, and the fine mesh sees the plateau
+        for itself. Whether that means the thickness is unbounded is
+        `Posterior.interval`'s question, not this one's.
+
+        Falls back to the whole range where the coarse density has nothing to
+        measure, which is the "everything is at one end" case the fine mesh
+        should see rather than have hidden by a zero-width box.
+        """
+        axis = np.asarray(axis, dtype=float)
+        weight = np.clip(np.asarray(weight, dtype=float), 0.0, None)
+
+        peak = float(np.max(weight)) if weight.size else 0.0
+        if not np.isfinite(peak) or peak <= 0.0 or axis.size < 2:
+            return [float(floor), float(ceiling)]
+
+        keep = weight >= _MESH_TAIL * peak
+        if not keep.any():
+            return [float(floor), float(ceiling)]
+
+        # The threshold says which nodes *are* the posterior; the spread is
+        # then measured over those alone. Doing it the other way round -- one
+        # spread over everything -- is what the plateau ruins, and taking the
+        # threshold crossing as the box directly is no better, because on a
+        # logarithmic axis a slowly decaying upper tail crosses a thousandth of
+        # the peak a long way out. Selecting, then measuring, is robust to both.
+        #
+        # Each node is weighted by how much of the axis it stands for.
+        # `_mesh_density` normalises per node, which is a quadrature rule only
+        # on a uniform grid; the coarse thickness axis is logarithmic, so its
+        # top nodes are a hundred times further apart than its bottom ones and
+        # counting them equally puts the mass where the *spacing* is.
+        span = np.gradient(axis)
+        mass = np.where(keep, weight * span, 0.0)
+        total = float(np.sum(mass))
+        if not np.isfinite(total) or total <= 0.0:
+            return [float(floor), float(ceiling)]
+
+        mass = mass / total
+        mean = float(np.dot(mass, axis))
+        spread = float(np.sqrt(max(np.dot(mass, (axis - mean) ** 2), 0.0)))
+
+        # A posterior narrower than one coarse step reads as zero spread, which
+        # is a statement about the sweep and not about the density. Fall back to
+        # the step itself, and let the fine mesh resolve what is inside it.
+        if not np.isfinite(spread) or spread <= 0.0:
+            spread = float(np.max(span[keep]))
+        if not np.isfinite(spread) or spread <= 0.0:
+            return [float(floor), float(ceiling)]
+
+        return [
+            max(mean - _MESH_BOX_SPAN * spread, float(floor)),
+            min(mean + _MESH_BOX_SPAN * spread, float(ceiling)),
+        ]
+
+    def _mesh_density(self, args, beta_axis, dz_axis, prior, sd_zt,
+                      temper=1.0):
         """
         Evaluate the marginal posterior on one box.
 
@@ -1238,29 +1869,35 @@ class CurieOptimiseBouligand(CurieGrid):
         :math:`(C, z_t)`, the truncated mass at each node, and the mass on each
         of the four edges.
 
-        Two things happen here that do not happen in `_initial_guess`, and both
-        are the difference between an argmin and a density:
+        Three things happen here that do not happen in `_initial_guess`, and
+        all three are the difference between an argmin and a density:
 
         * the conditional mean is taken **unclamped** (`clamp=False`), because
           the bound on :math:`z_t` is a truncation of a distribution rather
           than a wall for a point estimate;
         * the mass below that bound is subtracted from the log density. Unlike
           :math:`\\tfrac12 \\log \\det A`, which is constant over the mesh and
-          drops out, this term moves with the conditional mean and so does not.
+          drops out, this term moves with the conditional mean and so does not;
+        * the spectral misfit is divided by `temper`, which is what makes this
+          the same corrected likelihood `profile` reads. A seed does not want
+          that -- it has to be the argmin of what `_fit` minimises -- which is
+          why `_initial_guess` leaves it at 1.
         """
         kh, Phi, sigma_Phi = args
-        beta_axis = np.linspace(beta_box[0], beta_box[1], nodes)
-        dz_axis = np.linspace(dz_box[0], dz_box[1], nodes)
+        beta_axis = np.asarray(beta_axis, dtype=float)
+        dz_axis = np.asarray(dz_axis, dtype=float)
+        shape = (beta_axis.size, dz_axis.size)
         floor = self._bound_arrays()[0][_ZT]
 
-        cost = np.empty((nodes, nodes))
-        mean = np.empty((nodes, nodes, 2))
-        mass = np.ones((nodes, nodes))
+        cost = np.empty(shape)
+        mean = np.empty(shape + (2,))
+        mass = np.ones(shape)
 
         for i, beta in enumerate(beta_axis):
             for j, dz in enumerate(dz_axis):
                 C, zt, value = self._solve_linear(
-                    kh, Phi, sigma_Phi, beta, dz, prior, clamp=False
+                    kh, Phi, sigma_Phi, beta, dz, prior, clamp=False,
+                    temper=temper,
                 )
                 mean[i, j] = (C, zt)
                 reduced = (zt - floor) / sd_zt if sd_zt > 0.0 else np.inf
@@ -1276,7 +1913,7 @@ class CurieOptimiseBouligand(CurieGrid):
         # keeps a spectrum of several hundred bins from underflowing to zero
         # everywhere.
         finite = np.isfinite(cost)
-        blank = np.full((nodes, nodes), np.nan)
+        blank = np.full(shape, np.nan)
         if not finite.any():
             return beta_axis, dz_axis, blank, mean, mass, np.full(4, np.nan)
 
@@ -1636,6 +2273,7 @@ class CurieOptimiseBouligand(CurieGrid):
         yc,
         nodes=_MESH_NODES,
         bracket=None,
+        calibrate=True,
         beta=None,
         zt=None,
         dz=None,
@@ -1670,6 +2308,10 @@ class CurieOptimiseBouligand(CurieGrid):
                 `((beta_min, beta_max), (dz_min, dz_max))`. Default is a box
                 from the curvature at the mode, widened on any edge still
                 carrying mass.
+            calibrate : bool (default=True)
+                correct the likelihood for correlation between neighbouring
+                spectral bins -- see `_temperature`. The same correction
+                `profile` applies, so the two describe one posterior.
             beta, zt, dz, C : float, optional
                 starting values for the fit that locates the mode, as `optimise`
                 takes them. They set where the mesh is centred, not what it
@@ -1679,15 +2321,17 @@ class CurieOptimiseBouligand(CurieGrid):
 
         Returns:
             posterior : `Posterior`
-                axes, density, the conditional mean of :math:`(C, z_t)` at each
-                node, their constant conditional covariance, and the mass left
-                on each of the four edges
+                the density and everything read off it -- `interval`,
+                `marginal` and `moments` for any of the four parameters or the
+                Curie depth
 
         Usage:
             >>> p = grid.posterior(2000e3, xc, yc)
-            >>> dz_marginal = p.density.sum(axis=0)     # over beta
-            >>> _, _, lo, hi = grid.profile(
-            ...     2000e3, xc, yc, "CPD", method="mesh", posterior=p)
+            >>> lo, hi = p.interval("dz", level=0.95)
+            >>> cpd, sd = p.moments("CPD")
+
+            One mesh answers every target, which is the point of building it:
+            five intervals off one density rather than five scans.
 
         Notes:
             **What makes this exact rather than approximate.** Writing
@@ -1714,29 +2358,24 @@ class CurieOptimiseBouligand(CurieGrid):
             **The bound on** :math:`z_t` **does not drop out.** It is bounded
             below, so the conditional is a Gaussian truncated to a half plane
             whose mass *does* vary over the mesh. `mean` and `cov` describe the
-            untruncated conditional; anything integrating them -- `profile` with
-            `method="mesh"` -- applies the truncation. On windows that determine
+            untruncated conditional; anything integrating them -- every reader
+            on `Posterior` -- applies the truncation. On windows that determine
             :math:`z_t` at all the correction is inert, and it is not where
             `_warn_on_bounds` fires.
 
             **Read `edge_mass`.** A mesh that has clipped a tail is wrong in the
             direction of a *tighter* interval, and silently, which is the one
-            failure a sampler does not have. Edges above `_MESH_EDGE_TOL` are
-            widened and retried; what is reported is what remained.
+            failure a sampler does not have. `Posterior.interval` turns an
+            endpoint whose tail escaped into an infinity rather than reporting
+            where the box happened to stop.
 
-            **This posterior is too sharp, and so is the profile deviance.**
-            `_gls_covariance` corrects the reported covariance for correlation
-            between neighbouring spectral bins; `min_func` does not, so the
-            likelihood both this and `profile` are built on still treats them as
-            independent. Measured over 100 synthetic realisations, a nominal
-            68.27% interval on :math:`\\beta` covers 0.58 here and 0.52 through
-            the scan, where the Gaussian :math:`\\sigma` `optimise` reports --
-            which *is* corrected -- covers 0.65. The inflation the correction
-            applies is 1.30, and a likelihood too sharp by exactly that would
-            cover 0.56, which is what both do. Neither reading of the likelihood
-            is at fault and no change to the reading fixes it; the correction
-            has to reach the objective. Until it does, treat an interval from
-            either method as a lower bound on the uncertainty.
+            **The likelihood underneath is corrected before it is read**, by the
+            same factor `profile` uses -- see `_temperature`. Both are readings
+            of one surface: minimising along a mesh axis gives the profile
+            deviance, integrating along it gives the marginal here. The two
+            agree to 3e-4 in misfit on :math:`\\beta` and :math:`\\Delta z`,
+            which is what `test_mesh_row_minimum_is_the_profile_deviance`
+            holds them to.
         """
         args = self._resolve_spectrum(
             spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
@@ -1744,51 +2383,48 @@ class CurieOptimiseBouligand(CurieGrid):
         prior = self.prior
 
         x_hat = self._fit(self._initial_guess(args, beta, zt, dz, C), args).x
-        beta_box, dz_box = self._mesh_box(args, x_hat, bracket)
 
-        # A caller who supplied a box asked for that box, so it is evaluated
-        # once and reported as it stands.
-        lower, upper = self._bound_arrays()
-        remaining = 0 if bracket is not None else _MESH_EXPANSIONS
+        # Measured once, at the mode, and held for the whole mesh -- the same
+        # correction `profile` reads its deviance through, so the two describe
+        # one posterior rather than two. See `_temperature`.
+        temper = self._temperature(x_hat, args, prior, calibrate=calibrate)
 
         precision, covariance = self._linear_precision(args[0], args[2], prior)
         sd_zt = float(np.sqrt(covariance[1, 1]))
 
-        while True:
-            beta_axis, dz_axis, density, mean, mass, edge_mass = \
-                self._mesh_density(
-                    args, beta_box, dz_box, int(nodes), prior, sd_zt
-                )
-            if remaining <= 0 or not np.all(np.isfinite(edge_mass)):
-                break
+        beta_box, dz_box = self._mesh_box(
+            args, x_hat, bracket, prior, sd_zt, temper
+        )
 
-            # Widen only the edges still carrying mass, and only where there is
-            # room: an edge already sitting on a parameter bound is as wide as
-            # it goes, and the posterior beyond it does not exist.
-            widened = False
-            for spilled, box, side, limit in (
-                (edge_mass[0], beta_box, 0, lower[_BETA]),
-                (edge_mass[1], beta_box, 1, upper[_BETA]),
-                (edge_mass[2], dz_box, 0, lower[_DZ]),
-                (edge_mass[3], dz_box, 1, upper[_DZ]),
-            ):
-                if spilled <= _MESH_EDGE_TOL:
-                    continue
-                span = box[1] - box[0]
-                target = box[side] - span if side == 0 else box[side] + span
-                target = max(target, limit) if side == 0 else min(target, limit)
-                if not np.isclose(target, box[side]):
-                    box[side] = target
-                    widened = True
-
-            if not widened:
-                break
-            remaining -= 1
+        # One fine mesh. There is no expansion loop: the coarse sweep above
+        # already looked across everything `dz` is allowed to be, so there is
+        # no direction left to expand *towards*, and expanding turned out to be
+        # actively harmful. A window that cannot resolve the thickness leaves a
+        # tail of about 1e-5 out at hundreds of km -- the degenerate plateau
+        # where `dz` survives only inside the constant -- and a loop chasing
+        # any edge above a fixed tolerance walked the box out to the parameter
+        # bound to reach it, taking the resolution of everything else with it.
+        # That plateau does not decay, so no box contains it.
+        #
+        # What escapes is reported instead. `Posterior.interval` compares it
+        # against the mass that endpoint is placed to cut off, which is the
+        # question that actually matters and is a hundred times looser than any
+        # accounting tolerance.
+        lower, upper = self._bound_arrays()
+        beta_axis, dz_axis, density, mean, mass, edge_mass = self._mesh_density(
+            args,
+            np.linspace(beta_box[0], beta_box[1], int(nodes)),
+            np.linspace(dz_box[0], dz_box[1], int(nodes)),
+            prior, sd_zt, temper,
+        )
 
         finite_k = args[0][np.isfinite(args[0]) & (args[0] > 0.0)]
         self.last_posterior = Posterior(
             beta_axis, dz_axis, density, mean, covariance, mass, edge_mass,
             float(finite_k.min()) if finite_k.size else np.nan,
+            zt_floor=float(lower[_ZT]),
+            temper=temper,
+            provenance=getattr(args, "provenance", None),
         )
         return self.last_posterior
 
@@ -1894,144 +2530,6 @@ class CurieOptimiseBouligand(CurieGrid):
             dof_factor,
             **kwargs
         )
-
-    def _mesh_samples(self, posterior, target):
-        """
-        The mesh as a weighted sample of one target, plus the conditional width.
-
-        Every target is a function of position on the mesh: :math:`\\beta` and
-        :math:`\\Delta z` are the coordinates themselves, :math:`C` and
-        :math:`z_t` are the conditional mean there, and the Curie depth is
-        :math:`\\bar z_t + \\Delta z`. The first two are exact at a node; the
-        rest carry a Gaussian of fixed width on top.
-
-        The mesh is refined by interpolation first. It is a quadrature rule over
-        a continuous posterior, not a discrete distribution, and treating its
-        nodes as atoms puts one spike per node where a density belongs. The
-        refinement costs no evaluation of the forward model, because both the
-        density and the conditional mean are smooth in :math:`(\\beta, \\Delta z)`.
-        """
-        floor = self._bound_arrays()[0][_ZT]
-        fine_beta = np.linspace(
-            posterior.beta[0], posterior.beta[-1], _MARGINAL_REFINE
-        )
-        fine_dz = np.linspace(posterior.dz[0], posterior.dz[-1], _MARGINAL_REFINE)
-        weight = _bilinear(
-            posterior.beta, posterior.dz, posterior.density, fine_beta, fine_dz
-        )
-
-        if target == "beta":
-            return np.broadcast_to(fine_beta[:, None], weight.shape), weight, 0.0
-        if target == "dz":
-            return np.broadcast_to(fine_dz[None, :], weight.shape), weight, 0.0
-
-        index = 0 if target == "C" else 1
-        scale = float(np.sqrt(posterior.cov[index, index]))
-        centre = posterior.mean[..., index]
-        if target == _CPD:
-            centre = centre + posterior.dz[None, :]
-        values = _bilinear(
-            posterior.beta, posterior.dz, centre, fine_beta, fine_dz
-        )
-
-        if target in ("zt", _CPD):
-            # A node the bound has truncated has its conditional mean below the
-            # bound, and a Gaussian truncated well below its mean piles up at
-            # the boundary -- so that is where its mass goes. Exact in the limit
-            # and inert wherever this has been measured; `posterior.mass` says
-            # when it is not.
-            limit = floor if target == "zt" else floor + fine_dz[None, :]
-            values = np.maximum(values, limit)
-
-        return values, weight, scale
-
-    def _mesh_marginal(self, posterior, target):
-        """
-        The 1-D posterior of one target: values, density and CDF.
-
-        Built from the **exact** weighted pushforward -- sort the target's value
-        over the refined mesh, accumulate the weights, and interpolate that
-        cumulative onto a uniform grid. No binning, and so none of a histogram's
-        noise: a binned density needed a 1536-node refinement before its
-        interval stopped moving, and reported spurious multimodality below that,
-        which is the one diagnostic here that has to be trustworthy.
-
-        The conditional Gaussian is applied afterwards, and only where it is
-        resolvable. On a 1000 km window `z_t`'s conditional width is 0.007 km
-        against a 2 km node spacing, so for the Curie depth it is far below the
-        grid and smearing by it would invent structure rather than represent it.
-
-        Returns `(values, density, cdf)`.
-        """
-        values, weight, scale = self._mesh_samples(posterior, target)
-
-        weight = np.clip(np.asarray(weight, dtype=float).ravel(), 0.0, None)
-        values = np.asarray(values, dtype=float).ravel()
-        good = np.isfinite(values) & np.isfinite(weight) & (weight > 0.0)
-        if not good.any():
-            blank = np.zeros(_INTERVAL_POINTS)
-            return blank, blank, blank
-        values, weight = values[good], weight[good]
-        weight = weight / weight.sum()
-
-        order = np.argsort(values)
-        sorted_values = values[order]
-        # midpoint of each step, so the empirical CDF is centred rather than
-        # biased half a step high
-        cumulative = np.cumsum(weight[order])
-        cumulative = cumulative - 0.5 * weight[order]
-
-        mean = float(np.dot(weight, values))
-        spread = float(np.sqrt(np.dot(weight, (values - mean) ** 2) + scale ** 2))
-        low = min(sorted_values[0] - 4.0 * scale, mean - _MESH_SPAN * spread)
-        high = max(sorted_values[-1] + 4.0 * scale, mean + _MESH_SPAN * spread)
-        if not (high > low):
-            low, high = mean - 1.0, mean + 1.0
-
-        grid = np.linspace(low, high, _INTERVAL_POINTS)
-        cdf = np.interp(grid, sorted_values, cumulative, left=0.0, right=1.0)
-
-        spacing = grid[1] - grid[0]
-        if scale > 0.5 * spacing:
-            half = int(np.ceil(4.0 * scale / spacing))
-            offsets = np.arange(-half, half + 1) * spacing
-            kernel = np.exp(-0.5 * (offsets / scale) ** 2)
-            kernel /= kernel.sum()
-            padded = np.concatenate([
-                np.zeros(half), cdf, np.ones(half)
-            ])
-            cdf = np.convolve(padded, kernel, mode="same")[half:half + grid.size]
-
-        cdf = np.clip(cdf, 0.0, 1.0)
-        cdf = np.maximum.accumulate(cdf)
-        density = np.gradient(cdf, grid)
-        return grid, np.clip(density, 0.0, None), cdf
-
-    @staticmethod
-    def _mesh_interval(values, cdf, level):
-        """
-        Equal-tailed credible interval, by inverting the CDF.
-
-        Equal-tailed rather than highest-density, and the reason is numerical
-        rather than philosophical: a highest-density region is read off the
-        density, which here is a derivative of an interpolated cumulative and
-        is noisy enough that the endpoints move with the refinement. Inverting
-        the CDF is stable at any refinement -- the endpoints move by 0.05 km
-        between a 192-node and a 768-node refinement, against 1.5 km for the
-        density-based version.
-
-        On a Gaussian the two constructions coincide. On the skewed
-        :math:`\\Delta z` posterior the equal-tailed interval sits higher,
-        because it is centred on the median where a deviance level set is
-        centred on the mode. Which of those covers the truth at its nominal
-        rate is a question for measurement, not for argument.
-        """
-        if cdf.size == 0 or cdf[-1] <= 0.0:
-            return np.nan, np.nan
-
-        tail = 0.5 * (1.0 - float(level))
-        return (float(np.interp(tail, cdf, values)),
-                float(np.interp(1.0 - tail, cdf, values)))
 
     def _temperature(self, x_hat, args, prior=None, calibrate=True):
         """
@@ -2350,108 +2848,6 @@ class CurieOptimiseBouligand(CurieGrid):
         upper = self._profile_root(
             values[above], deviance[above], threshold, gap, np.inf, target, level
         )
-
-        return values, deviance, lower, upper
-
-    def _profile_on_mesh(self, window, xc, yc, target, level, nodes, bracket,
-                         posterior, beta, zt, dz, C, taper, process_subgrid,
-                         dof_factor, spectrum, **kwargs):
-        """
-        `profile` with `method="mesh"`: the interval read off the posterior.
-
-        Returns the same 4-tuple the scan does, so a caller unpacking
-        `values, deviance, lower, upper` does not care which produced it.
-        `deviance` here is :math:`-2 \\log(p/p_{max})` of the marginal, which is
-        the same scale as the profile deviance and plots against the same
-        threshold.
-        """
-        if bracket is not None and np.ndim(bracket) != 2:
-            raise ValueError(
-                "with method='mesh' the bracket is a box in the two parameters "
-                "the posterior lives in, ((beta_min, beta_max), (dz_min, "
-                "dz_max)), not a range in {!r}. A range in one target cannot "
-                "say where the other should be evaluated.".format(target)
-            )
-
-        if posterior is None:
-            posterior = self.posterior(
-                window, xc, yc, nodes=nodes, bracket=bracket, beta=beta, zt=zt,
-                dz=dz, C=C, taper=taper, process_subgrid=process_subgrid,
-                dof_factor=dof_factor, spectrum=spectrum, **kwargs
-            )
-
-        values, density, cdf = self._mesh_marginal(posterior, target)
-        lower, upper = self._mesh_interval(values, cdf, level)
-
-        with np.errstate(divide="ignore", invalid="ignore"):
-            peak = np.max(density) if np.any(density > 0.0) else np.nan
-            deviance = -2.0 * np.log(np.where(density > 0.0, density, np.nan)
-                                     / peak)
-        deviance = np.where(np.isfinite(deviance), deviance, np.inf)
-
-        # An endpoint is only a number if the mesh contained the tail it sits
-        # in. `_MESH_EDGE_TOL` is the accounting tolerance; what matters for an
-        # interval is whether more mass escaped than the interval is allowed to
-        # miss, because then the endpoint is set by the edge of the box rather
-        # than by the data.
-        # the mass beyond *one* endpoint, which is what that endpoint is
-        # placed to cut off -- not the mass outside the whole interval
-        escaped = 0.5 * (1.0 - float(level))
-        low_edge, high_edge = (
-            (posterior.edge_mass[0], posterior.edge_mass[1])
-            if target == "beta"
-            else (posterior.edge_mass[2], posterior.edge_mass[3])
-        )
-        for side, mass, name in ((0, low_edge, "lower"), (1, high_edge, "upper")):
-            if mass > escaped:
-                warnings.warn(
-                    "the {} posterior still carries {:.2e} of its mass at the "
-                    "edge of the mesh, more than the {:.3g} a {:.4g} interval "
-                    "may miss, so the {} side of the interval is unbounded. "
-                    "The data do not constrain it; widen `bracket` to "
-                    "confirm.".format(target, mass, escaped, level, name),
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
-                if side == 0:
-                    lower = -np.inf
-                else:
-                    upper = np.inf
-
-        # A thickness whose rolloff sits below the longest wavelength measured
-        # is not something this window can distinguish from any larger one --
-        # `dz` survives there only as `2 ln dz` inside the constant, degenerate
-        # with `C`. Where the interval runs past that, its upper end is set by
-        # the numerical ceiling on the forward model rather than by the data,
-        # and reporting the resulting number is worse than reporting nothing:
-        # at a 250 km window it comes back as (190, 943) km.
-        #
-        # The scan reaches the same verdict a different way, by never crossing
-        # its threshold. Reporting it the same way keeps the two comparable.
-        limit = (_MESH_IDENTIFIABLE / posterior.kmin
-                 if np.isfinite(posterior.kmin) and posterior.kmin > 0.0
-                 else np.inf)
-        if target in ("dz", _CPD) and np.isfinite(upper) and upper > limit:
-            warnings.warn(
-                "the {} interval reaches {:.4g} km, past the {:.4g} km whose "
-                "rolloff is still inside this window's band, so its upper side "
-                "is unbounded -- beyond that the spectrum cannot tell one "
-                "thickness from another. The data do not constrain it.".format(
-                    target, upper, limit
-                ),
-                RuntimeWarning,
-                stacklevel=3,
-            )
-            upper = np.inf
-            # and the lower end is then a quantile of a posterior most of whose
-            # mass sits in the region the data cannot speak about. Take it from
-            # the part they can, which is what makes it comparable to the
-            # scan's finite lower endpoint rather than an artefact of the
-            # ceiling.
-            inside = values <= limit
-            if np.count_nonzero(inside) > 1 and cdf[inside][-1] > 0.0:
-                restricted = cdf[inside] / cdf[inside][-1]
-                lower = float(np.interp(escaped, restricted, values[inside]))
 
         return values, deviance, lower, upper
 

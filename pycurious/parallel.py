@@ -199,6 +199,20 @@ class CurieParallel(object):
                 "each centroid compute its own."
             )
 
+        # A routine returning a `Posterior` per centroid is not something
+        # `_collect` can stack: it reassembles by `numpy.ndim` of the first
+        # success, and a density, two axes, a conditional mean and four scalars
+        # are not an array. That is the whole obstacle -- unlike `spectrum`
+        # above there is nothing wrong with the *idea* of one posterior per
+        # centroid -- so this says which it is rather than letting numpy raise
+        # "inhomogeneous shape" from three frames down.
+        if getattr(func, "__name__", None) == "posterior":
+            raise ValueError(
+                "posterior returns a density per centroid, which cannot be "
+                "stacked into the arrays this returns. Call it per centroid, "
+                "or use optimise_routine and profile for a map."
+            )
+
         seed = kwargs.pop("seed", None)
 
         if seed is not None and not getattr(func, "wants_seed", False):

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 import pycurious
-from pycurious.optimise_bouligand import _CPD, _JACOBIAN_STEP
+from pycurious.optimise_bouligand import _CPD, _JACOBIAN_STEP, _PARAMETERS
 
 from conftest import synthetic_grid
 
@@ -216,6 +216,100 @@ def test_profile_unbounded_returns_inf():
     assert np.isfinite(lower)
 
 
+def test_mesh_row_minimum_is_the_profile_deviance(bouligand):
+    """
+    `profile` and `posterior` are two readings of one surface, not two
+    constructions to be kept in step by hand. Minimising the reduced misfit
+    along `beta` at fixed `dz` **is** `_profiled_misfit("dz", ...)`, because
+    `_solve_linear` has already profiled `C` and `zt` out exactly -- so the
+    density the mesh integrates contains the deviance the scan walks.
+
+    Measured to 3e-4 in misfit, which is 6e-4 in deviance against a threshold
+    of 3.84. This is the test that says retiring one of them would lose
+    nothing, and equally that a change to either which broke the identity would
+    be caught.
+
+    It holds for `beta` and `dz` and for nothing else, deliberately: `zt` and
+    `C` are marginalised out, so no row of the mesh holds one fixed, and `CPD`
+    constrains `zt = CPD - dz`, which turns each node's two-column solve into a
+    one-column one -- a different surface.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning,
+                                         power=2.0)
+    args = (k, Phi, sigma)
+    x_hat = grid._fit(grid._initial_guess(args), args).x
+
+    betas = np.linspace(max(x_hat[0] - 1.2, 0.1), x_hat[0] + 1.2, 33)
+    for dz in (16.0, 20.0, 26.0, 34.0):
+        reference = grid._profiled_misfit("dz", dz, x_hat, args)
+        along = [grid._solve_linear(k, Phi, sigma, b, dz)[2] for b in betas]
+
+        j = int(np.argmin(along))
+        assert 0 < j < len(betas) - 1, "the minimum ran off the beta range"
+        # parabolic refinement, as reading an interpolated mesh row would do
+        y0, y1, y2 = along[j - 1], along[j], along[j + 1]
+        shift = 0.5 * (y0 - y2) / (y0 - 2.0 * y1 + y2)
+        best = y1 - 0.25 * (y0 - y2) * shift
+
+        assert abs(best - reference) < 1e-3, (dz, best, reference)
+
+
+@pytest.mark.parametrize(
+    "taper", [None, np.hanning, np.hamming, np.blackman],
+    ids=["none", "hanning", "hamming", "blackman"],
+)
+def test_the_mesh_holds_together_under_any_taper(taper):
+    """
+    Every constant in the mesh was tuned under `numpy.hanning`, and a taper
+    changes both the correlation between bins -- `t2` runs 1.03 untapered to
+    about 1.7 under `numpy.blackman` -- and the shape of the spectrum they are
+    measured from.
+
+    `np.blackman` is in the list precisely because `_TAPER_DOF` has never
+    calibrated it: it exercises the path where the within-bin correction falls
+    back to the untapered entry while the between-bin one is still measured
+    from the residuals. That is the combination a user reaches for by supplying
+    any taper of their own.
+    """
+    grid, xc, yc = _grid(seed=3)
+    grid.reset_priors()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        coarse = grid.posterior(WINDOW, xc, yc, taper=taper)
+        spectrum = grid.last_spectrum
+        fine = grid.posterior(WINDOW, xc, yc, nodes=96, spectrum=spectrum,
+                              taper=taper)
+
+    # An untapered spectrum has essentially no correlation to correct, and the
+    # estimator lands a hair *under* 1 there rather than exactly on it -- it is
+    # a ratio of two estimated covariances, and on uncorrelated residuals it
+    # measures 0.997 +/- 0.006 at 249 bins. Asserting `>= 1` tests the floating
+    # point, not the method.
+    assert 0.95 < coarse.temper < 2.5, coarse.temper
+    assert np.isfinite(coarse.density).all()
+    assert coarse.density.sum() == pytest.approx(1.0, rel=1e-9)
+
+    # the box holds the posterior, whatever the taper did to its width
+    assert coarse.edge_mass.max() < 1e-3, coarse.edge_mass
+
+    # and the moments are the same ones a much finer mesh finds
+    for target in ("beta", "dz", _CPD):
+        near, exact = coarse.moments(target), fine.moments(target)
+        assert near[0] == pytest.approx(exact[0], abs=0.05 * exact[1]), target
+        assert near[1] == pytest.approx(exact[1], rel=0.1), target
+
+    # E[CPD] = E[zt] + E[dz] holds whatever the correlation between them, and
+    # is what catches a Curie marginal built as a marginal rather than as a
+    # convolution -- and, with the flag below, catches it being satisfied
+    # vacuously by two meaningless numbers
+    assert not coarse.interval("dz").conditional
+    assert coarse.moments(_CPD)[0] == pytest.approx(
+        coarse.moments("zt")[0] + coarse.moments("dz")[0], abs=5e-3
+    )
+
+
 def test_posterior_conditional_mean_is_the_linear_solve(bouligand):
     """
     The mesh stores the conditional mean of (C, zt) at each node, and that must
@@ -295,7 +389,7 @@ def test_curie_depth_marginal_is_a_convolution_not_a_marginal(bouligand):
     trapezoid = getattr(np, "trapezoid", None) or np.trapz
     mean = {}
     for target in ("zt", "dz", _CPD):
-        values, density, cdf = grid._mesh_marginal(p, target)
+        values, density, cdf = p._marginal(target)
         assert trapezoid(density, values) == pytest.approx(1.0, rel=1e-3)
         assert cdf[0] < 1e-6 and cdf[-1] == pytest.approx(1.0, abs=1e-9)
         assert np.all(np.diff(cdf) >= -1e-12), "the CDF must not decrease"
@@ -324,8 +418,7 @@ def test_mesh_interval_is_stable_under_refinement(bouligand):
     try:
         for refine in (96, 192, 384):
             ob._MARGINAL_REFINE = refine
-            values, _, cdf = grid._mesh_marginal(p, _CPD)
-            ends.append(grid._mesh_interval(values, cdf, 0.6827))
+            ends.append(p.interval(_CPD, level=0.6827))
     finally:
         ob._MARGINAL_REFINE = original
 
@@ -358,19 +451,24 @@ def test_scan_and_mesh_agree_where_the_posterior_is_near_gaussian(
         WINDOW, xc, yc, target, level=0.6827, taper=np.hanning,
         spectrum=spectrum,
     )
-    mesh = grid.profile(
-        WINDOW, xc, yc, target, level=0.6827, method="mesh", spectrum=spectrum,
+    mesh = grid.posterior(WINDOW, xc, yc, spectrum=spectrum).interval(
+        target, level=0.6827
     )
 
     width = scan[3] - scan[2]
-    assert abs(mesh[2] - scan[2]) < 0.15 * width, (target, scan[2], mesh[2])
-    assert abs(mesh[3] - scan[3]) < 0.15 * width, (target, scan[3], mesh[3])
+    assert abs(mesh[0] - scan[2]) < 0.15 * width, (target, scan[2], mesh[0])
+    assert abs(mesh[1] - scan[3]) < 0.15 * width, (target, scan[3], mesh[1])
+    assert not mesh.conditional
 
 
-def test_mesh_profile_reuses_a_supplied_posterior(bouligand):
+def test_one_posterior_answers_every_target(bouligand):
     """
-    One density serves every target, the way one spectrum serves every routine.
-    Recomputing it per target would make five intervals cost five meshes.
+    One density serves every target, which is the whole case for building it:
+    five intervals off one mesh rather than five scans. Because the readers
+    live on the `Posterior` and take no window, there is also no way to ask one
+    for an interval at a window it was not computed at -- the defect the
+    spectrum layer needs `provenance` to guard against cannot be expressed
+    here.
     """
     grid, xc, yc = bouligand
     grid.reset_priors()
@@ -386,14 +484,22 @@ def test_mesh_profile_reuses_a_supplied_posterior(bouligand):
     p = grid.posterior(WINDOW, xc, yc, spectrum=spectrum)
     grid._mesh_density = counted
     try:
-        for target in ("beta", "dz", _CPD):
-            grid.profile(WINDOW, xc, yc, target, method="mesh", posterior=p,
-                         spectrum=spectrum)
+        for target in _PARAMETERS + (_CPD,):
+            lower, upper = p.interval(target, level=0.6827)
+            assert lower < upper
+            p.marginal(target)
+            p.moments(target)
     finally:
         del grid._mesh_density
 
-    assert calls["n"] == 0, "a supplied posterior was recomputed"
+    assert calls["n"] == 0, "reading a posterior recomputed it"
     assert grid.last_posterior is not None
+
+    # One computed from a window knows what it came from, the way a spectrum
+    # does. One built on a spectrum handed in from outside does not, and that
+    # is the same "nothing to check, take it as given" case `_Spectrum` has.
+    assert p.provenance is None
+    assert grid.posterior(WINDOW, xc, yc).provenance is not None
 
     import pickle
     restored = pickle.loads(pickle.dumps(grid))
@@ -402,7 +508,7 @@ def test_mesh_profile_reuses_a_supplied_posterior(bouligand):
     )
 
 
-def test_mesh_profile_returns_inf_where_the_data_do_not_constrain_dz():
+def test_posterior_returns_inf_where_the_data_do_not_constrain_dz():
     """
     The same failure the scan has, reported the same way: a window too small to
     bound `dz` has no upper endpoint, and saying so beats returning the edge of
@@ -410,15 +516,47 @@ def test_mesh_profile_returns_inf_where_the_data_do_not_constrain_dz():
 
     Here the mesh has an advantage worth keeping honest about -- it knows *how
     much* mass escaped, where the scan only knows it never crossed a threshold.
+
+    The lower end is `nan` rather than a number when the identifiable part of
+    the posterior is a sliver: its quantile then lands on the bottom of the
+    box, which is the box's number and not a bound. `~/Global_CPD` stores a
+    finite `dz_lo` as a real bound, so 0.05 km against a fitted 368 would go
+    into an archive looking like a measurement.
     """
     grid, xc, yc = _grid(n=256)
     grid.reset_priors()
-    with pytest.warns(RuntimeWarning, match="unbounded"):
-        _, _, lower, upper = grid.profile(
-            60e3, xc, yc, "dz", method="mesh", taper=np.hanning
-        )
+    p = grid.posterior(60e3, xc, yc, taper=np.hanning)
+    lower, upper = p.interval("dz")
+
     assert np.isinf(upper)
-    assert np.isfinite(lower)
+    assert np.isnan(lower) or lower > p.dz[0]
+    assert p.interval("dz").conditional
+
+
+def test_an_unbounded_thickness_makes_every_other_target_conditional():
+    """
+    A marginal in `beta` is an integral **over** `dz`. Where `dz` is not
+    bounded, that integral runs over whatever box the mesh happened to use, and
+    the answer moves with it -- measured at 44% of the interval's own width
+    across three defensible boxes, with nothing saying so.
+
+    So those targets are integrated over the thicknesses the window can
+    actually resolve and come back flagged. A narrower question than the one
+    asked, but an answerable one, and labelled.
+    """
+    grid, xc, yc = _grid(n=256)
+    grid.reset_priors()
+    p = grid.posterior(60e3, xc, yc, taper=np.hanning)
+
+    for target in ("beta", "zt", "C"):
+        with pytest.warns(RuntimeWarning, match="conditional on dz"):
+            interval = p.interval(target)
+        assert interval.conditional, target
+        assert interval.restriction == pytest.approx(p.identifiable_dz)
+        assert np.isfinite(interval[0]) and np.isfinite(interval[1])
+
+    # and a moment over a posterior running off its own box is not a moment
+    assert np.isnan(p.moments("beta")[0])
 
 
 def test_mesh_widens_a_box_the_curvature_underestimated(bouligand):
@@ -446,18 +584,17 @@ def test_mesh_widens_a_box_the_curvature_underestimated(bouligand):
     assert pinched.dz[-1] - pinched.dz[0] < adaptive.dz[-1] - adaptive.dz[0]
 
 
-def test_mesh_rejects_a_one_dimensional_bracket(bouligand):
+def test_posterior_rejects_an_unknown_target(bouligand):
     """
-    `profile`'s bracket is a range in the target; the mesh needs a box in the
-    two parameters the posterior lives in. A range in CPD cannot say where
-    `beta` should be evaluated, so silently reinterpreting one as the other
-    would evaluate a box nobody asked for.
+    The five names `profile` takes are the five a posterior can be read for,
+    and a typo should say so rather than returning an empty marginal.
     """
     grid, xc, yc = bouligand
-    with pytest.raises(ValueError, match="box in the two parameters"):
-        grid.profile(WINDOW, xc, yc, "dz", method="mesh", bracket=(5.0, 40.0))
-    with pytest.raises(ValueError, match="method must be"):
-        grid.profile(WINDOW, xc, yc, "dz", method="quadrature")
+    grid.reset_priors()
+    p = grid.posterior(WINDOW, xc, yc)
+    for reader in (p.interval, p.marginal, p.moments):
+        with pytest.raises(ValueError, match="target must be one of"):
+            reader("curie_depth")
 
 
 def test_profile_rejects_unknown_target(bouligand):
@@ -612,6 +749,40 @@ def test_calibration_spares_the_prior_rows(bouligand):
     assert pinned < 1.10
     # and where no prior is holding it, the full correction lands
     assert weak == pytest.approx(factor, rel=0.02)
+
+
+def test_the_correction_is_inert_on_uncorrelated_residuals():
+    """
+    `_correlation_inflation` has to be able to say "nothing to correct". It is
+    a ratio of two estimated covariances, so it does not return exactly 1 --
+    measured on residuals with no correlation at all, projected off a
+    four-column Jacobian as a real fit leaves them, it reads
+
+        20 bins   0.974 +/- 0.043
+        49 bins   0.982 +/- 0.028
+       120 bins   0.992 +/- 0.014
+       249 bins   0.997 +/- 0.006
+
+    biased slightly *low* and tightening with the bin count. That floor is
+    what makes the untapered reading of 1.03 on a real spectrum signal rather
+    than noise -- about five standard deviations clear of it -- and it is why
+    nothing here asserts `t2 == 1`, which cannot pass.
+    """
+    from pycurious.grid import _correlation_inflation
+
+    rng = np.random.default_rng(0)
+    for nbins, tolerance in ((49, 0.10), (249, 0.03)):
+        values = []
+        for _ in range(60):
+            J = rng.standard_normal((nbins, 4))
+            r = rng.standard_normal(nbins)
+            r = r - J.dot(np.linalg.lstsq(J, r, rcond=None)[0])
+            t2, spread = _correlation_inflation(J, r, nbins)
+            if t2 is not None:
+                values.append(t2)
+
+        assert len(values) > 50
+        assert np.mean(values) == pytest.approx(1.0, abs=tolerance), nbins
 
 
 def test_calibrate_false_reproduces_the_uncorrected_interval(bouligand):
