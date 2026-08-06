@@ -68,9 +68,63 @@ that scatter into an honest weight:
 Beyond the covariance,
 {py:meth}`~pycurious.CurieOptimiseBouligand.profile` gives profile-deviance
 intervals — which matter because $\Delta z$ and the Curie depth are genuinely
-asymmetric — {py:meth}`~pycurious.CurieOptimiseBouligand.metropolis_hastings`
-samples the posterior, and
+asymmetric — {py:meth}`~pycurious.CurieOptimiseBouligand.posterior` evaluates
+the posterior itself,
+{py:meth}`~pycurious.CurieOptimiseBouligand.metropolis_hastings` samples it, and
 {py:meth}`~pycurious.CurieOptimiseBouligand.sensitivity` resamples the spectrum.
+
+### Correcting the likelihood, not just the covariance
+
+The generalised least-squares covariance above allows for correlation between
+bins. The likelihood does not: the objective is a plain sum of squares. So an
+interval read *off the likelihood* — a profile deviance, a posterior density, a
+Metropolis chain — is narrower than the $\sigma$ the same fit reports, by
+exactly the factor the correction applies. Measured over 200 synthetic
+realisations, a nominal 68.27 % interval on $\beta$ covered 0.52 where the
+corrected $\sigma$ covered 0.65.
+
+PyCurious measures that factor once, at the fitted point, and divides the
+**spectral** part of the misfit by it wherever the likelihood is read. Nothing
+that is minimised changes, so no fitted value moves; the intervals widen by its
+square root, about 1.27 under a Hanning taper. Prior terms are excluded, so a
+parameter the user has pinned keeps the width they gave it. Pass
+`calibrate=False` to reproduce an interval computed before this existed.
+
+### The posterior is two-dimensional
+
+Writing the forward model out,
+
+$$ \Phi(k) = C \cdot 1 + Z_t \cdot (-2k) + h(k; \beta, \Delta z), $$
+
+$C$ appears once and additively, $Z_t$ once as $-2 k Z_t$, and the Bessel term
+depends on neither. They are therefore linear coefficients on basis vectors that
+do not involve the other two parameters, so their conditional posterior is an
+exact Gaussian whose precision $A = G^{\mathsf{T}} G$ is built from the
+wavenumbers, the uncertainties and the prior widths alone. Nothing in $A$ depends
+on $(\beta, \Delta z)$, so $\tfrac12 \log \det A$ is an additive constant and
+
+$$ -\log P(\beta, \Delta z \mid \Phi_d) = F(\beta, \Delta z) + \mathrm{const}, $$
+
+where $F$ is the misfit with $C$ and $Z_t$ profiled out. Marginalising those two
+and profiling them are the same operation here, exactly rather than
+approximately.
+
+That leaves two dimensions, which is small enough to integrate rather than
+sample. {py:meth}`~pycurious.CurieOptimiseBouligand.posterior` evaluates $F$ on
+a mesh and returns a {py:class}`~pycurious.Posterior`; an interval on any of the
+four parameters, or on the Curie depth, is then a one-dimensional integral over
+a density already in hand. Minimising along a mesh axis instead of integrating
+recovers the profile deviance, so the two intervals PyCurious reports are two
+readings of one surface.
+
+```{note}
+Every target except $\Delta z$ is an integral *over* $\Delta z$. Where a window
+cannot bound the thickness — the rolloff must sit inside the measured band, so
+$\Delta z \lesssim 1/k_{\min}$ — an interval on $\beta$ says more about where
+the mesh was placed than about the data. Those come back marked `conditional`,
+integrated over the resolvable thicknesses only, and the thickness itself comes
+back unbounded rather than as the edge of the mesh.
+```
 
 ```{note}
 `C` is not recoverable in practice and is best treated as a nuisance parameter:

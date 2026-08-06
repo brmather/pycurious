@@ -20,6 +20,20 @@ window spectra, and the covariance machinery behind the uncertainties.
    :members:
 ```
 
+### The posterior
+
+What `CurieOptimiseBouligand.posterior` returns. `C` and `z_t` integrate out
+exactly, so the joint posterior of all four parameters is a density over
+`beta` and `dz` alone — small enough to evaluate rather than sample, and read
+for an interval on any target without evaluating the forward model again.
+
+```{eval-rst}
+.. autoclass:: pycurious.Posterior
+   :members: interval, marginal, moments, identifiable_dz
+
+.. autoclass:: pycurious.Interval
+```
+
 ## Tanaka optimiser
 
 ```{eval-rst}

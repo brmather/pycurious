@@ -196,8 +196,24 @@ marginal posterior of `(beta, dz)` *is* the reduced misfit `_solve_linear`
 already returns. `posterior()` evaluates it on a mesh; two dimensions is small
 enough to integrate rather than sample.
 
-`profile(..., method="mesh")` returns the same 4-tuple from that density. Three
-things about it are easy to get wrong and are all guarded by tests:
+**`profile` and `posterior` read one surface two ways.** Minimising the reduced
+misfit along a mesh axis *is* `_profiled_misfit` — verified to 3e-4, because
+`_solve_linear` has already profiled `C` and `zt` out exactly — and integrating
+along it is the marginal. So they are not rival constructions to be kept in step
+by hand. They are different objects, though: a likelihood level set centred on
+the mode against an equal-tailed credible interval centred on the median, which
+agree on `beta`, `zt` and `C` and differ on the skewed `dz`. Keep both; `profile`
+is the cheap single-target path (225 evaluations against ~1150), `posterior`
+answers every target from one density.
+
+`posterior()` returns a `Posterior`, and the readers live on it —
+`p.interval(target, level)`, `p.marginal`, `p.moments`. They take no window, so
+a density cannot be asked for an interval at a window it was not computed at;
+the defect `_Spectrum.provenance` guards one layer down cannot be expressed
+here. `parallelise_routine` rejects `posterior`, because `_collect` stacks by
+`np.ndim` and a density is not an array — that is the obstacle, not the idea.
+
+Four things about the mesh are easy to get wrong and are all guarded by tests:
 
 - **The mesh is a quadrature rule, not a discrete distribution.** `zt`'s
   conditional width is 0.007 km against a 2 km node spacing, so summing one
@@ -207,28 +223,69 @@ things about it are easy to get wrong and are all guarded by tests:
   Propagating it from `dz` drops `zt`'s conditional spread. `E[CPD] = E[zt] +
   E[dz]` holds whatever the correlation, and is the identity that catches both
   mistakes — the atoms version failed it by 0.5 km.
+- **Every target except `dz` is an integral *over* `dz`.** So where the window
+  cannot bound the thickness, an interval on `beta` is a statement about where
+  the box was put — 44% of its own width across three defensible boxes. Those
+  are integrated over the resolvable range only and come back with
+  `.conditional` set. `moments` returns `nan` there rather than the box's number.
 - **An interval running past `1/k_min` is not a measurement.** Beyond that the
   rolloff is below the longest wavelength the window measured and `dz` is
   degenerate with `C`; the endpoint is then set by where `bouligand2009`
   overflows. At a 250 km window that produced `(190, 943)` km before the guard.
-  It returns `inf`, as the scan does by never crossing its threshold.
+  It returns `inf`, as the scan does by never crossing its threshold — and `nan`
+  rather than a lower bound when the identifiable part is a sliver, because that
+  quantile lands on the floor of the box (0.05 km against a fitted 368).
 
-The two interval constructions are genuinely different objects — a likelihood
-level set centred on the mode against an equal-tailed credible interval centred
-on the median — so they agree on `beta`, `zt` and `C` and differ on the skewed
-`dz`.
+**The box is measured, not assumed.** A coarse log sweep across everything `dz`
+may be locates the mass; the fine uniform mesh is sized from that density's own
+spread (`_MESH_BOX_SPAN = 5`, measured — at 3 it clips the tail and the spread
+comes back a sixth small, at 6 the same nodes resolve a wider box less well).
+Three traps, all of which produced a wrong box first: a log axis needs its node
+spacing as a quadrature weight (without it the spread read 118 sigma on a
+posterior whose own is four); select nodes by density *then* measure, since one
+spread over everything is ruined by the degenerate plateau; and there is no
+expansion loop, because a loop chasing any edge above a fixed tolerance walks
+the box out to the parameter bound to reach a plateau that never decays.
 
-**Neither is calibrated, and it is not their fault.** `_gls_covariance` corrects
-the covariance for correlation between neighbouring bins; `min_func` does not,
-so the likelihood underneath both is too sharp. Over 100 synthetics a nominal
-68.27% interval on `beta` covers **0.52 (scan) and 0.58 (mesh)** where
-`optimise`'s GLS-corrected sigma covers **0.65**, and the correction's inflation
-factor of **1.298** predicts exactly that. The split — OLS point estimate, GLS
-uncertainty — was a deliberate and measured choice for the *fit*; what was
-missed is that it leaves the *deviance* uncorrected, so every interval inherits
-it. Fixing it means putting `R^-1` in the objective or tempering the deviance;
-until then read a `profile` interval as a lower bound. This is the same ~0.5-0.6
-that `sensitivity` reports and that `sigma_dz`'s "understates by 40%" records.
+**The likelihood is corrected where it is read.** `_gls_covariance` corrects the
+covariance for correlation between bins; `min_func` does not, so every interval
+read off it was too sharp by exactly that factor — nominal 68.27% on `beta`
+covering 0.52 (scan) and 0.58 (mesh) against `optimise`'s 0.65.
+`_correlation_inflation` measures the factor and `_temperature` applies it, to
+the deviance, the mesh density and the MCMC target alike. Nothing that is
+minimised changes, so **no fitted value moves**. `calibrate=False` reproduces a
+pre-v2 interval exactly, which is how an archive is audited.
+
+Four things make it defensible, all measured:
+
+- **One scalar is enough because the four agree** — the per-parameter inflations
+  sit within 0.6–3.1% of each other, so this is a loss of degrees of freedom,
+  not a reshaping. `_TEMPER_SPREAD_LIMIT` warns when they stop agreeing; it
+  fires at 12% on the legacy 305 km fixture, which is a window too narrow for
+  its model.
+- **Only the spectral block enters, on both sides.** `residuals` appends a row
+  per prior, so dividing `F` whole would widen a 0.05 km `zt` pin by 30% —
+  loosening the constraint that carries the depth scale in the name of
+  calibrating it. Measured: 1.049 under a hard pin where tempering everything
+  gives 1.310, and agreement with the full factor where no prior holds it.
+- **It is computed once, at the mode, and held.** `_banded_correlation` reads
+  model mismatch as correlation, which is right for a covariance at the solution
+  and fatal if re-estimated per node, where a fit could lower the objective by
+  making its own residuals look correlated.
+- **On windows that bound `dz` it widens by `sqrt(t2)` and does nothing else** —
+  1.285 against 1.269 at 1000 km, 1.305 against 1.298 at 2000. At 200 km, where
+  a 30 km layer is not resolvable, the corrected deviance stops crossing and
+  reports unbounded. The correction is largest where the model cannot follow the
+  data, which is the honest answer, not an overreach.
+
+Whitening the objective was the other candidate and is **rejected**: 28% scatter
+on the `dz` estimator, `R` tabulated per taper, `_covariance` dropping
+`_gls_covariance` or correcting twice, and `_ANALYTIC_COLUMNS` whitened too —
+unwhitened, that sent a `dz = 10` layer to 60.9.
+
+Note the temper is a ratio of two covariances and so is blind to the absolute
+scale of `sigma_Phi`: it cannot detect a wrong `dof_factor`, and an uncalibrated
+taper still gets `_TAPER_DOF`'s untapered fallback in the *within*-bin term.
 
 **`sensitivity` reports about half the spread an independent repeat would
 find** — 0.50 to 0.62 of the scatter over independent realisations of the
@@ -377,10 +434,11 @@ each was resolved — including two whose prescribed fix turned out to be wrong 
 measurement. Worth reading before trusting any of them.
 `notes/derived-starting-values.md` records what deriving the starting point cost
 and bought, including where it is a straight regression.
-`notes/collapsed-posterior.md` records what `posterior()` and
-`profile(method="mesh")` measured: the 2-D density converges on a **24x24 mesh,
-576 forward-model evaluations against a chain's 24,000**, and neither interval
-construction is calibrated. Read its "what is still needed" before trusting
-either on real data. `notes/dz-recoverability.md` maps where `dz` is
-recoverable at all, and finds it never converges on WDMAM.
+`notes/collapsed-posterior.md` records what `posterior()` measured: the 2-D
+density needs a few hundred forward-model evaluations against a chain's 24,000,
+the production regime is one where MCMC does not work at all (ESS 20 from 8000
+draws, so it cannot referee anything), and what tempering the likelihood cost
+and bought. `notes/dz-recoverability.md` maps where `dz` is recoverable at all,
+and finds it never converges on WDMAM. `notes/bench/` holds the harness behind
+every number in `notes/` — tracked, while what it caches is not.
 Everything in `notes/` stays out of the Sphinx build, unlike `docs/`.

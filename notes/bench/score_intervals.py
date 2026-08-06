@@ -69,21 +69,29 @@ def wilson(hits, n, level=0.95):
     return centre - half, centre + half
 
 
-def main(nseed, cases):
+METHODS = ("scan", "mesh")
+
+
+def main(nseed, cases, calibrate=True):
     warnings.simplefilter("ignore")
 
     print("Interval coverage: how often a nominal interval contains the truth.")
     print("`scan` is the profile-deviance interval, `mesh` the equal-tailed")
     print("credible interval from the posterior. {} realisations per cell,".format(nseed))
+    print("likelihood correction {}.".format("ON" if calibrate else "OFF"))
     print("95% Wilson bounds in brackets.\n")
+
+    last_error = [None]
 
     for label, n, dx, window, beta, zt, dz in cases:
         counts = {(t, l, m): 0 for t in TARGETS for l in LEVELS
-                  for m in ("scan", "mesh")}
+                  for m in METHODS}
         widths = {(t, l, m): [] for t in TARGETS for l in LEVELS
-                  for m in ("scan", "mesh")}
+                  for m in METHODS}
         unbounded = {(t, l, m): 0 for t in TARGETS for l in LEVELS
-                     for m in ("scan", "mesh")}
+                     for m in METHODS}
+        failures = {(t, l, m): 0 for t in TARGETS for l in LEVELS
+                    for m in METHODS}
         used = 0
 
         for seed in range(nseed):
@@ -96,31 +104,36 @@ def main(nseed, cases):
                 window, xc, yc, taper=np.hanning, power=2.0
             )
 
-            posteriors = {
-                level: grid.posterior(window, xc, yc, spectrum=spectrum)
-                for level in (LEVELS[0],)
-            }
-            shared = posteriors[LEVELS[0]]
+            # one density serves every target and every level
+            shared = grid.posterior(
+                window, xc, yc, calibrate=calibrate, spectrum=spectrum
+            )
 
             for level in LEVELS:
                 for target in TARGETS:
                     true = truth_of(target, beta, zt, dz)
-                    for method in ("scan", "mesh"):
+                    for method in METHODS:
+                        # A bare `except Exception: continue` here used to
+                        # swallow the whole arm. When `profile` lost its
+                        # `method=` keyword every mesh call raised TypeError,
+                        # every mesh row silently emptied, and the table came
+                        # out looking like a coverage result with one method
+                        # quietly absent. Count what failed and say so.
                         try:
                             if method == "scan":
                                 out = grid.profile(
                                     window, xc, yc, target, level=level,
-                                    spectrum=spectrum,
+                                    calibrate=calibrate, spectrum=spectrum,
                                 )
+                                lo, hi = out[2], out[3]
                             else:
-                                out = grid.profile(
-                                    window, xc, yc, target, level=level,
-                                    method="mesh", posterior=shared,
-                                    spectrum=spectrum,
-                                )
-                        except Exception:
+                                lo, hi = shared.interval(target, level=level)
+                        except Exception as error:
+                            failures[(target, level, method)] += 1
+                            last_error[0] = "{}: {}".format(
+                                type(error).__name__, error
+                            )
                             continue
-                        lo, hi = out[2], out[3]
                         key = (target, level, method)
                         if not np.isfinite(hi) or not np.isfinite(lo):
                             unbounded[key] += 1
@@ -137,7 +150,7 @@ def main(nseed, cases):
         for target in TARGETS:
             for level in LEVELS:
                 row = "  {:>6s} {:8.4f} |".format(target, level)
-                for method in ("scan", "mesh"):
+                for method in METHODS:
                     key = (target, level, method)
                     hits = counts[key]
                     lo, hi = wilson(hits, used)
@@ -146,6 +159,12 @@ def main(nseed, cases):
                         hits / used, lo, hi, width, unbounded[key]
                     )
                 print(row)
+
+        broken = sum(failures.values())
+        if broken:
+            print("  {} of {} interval calls raised and were not counted; "
+                  "last: {}".format(
+                      broken, len(failures) * used, last_error[0]))
         print()
 
 
@@ -154,6 +173,9 @@ if __name__ == "__main__":
     parser.add_argument("--seeds", type=int, default=200)
     parser.add_argument("--case", type=int, default=None,
                         help="index into CASES, default all")
+    parser.add_argument("--no-calibrate", action="store_true",
+                        help="read both intervals off the uncorrected "
+                             "likelihood, as pre-v2 did")
     args = parser.parse_args()
     chosen = CASES if args.case is None else (CASES[args.case],)
-    main(args.seeds, chosen)
+    main(args.seeds, chosen, calibrate=not args.no_calibrate)

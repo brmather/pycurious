@@ -1,14 +1,10 @@
 # The Bouligand posterior is two-dimensional, and small enough to integrate
 
-`posterior()` and `profile(..., method="mesh")` are **in the library**;
-`notes/bench/collapsed_mcmc.py` is the prototype that established the identity
-and measured what a chain is worth against it. Harnesses:
-`notes/bench/score_intervals.py` (coverage) and `notes/bench/score_mesh_L2.py`
-(WDMAM L2, all 40 rungs).
-
-**Read the calibration section before using either interval.** Both the mesh and
-the existing deviance scan under-cover, for a reason that is upstream of both
-and is not fixed here.
+`posterior()` and the `Posterior` it returns are **in the library**, alongside
+`profile`, which keeps the deviance scan. `notes/bench/collapsed_mcmc.py` is the
+prototype that established the identity and measured what a chain is worth
+against it. Harnesses: `notes/bench/score_intervals.py` (coverage) and
+`notes/bench/score_mesh_L2.py` (WDMAM L2, all 40 rungs).
 
 `metropolis_hastings` walks four parameters. Two of them need not be walked, and
 once they are gone the remaining two need not be walked either.
@@ -19,9 +15,18 @@ conditional posterior is an exact Gaussian and integrates out in closed form,
 leaving a marginal posterior over `(beta, dz)` that is *exactly* the reduced
 misfit `_solve_linear` already computes. Sampling that 2-D marginal instead of
 the 4-D posterior is worth about **1.9x** in effective sample size. Evaluating it
-on a mesh instead of sampling it at all is worth about **40x** against the chain,
-and lands at **parity with two calls to `profile`** — while returning the entire
-joint posterior rather than one interval.
+on a mesh instead of sampling it at all is worth about **20x** against the chain,
+and lands at a few times one call to `profile` — while returning the entire
+joint posterior rather than one interval on one target.
+
+**Two things changed after this note was first written, and both are worth
+reading before the middle sections.** The under-coverage both interval
+constructions showed is fixed, by correcting the likelihood where it is read
+rather than by whitening the objective; and the mesh box is now measured from
+the data rather than taken from the curvature at the mode, which is what made
+the convergence numbers here honest. Sections are in the order the work
+happened, so the early ones describe the prototype and the late ones describe
+what shipped.
 
 ## The identity
 
@@ -154,30 +159,35 @@ adds the conditional variance `A⁻¹` to the spread of `p̂` across the mesh �
 law of total variance, because the mesh sees the conditional *mean* moving but
 not the conditional spread.
 
-Convergence, against a 192x192 reference:
+Convergence, measured **as shipped** — a coarse 6x20 sweep sizing the box, then
+one fine mesh — against a 192-node reference at a 1000 km window:
 
-| nodes | evaluations | seconds | dz mean error | dz sd ratio | edge mass |
-|---|---|---|---|---|---|
-| 16 | 256 | 0.02–0.04 | 0.0008–0.020 sd | 0.985–1.000 | 7e-12 – 1e-7 |
-| **24** | **576** | **0.05–0.08** | **≤0.0002 sd** | **1.0000** | 3e-12 – 9e-8 |
-| 32 | 1024 | 0.09–0.15 | 0.0000 sd | 1.0000 | 2e-12 – 6e-8 |
-| 128 | 16384 | 1.5–2.2 | — | — | 6e-13 – 2e-8 |
+| nodes | evaluations | dz mean error | dz sd ratio | edge mass |
+|---|---|---|---|---|
+| 16 | 120 + 256 | 0.15 km | 1.16 | 1.4e-5 |
+| 24 | 120 + 576 | 0.013 km | 1.07 | 6.7e-6 |
+| **32** | **120 + 1024** | **0.007 km** | **1.012** | 4.9e-6 |
+| 64 | 120 + 4096 | 0.001 km | 1.003 | 2.4e-6 |
 
-It converges at **24x24 = 576 evaluations**. At 32 nodes the moments agree with a
-128x128 mesh to **3e-9** of a standard deviation and the standard deviations to
-**1e-8** — which is to say the mesh is exact long before anything else in the
-calculation is.
+The default is 32. Note these are **not** the numbers an earlier version of this
+note carried — it claimed exactness to 3e-9 of a standard deviation at 24 nodes,
+on a box taken from the curvature at the mode. That box was both too small at
+short windows (a fitted `dz` of 54 km against a `1/k_min` of 26.6) and 38 to 240
+standard deviations across at long ones, and the apparent exactness was a
+reference computed the same wrong way. Measuring the box from a coarse sweep
+costs 120 evaluations and makes the convergence honest.
 
-Against the 4-D chain's 24,000 evaluations and 2.1–3.6 s for an ESS of
-1,000–1,200, that is **~40x fewer forward-model evaluations and ~40x less wall
-clock, for an exact answer rather than a noisy one**: no autocorrelation, no
-burn-in, no seed, no acceptance rate to tune, and no possibility of a chain that
-has not mixed reporting a confident wrong interval.
+Against the 4-D chain's 24,000 evaluations for an ESS of 1,000–1,200, that is
+still **~20x fewer forward-model evaluations for an exact answer rather than a
+noisy one**: no autocorrelation, no burn-in, no seed, no acceptance rate to
+tune, and no possibility of a chain that has not mixed reporting a confident
+wrong interval.
 
-Mass falling outside the mesh runs 2e-8 to 8e-13. That is the number to watch. A
-quadrature that has clipped `dz`'s long upper tail is wrong in a way a chain is
-not — silently, and in the direction of a *tighter* interval — so the prototype
-reports it rather than assuming it.
+Mass falling outside the mesh is the number to watch. A quadrature that has
+clipped `dz`'s long upper tail is wrong in a way a chain is not — silently, and
+in the direction of a *tighter* interval — so `edge_mass` is reported rather
+than assumed, and `Posterior.interval` compares it against the mass the endpoint
+in question is placed to cut off.
 
 ## The comparison that matters is `profile`, not MCMC
 
@@ -233,246 +243,215 @@ agrees with a 4x finer mesh to 1e-8. **Compare a deterministic method against a
 finer version of itself, never against a sampler** — the sampler is the noisy
 one, and it is the one you would end up "fixing".
 
-## Built: `posterior()` and `profile(method="mesh")`
 
-The five points below were the shipping list, and four of them are now settled
-in code. `posterior()` returns the density, its axes, the conditional mean of
-`(C, z_t)` at each node, their constant conditional covariance, the truncated
-mass, the mass on each edge, and `k_min`. `profile(..., method="mesh")`
-integrates it down to the same 4-tuple the scan returns, so
-`~/Global_CPD` switches with one keyword — verified end to end.
+## Built: `posterior()` and the `Posterior` it returns
 
-Three things bit during implementation, all now guarded by tests:
+`posterior()` returns a `Posterior`; the readings live on it —
+`interval(target, level)`, `marginal(target)`, `moments(target)`, for any of the
+four parameters or the Curie depth. `profile` keeps the deviance scan and loses
+its `method=` keyword.
+
+That split was not the original plan. The mesh first arrived as
+`profile(method="mesh")`, which returned a differently shaped tuple, redefined
+`deviance` as `-2 log(p/p_max)` of a marginal rather than `2(F - F_min)` of a
+profile, silently ignored `npoints`, and reinterpreted `bracket` from a range in
+the target into a box in two other parameters. Four incoherences for one
+keyword, and they were the symptom of two genuinely different objects sharing an
+entry point.
+
+Retiring `profile` altogether was considered and rejected on measurement. Two
+things a credible interval cannot supply:
+
+- **An interval invariant to where the box sits.** Every target except `dz` is a
+  marginal *over* `dz`. Measured at a 200 km window across three defensible
+  boxes, the `beta` credible interval moved by 0.14 — 44% of its own width —
+  while the profile interval was identical for two of the three and unchanged to
+  four figures. Where `dz` is unbounded, the mesh has to say so about every other
+  target too, which it now does via `Interval.conditional`.
+- **A cheap single-target path.** `~/Global_CPD` runs `profile("dz")` 26 million
+  times at L8, at 225 evaluations against the mesh's ~1150.
+
+So both ship. They are not rivals: minimising the reduced surface along a mesh
+axis **is** `_profiled_misfit`, verified to 3e-4 in misfit — 6e-4 in deviance
+against a 3.84 threshold — because `_solve_linear` has already profiled `C` and
+`z_t` out exactly. One surface, two readings, and a test that says so.
+
+Five things bit during implementation, all now guarded:
 
 1. **The mesh is a quadrature rule, not a discrete distribution.** `z_t`'s
    conditional width is 0.007 km against a 2 km node spacing, so summing one
-   narrow Gaussian per node gives a picket fence of 1024 spikes. Interpolating
-   first costs no forward-model evaluations.
-2. **`CPD = z_t + Δz` is a convolution along the mesh, not a marginal of it.**
-   `E[CPD] = E[z_t] + E[Δz]` holds whatever the correlation, and is the identity
-   that caught both wrong versions — the atoms version failed it by 0.5 km, a
-   `mass` array shadowed by a loop variable by 0.53.
-3. **An interval running past `1/k_min` is not a measurement.** Beyond that the
-   rolloff sits below the longest wavelength the window measured and `Δz` is
-   degenerate with `C`, so the endpoint is set by where `bouligand2009`
-   overflows. At a 250 km window that produced `(190, 943)` km before the guard.
+   narrow Gaussian per node gives a picket fence of spikes. Interpolate first.
+2. **`CPD = z_t + dz` is a convolution along the mesh, not a marginal of it.**
+   `E[CPD] = E[z_t] + E[dz]` holds whatever the correlation and is the identity
+   that caught both wrong versions — the atoms version by 0.5 km, a `mass` array
+   shadowed by a loop variable by 0.53.
+3. **A CDF with a flat run cannot be inverted by `numpy.interp`.** It needs
+   increasing `xp` and resolves ties by position, which read a `dz` of −0.71 km
+   off a posterior with no support below zero. Invert only where it rises.
+4. **A marginal's grid must not be sized by `mean ± 6·spread`.** On a window
+   that bounds nothing, the spread is most of the mesh and that reached −537 km.
+   The grid is the range the target takes, widened only by the conditional
+   Gaussian's reach — which for `beta` and `dz` is exactly zero.
+5. **An interval running past `1/k_min` is not a measurement.** Beyond it the
+   rolloff sits below the longest wavelength measured and `dz` is degenerate
+   with `C`, so the endpoint is set by where `bouligand2009` overflows: `(190,
+   943)` km at a 250 km window. And when the identifiable part is a sliver its
+   low quantile lands on the floor of the box — 0.05 km against a fitted 368 —
+   which `~/Global_CPD` would archive as a real bound. That returns `nan`.
 
-A highest-density interval was tried first and abandoned: it is read off a
-derivative of an interpolated cumulative, and its endpoints moved 1.5 km between
-a 192-node and a 768-node refinement while reporting spurious multimodality
-below that. Inverting the CDF moves 0.05 km over the same range. A mode-counting
-warning went the same way — on a flat posterior it reported 14 modes.
+A highest-density interval was tried first and abandoned: read off a derivative
+of an interpolated cumulative, its endpoints moved 1.5 km between a 192-node and
+a 768-node refinement and reported spurious multimodality below that. Inverting
+the CDF moves 0.05 km. A mode-counting warning went the same way — on a flat
+posterior it reported 14 modes.
 
-## Measured: neither interval is calibrated, and it is not the mesh's fault
+## The box is measured, and three ways of measuring it were wrong
 
-200 synthetic realisations per cell, coverage of the known truth:
+The first box came from the curvature at the mode: the Gaussian approximation
+`profile` exists because it distrusts. It was wrong in both directions at once —
+at a 200 km window the fitted `dz` was 54 km against a `1/k_min` of 26.6, and at
+1000 km and beyond a range reaching `1/k_min` was 38 to 240 standard deviations
+across, where the moments need a couple of dozen nodes over about six.
 
-| regime | target | nominal | scan | mesh |
+It also had a dependence nobody had noticed until the likelihood correction
+below went in: **correcting the likelihood widens the posterior by ~1.27**, so a
+box scaled from the *uncorrected* curvature stopped containing it and the mesh
+quietly stopped converging. That is how the box got looked at at all.
+
+What ships is a coarse 6x20 logarithmic sweep across everything `dz` may be —
+log because that range spans four orders of magnitude, and to the *bound* rather
+than to `1/k_min`, so the mode is inside the box even where the data cannot pin
+it — followed by one fine uniform mesh sized from that coarse density's spread.
+
+Three attempts at "sized from the spread" failed first, and each failure is a
+different lesson:
+
+- **A weighted standard deviation over the raw coarse density: 118 sigma.** A
+  log axis is not a quadrature rule until each node is weighted by how much of
+  the axis it stands for. Without that, the sparse high-`dz` nodes count as
+  heavily as the dense low ones and the mass lands where the *spacing* is.
+- **A quantile range: still too wide, and unfixable at this resolution.** Twelve
+  nodes over four orders of magnitude cannot place a 1e-3 quantile; the tail it
+  was meant to exclude carried more than the threshold.
+- **The threshold crossing taken directly as the box: too wide again.** On a log
+  axis a slowly decaying upper tail crosses a thousandth of the peak a long way
+  out, and padding it in value space pushed the *low* end through zero onto its
+  floor, which then set the width.
+
+What works is to use the threshold to **select** which nodes are the posterior
+and then measure the spread over those alone. `_MESH_BOX_SPAN` is 5, measured
+against a 192-node reference:
+
+| span | box width | dz mean error | dz sd ratio |
+|---|---|---|---|
+| 3 | 5.4 sigma | −0.32 km | 0.839 |
+| 4 | 11.5 sigma | −0.05 km | 0.972 |
+| **5** | **18.6 sigma** | **−0.01 km** | **1.012** |
+| 6 | 25.3 sigma | +0.00 km | 1.036 |
+
+Below 4 the box clips the upper tail and the spread comes back a sixth too
+small; above 5 the same 32 nodes resolve a wider box less well. There is no
+plateau of safe values, which is why this is measured rather than chosen.
+
+**The expansion loop is gone.** A window that cannot resolve the thickness
+leaves ~1e-5 of the mass out at hundreds of km — the degenerate plateau — and a
+loop widening any edge above a fixed tolerance walked the box out to the
+parameter bound chasing it, taking the resolution of everything else with it.
+That plateau does not decay, so no box contains it. `edge_mass` reports it and
+`interval` compares it against the mass that endpoint is placed to cut off,
+which is the question that actually matters and is a hundred times looser than
+any accounting tolerance.
+
+## Fixing the calibration: temper the likelihood, do not whiten the objective
+
+Both interval constructions under-covered, by the factor `_gls_covariance`
+applies and `min_func` does not: nominal 68.27% on `beta` covering **0.52
+(scan)** and **0.58 (mesh)** where `optimise`'s corrected sigma covers **0.65**,
+which an inflation of 1.298 predicts exactly.
+
+**Whitening the objective was measured and rejected.** It works — `beta` goes to
+0.640/0.945 — but it costs the `dz` estimator 28% of its scatter, needs `R`
+tabulated per taper because `_banded_correlation` reads model mismatch as
+correlation (`rho_1` from 0.24 to 0.42 depending where it is asked), forces
+`_covariance` to drop `_gls_covariance` or correct twice, and needs
+`_ANALYTIC_COLUMNS` whitened too — unwhitened, that sent a `dz = 10` layer at a
+4000 km window to **60.9**. Four touch points and a 28% regression to fix an
+interval.
+
+What ships instead corrects the likelihood where it is *read*.
+`_correlation_inflation` measures how far the GLS covariance exceeds what the
+likelihood implies; `_temperature` divides the spectral misfit by it in
+`profile`, in `posterior` and in `metropolis_hastings`. **Nothing that is
+minimised changes, so no fitted value moves anywhere.**
+
+Two properties make one scalar defensible, and both are measured rather than
+assumed.
+
+**The four per-parameter inflations agree.** Under `numpy.hanning` at 1000 km
+they are 1.265 / 1.267 / 1.267 / 1.265 for `beta`, `z_t`, `dz`, `C` — 0.2%
+apart. So the correction is a loss of effective degrees of freedom, not a
+reshaping of the covariance, and a scalar is what it *is* rather than a
+convenience. `_TEMPER_SPREAD_LIMIT` warns when they stop agreeing; it fires at
+12% on the legacy 305 km fixture, which is a window too narrow for the model
+fitted to it.
+
+**Only the spectral block enters, on both sides.** This is the correction that
+took two goes. `residuals` appends one row per prior, so dividing `F` whole
+widens every prior by `sqrt(t2)` — a 30% loosening of the 0.05 km `z_t` pin that
+carries the whole depth scale, applied silently in the name of calibration, and
+exactly what `_gls_covariance` refuses when it keeps prior rows out of its
+solve. Estimating `t2` from the whole Jacobian has the matching problem: the
+per-parameter agreement above holds for a *free* fit and degrades to 6–18% under
+production priors, because a prior-dominated direction has no correlated
+information in it to inflate. Taking `t2` from the spectral block alone and
+applying it to the spectral rows alone fixes both:
+
+| `z_t` prior | spectral only | whole misfit | `sqrt(t2)` |
+|---|---|---|---|
+| 0.01 (hard pin) | **1.049** | 1.310 | 1.302 |
+| 0.05 (production) | **1.210** | 1.299 | 1.302 |
+| 0.20 | 1.302 | 1.309 | 1.302 |
+| 1.00 (weak) | 1.309 | 1.309 | 1.302 |
+
+Both limits are the point. Under a hard pin the prior sets the width and the
+correction nearly vanishes; under a weak one there is nothing holding it and the
+two agree, as they must. And the estimate itself becomes prior-independent —
+0.6% to 3.9% between a free fit and a production-pinned one, against 14% when
+taken over the whole Jacobian.
+
+**What it does.** On windows that bound `dz`, the interval widens by `sqrt(t2)`
+and nothing else moves: 1.285 measured against a predicted 1.269 at 1000 km,
+1.305 against 1.298 at 2000 km, the small excess being the upper tail a wider
+level set reaches further into. At 200 km, where a 30 km layer is not resolvable
+at all, the corrected deviance stops crossing its threshold and reports
+unbounded. That is the correction working rather than overreaching: it is
+largest where the model cannot follow the data, because `_banded_correlation`
+reads smooth model mismatch as correlation and a model that cannot follow the
+data genuinely leaves its parameters less determined.
+
+**One review finding did not reproduce, and it matters which way.** The estimator
+was said to be biased *above* 1 on uncorrelated residuals (mean 1.025–1.038, max
+1.35), which would make the untapered reading of 1.03 indistinguishable from
+noise. Measured with the geometric mean of the diagonal ratios, 400 replicates
+of residuals projected off a four-column Jacobian:
+
+| bins | 20 | 49 | 120 | 249 |
 |---|---|---|---|---|
-| 1000 km, dz 20 | beta | 0.6827 | 0.510 | 0.545 |
-| | dz | 0.6827 | 0.430 | 0.420 |
-| | dz | 0.95 | 0.805 | **0.835** |
-| 4000 km, dz 30 | dz | 0.6827 | 0.550 | 0.555 |
-| | dz | 0.95 | 0.835 | **0.850** |
+| `t` | 0.974 ± 0.043 | 0.982 ± 0.028 | 0.992 ± 0.014 | **0.997 ± 0.006** |
 
-Both under-cover, by about 0.25 at 68% and 0.11 at 95%. The mesh is marginally
-better at 95% and indistinguishable at 68%. **The cause is shared and it is
-upstream of both.**
+Biased slightly *low*, and about five times tighter than claimed. So the
+untapered 1.03 sits ~5 sigma clear of the floor and is signal. What survives of
+the concern is the ±4% per-vertex scatter at 20 bins, which is why nothing
+asserts `t2 == 1` — a test that cannot pass.
 
-`_gls_covariance` corrects the reported covariance for correlation between
-neighbouring spectral bins. `min_func` does not — the likelihood still treats
-them as independent. So the two disagree by exactly that factor:
+**`calibrate=False`** reproduces a pre-v2 interval exactly, on all three
+routines. That is the audit hook, and it is what the four pinned `dz` intervals
+in the test suite are now read through: they are an archive of an uncorrected
+likelihood, and reading them through the new default would compare two different
+quantities.
 
-| beta interval, 100 realisations | 68.27% | 95% |
-|---|---|---|
-| `optimise` sigma (GLS-corrected) | **0.650** | **0.920** |
-| `profile(method="scan")` | 0.520 | 0.830 |
-| `profile(method="mesh")` | 0.580 | 0.850 |
-| predicted, likelihood too sharp by 1.298 | 0.559 | 0.869 |
-
-The measured GLS inflation is **1.298 ± 0.047**, and it predicts the observed
-under-coverage of both. Neither reading of the likelihood is at fault and no
-change to how the interval is read can fix it. The split — OLS point estimate,
-GLS uncertainty — was a deliberate and measured choice for the *fit*
-(`notes/spectrum-binning-weighting-multitaper.md`: "OLS is already efficient for
-smooth regressors"); what nobody noticed is that it leaves the *deviance*
-uncorrected, so every interval inherits a likelihood that is too confident. It
-is the same 0.5–0.6 that `sensitivity` reports against independent fields and
-that `sigma_dz`'s "understates by about 40%" records.
-
-The fix is to put `R^-1` in the objective, or to temper the deviance by the
-ratio of GLS to naive curvature. **Neither is made here** — it changes every
-published interval and is the user's call.
-
-## Measured: WDMAM L2, all 40 rungs
-
-162 vertices x 40 rungs from the cached spectra, mesh against the archived
-`dz_lo`/`dz_hi`. `inf` counts unbounded upper endpoints.
-
-| window | n | scan inf | mesh inf | scan width | mesh width | med \|Δlo\| | med \|Δhi\| |
-|---|---|---|---|---|---|---|---|
-| 10000 | 155 | 2 | 0 | 9.68 | 10.93 | 0.23 | 0.79 |
-| 4000 | 162 | 0 | 0 | 8.2 | 8.9 | 0.35 | 0.95 |
-| 2000 | 160 | 0 | 0 | 9.03 | 9.83 | 0.47 | 1.23 |
-| 1250 | 155 | 0 | **13** | 10.78 | 11.43 | 0.63 | 1.71 |
-| 1000 | 155 | 2 | **23** | 11.56 | 11.58 | 0.83 | 1.82 |
-| 750 | 150 | 0 | **38** | 12.34 | 12.38 | 1.88 | 2.35 |
-| 500 | 150 | 12 | **89** | 14.50 | 14.72 | 3.00 | 4.00 |
-| 250 | 144 | 29 | **143** | 19.04 | 4.34 | 2.68 | 5.78 |
-
-Two readings:
-
-- **From 1500 km up the two track closely**, the mesh about 1 km wider on the
-  upper end — the skew, which an equal-tailed interval carries and a level set
-  does not.
-- **Below that they part company, and the direction is the interesting one.**
-  At 250 km the mesh declares `Δz` unbounded at **143 of 144** vertices; the
-  archived scan does so at 29 and reports a confident ~19 km interval at the
-  other 115. The mesh is not failing there — 250 km cannot resolve a layer whose
-  rolloff sits below its longest wavelength, and saying so is the answer.
-
-## The 4-D chain cannot referee, and that is a result
-
-Disagreements were to be adjudicated by `metropolis_hastings`, run as four
-dispersed chains with a mixing diagnostic because an unmixed chain refereeing
-anything is worth nothing. **All 12 failed the diagnostic**, and the reason is
-not the one that was guarded against:
-
-| case | samples | R-hat | worst ESS |
-|---|---|---|---|
-| 9000 km, vertex 87 | 8,000 | 1.014 | **20** |
-| | 40,000 | 1.002 | **33** |
-| 2000 km, vertex 123 | 8,000 | 1.004 | **62** |
-| | 40,000 | 1.001 | **396** |
-
-R-hat is fine — the chains agree with each other. They simply do not move: an
-effective sample size of 20 from 8,000 draws is an autocorrelation time of 400.
-Reaching ESS 400 would take roughly half a million samples per vertex.
-
-On the clean synthetics earlier in this note the same sampler reached ESS
-1,200 from 20,000. The production regime — band limited, `sigma` inflated at
-high `k`, `z_t` pinned to 0.05 km, a `beta` prior — is where it stops working.
-So **MCMC is not an option there at all**, which is a stronger argument for
-integrating the 2-D posterior than any of the speed numbers above.
-
-It also means the adjudication question was the wrong one. Scan and mesh do not
-disagree about which basin is right; they apply two different constructions to
-the same too-sharp likelihood, and the coverage measurement above says what
-that costs — for both.
-
-## Putting `R^-1` in the objective: measured before doing it
-
-The under-coverage above is the GLS correction missing from the likelihood. What
-it would take, and what it costs, measured rather than assumed.
-
-**It works.** A whitened objective, 200 realisations, 1000 km:
-
-| target | nominal | diagonal (today) | whitened |
-|---|---|---|---|
-| beta | 0.6827 | 0.510 | **0.640** |
-| beta | 0.95 | 0.850 | **0.945** |
-| dz | 0.6827 | 0.430 | 0.515 |
-| dz | 0.95 | 0.805 | 0.860 |
-
-(An earlier version of this table read 0.670 and 0.545 for the whitened arm. It
-was measured through `_fit`, which supplies exact Jacobian columns for `z_t` and
-`C` that are only exact for the *diagonal* residual — so the whitened fit was
-handed a wrong Jacobian for half its parameters. Both arms now difference every
-column. The correction moves the numbers a little and the conclusion not at
-all.)
-
-`beta` becomes calibrated outright. `dz` improves by half the gap and does not
-close it — the rest is its skew, which is what `profile` exists for.
-
-**`R` cannot be estimated from the residuals in hand.** `_banded_correlation`
-reads smooth model mismatch as correlation, which is correct for a covariance at
-the solution and fatal in an objective. Measured over one spectrum, `rho_1` is
-0.38 at the fitted point, 0.42 at `dz + 50%`, 0.24 at `beta = 2`. An objective
-`r^T R(r)^-1 r` is not a fixed function of the parameters, its Jacobian is wrong,
-and the fit can lower it by making its own residuals look correlated. It has to
-be a table.
-
-**The table, measured from known truth** (`notes/bench/calibrate_correlation.py`,
-300 realisations, referenced against the across-realisation mean so no
-deterministic term survives):
-
-| taper | rho_1 | rho_2 | rho_3 |
-|---|---|---|---|
-| none | 0.003 | −0.005 | −0.002 |
-| hanning | **0.355** | **0.032** | −0.007 |
-| hamming | **0.310** | **0.020** | −0.006 |
-
-Dead by lag 3 in every case, which is what `_CORRELATION_BANDS = 2` already
-assumes. `hamming` had never been measured. An earlier attempt at this
-referenced the residual against the *analytic* model and got 0.9 at every lag
-including untapered — the log-periodogram's deterministic bias, divided by a
-`sigma` that falls as `1/sqrt(k)`, is a strong smooth trend that a row-mean
-subtraction leaves behind.
-
-**What else moves:**
-
-| consumer | effect |
-|---|---|
-| point estimate | `beta`, `zt`, `C` unchanged (≤0.02). `dz` mean shift +0.43 km, max 1.60 |
-| `optimise`'s sigma | ≤5% — `now/after` is 0.987, 0.984, 0.947, 0.983 |
-| `_covariance` | **must** drop `_gls_covariance` for `(J^T J)^-1`, or it corrects twice |
-| reduced chi² | 0.983 → 0.997, inside the test's 0.7–1.6 |
-| `dz` recovery in the mean | +6.4% → +5.7%, +6.8% → +6.9%; the 10% budget holds |
-| variable projection | survives — `G^T R^-1 G` is still constant in `(beta, dz)` |
-| `_ANALYTIC_COLUMNS` | must be whitened too, or the exact Jacobian columns are wrong — and this is not cosmetic: unwhitened, they sent a `dz = 10` layer at a 4000 km window to **60.9** |
-
-**The cost, and it is not small.** Whitening degrades the `dz` *estimator*:
-across 60 realisations its spread rises from 5.98 to 7.65 km, +28%, while its
-sigma rises only 3.30 → 3.48. So `dz`'s own calibration ratio gets *worse*
-(1.81 → 2.20) even as its interval coverage improves. This is the finding
-`notes/spectrum-binning-weighting-multitaper.md` recorded as "whitening the fit
-slightly worsens scatter"; for `dz` it is 28%, not slight. `R^-1` is a high-pass
-on the residual sequence and `dz` is the curvature feature it was hoped would
-gain — it loses.
-
-That leaves a real choice, and it is not obvious:
-
-- **Whiten everything.** One objective everywhere, internally consistent, and
-  the intervals become honest. Costs 28% on the `dz` estimator and moves every
-  published `dz` by up to 1.6 km.
-- **Whiten only the uncertainty** — keep the OLS point estimate, which is the
-  efficient one, and evaluate the deviance and the posterior with `R^-1`. Every
-  published parameter is untouched and the intervals still widen. But the
-  package then minimises one objective and reports intervals from another, and
-  `profile`'s interval is no longer centred on `optimise`'s answer.
-
-There is also an API question with no obvious answer: the whitening depends on
-the **taper**, and `residuals(x, kh, Phi, sigma_Phi)` does not receive one. It
-would have to become instance state (like `bounds` and `prior`), or ride on the
-spectrum tuple — which would change `_SPECTRUM_RETURNS` and the `spectrum=`
-contract that `~/Global_CPD`'s three-array zarr caches depend on.
-
-## What is still needed
-
-In rough order of how much each could change the answer:
-
-1. **The likelihood, not the interval.** Both constructions under-cover by the
-   GLS factor, and until `R^-1` reaches the objective (or the deviance is
-   tempered by the ratio of GLS to naive curvature) every interval this package
-   reports is a lower bound on the uncertainty. This is now the largest known
-   error in the uncertainty machinery and it is not specific to the mesh.
-2. **Decide what the short rungs should say.** The mesh calls `Δz` unbounded at
-   143 of 144 vertices at 250 km where the archive reports a number. If that is
-   right, a large part of the published short-window map is not a measurement;
-   if it is too conservative, `_MESH_IDENTIFIABLE` is the knob. Nothing here
-   settles it — coverage at 400 km cannot, because an unbounded interval covers
-   the truth trivially and so flatters whichever method returns more of them.
-3. **Coverage on the production regime.** The 200-realisation coverage above is
-   on clean synthetics with a free `z_t`. Repeating it with the band cut, the
-   `sigma` inflation and the `z_t` pin needs synthetics that carry WDMAM's
-   unmodelled resolution rolloff, which `notes/bench/run_experiments.py` can
-   already degrade for.
-4. **A degenerate posterior still returns a lower endpoint.** When the upper is
-   unbounded the lower is recomputed from the identifiable part, which is
-   defensible and is what makes it comparable to the scan — but it is a
-   quantile of a truncated posterior and should be labelled as such rather than
-   read as a bound.
-5. **Cost is parity, not a win.** 576 evaluations against `profile`'s 225, so
-   about two profiles, returning the joint posterior of all four parameters
-   instead of one interval on one target. That is a better product at the same
-   price; it does not make the L8 run cheaper.
+**The temper is blind to one thing.** It is a ratio of two covariances, so it is
+invariant to the absolute scale of `sigma_Phi`. That makes it robust to a
+mis-set `dof_factor` and equally unable to detect one: an uncalibrated taper
+still gets `_TAPER_DOF`'s untapered fallback in the *within*-bin term, and
+`np.blackman` returning 1.29 is not evidence that such a taper is fully handled.
