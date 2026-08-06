@@ -429,6 +429,76 @@ largest where the model cannot follow the data, because `_banded_correlation`
 reads smooth model mismatch as correlation and a model that cannot follow the
 data genuinely leaves its parameters less determined.
 
+### It works: coverage, 120 realisations at 1000 km
+
+`notes/bench/score_intervals.py`, truth `beta = 3`, `dz = 20`. The number to
+beat is what `optimise`'s own GLS-corrected sigma covers, **0.65** — because
+that is the uncertainty the same fit already reports, and the whole complaint
+was that the intervals disagreed with it.
+
+| target | nominal | scan, off | scan, **on** | mesh, off | mesh, **on** |
+|---|---|---|---|---|---|
+| beta | 0.6827 | 0.533 | **0.650** | 0.592 | **0.683** |
+| beta | 0.95 | 0.850 | **0.925** | 0.875 | **0.933** |
+| dz | 0.6827 | 0.467 | 0.567 | 0.433 | 0.583 |
+| dz | 0.95 | 0.842 | 0.892 | 0.842 | 0.892 |
+| CPD | 0.6827 | 0.467 | 0.567 | 0.450 | 0.592 |
+| CPD | 0.95 | 0.842 | 0.892 | 0.842 | 0.892 |
+
+`beta` becomes calibrated outright — 0.650 through the scan, which is
+`optimise`'s number exactly, and 0.683 through the mesh, which is nominal.
+`dz` and the Curie depth improve by about half the gap and do not close it. That
+residual is the skew, and it is not something a scalar on the likelihood can
+reach: `dz`'s posterior has a long upper tail, so an interval centred on the
+mode or on the median both miss on the same side. Widths grow 1.20x to 1.33x,
+which is `sqrt(t2)`.
+
+### And it does not disturb a real archive
+
+`notes/bench/score_calibration_L2.py` refits the cached L2 spectra of
+`~/Global_CPD` twice, `calibrate` off and on, holding the spectra, the priors,
+the `zt` pins and the optimiser fixed. 162 vertices, both compilations:
+
+| window | emag2 width x | emag2 `t2` | emag2 inf | wdmam width x | wdmam `t2` | wdmam inf |
+|---|---|---|---|---|---|---|
+| 10000 | 1.328 | 1.874 | 1 → 2 | 1.284 | 1.859 | 0 → 0 |
+| 6000 | 1.291 | 1.846 | 1 → 1 | 1.225 | 1.826 | 0 → 0 |
+| 4000 | 1.253 | 1.810 | 2 → 2 | 1.182 | 1.800 | 0 → 1 |
+| 2500 | 1.217 | 1.754 | 1 → 1 | 1.155 | 1.737 | 0 → 0 |
+| 1500 | 1.216 | 1.706 | 0 → 1 | 1.147 | 1.630 | 5 → 5 |
+| 1000 | 1.207 | 1.626 | 5 → 6 | 1.144 | 1.526 | 11 → 13 |
+| 500 | 1.177 | 1.420 | 19 → 22 | 1.119 | 1.309 | 37 → 38 |
+| 250 | 1.048 | 1.143 | 49 → 51 | 1.033 | 1.077 | 55 → 56 |
+
+**Every point estimate is bit-identical at every rung on both compilations** --
+`max |d beta|` and `max |d dz|` are 0.00e+00 throughout. That is the claim that
+had to hold, and the one worth checking on real data rather than on synthetics.
+
+The intervals widen with the window, because `t2` does: 1.86 at 10,000 km down
+to 1.08 at 250 km. That gradient is itself informative. The correction is
+estimated from the residuals, so it measures how much of the misfit is smooth
+and correlated rather than independent scatter -- and a 10,000 km window is
+where the single-layer model has the least chance of following the data, which
+is exactly `notes/dz-recoverability.md`'s finding that a WDMAM `dz` is a
+thickness-at-a-window. The correction is largest where that note says to trust
+the answer least.
+
+**The count of unbounded rungs barely moves** -- 49 → 51 at emag2's 250 km,
+0 → 0 at wdmam's 10,000 -- so this does not flood an archive with infinities
+where it used to report numbers. The short rungs were already mostly unbounded
+and the long ones stay bounded.
+
+Note the comparison is deliberately *not* against the stored archive. WDMAM's L2
+was written with `zt` pinned at a constant 1.0 km where the current default pins
+per vertex at the water depth, and `d(CPD)/d(zt)` runs −1.7 to −5.8: two km of
+`zt` apart is 16 km of Curie depth, which swamps anything this change does. A
+before-and-after against that archive measures the `zt` policy, not the
+likelihood. (Reproducing the archive's own configuration is not currently
+possible either — `03_compute_curie.py --zt-source constant` from a fresh mesh
+dies in `zt_pin_field` with a chunk-shaped reshape, 2560 into (40, 162). That is
+a `~/Global_CPD` bug on a path its own archive never took, since that run used
+`--stage b`.)
+
 **One review finding did not reproduce, and it matters which way.** The estimator
 was said to be biased *above* 1 on uncorrelated residuals (mean 1.025–1.038, max
 1.35), which would make the untapered reading of 1.03 indistinguishable from
