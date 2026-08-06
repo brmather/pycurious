@@ -15,8 +15,8 @@ returns a bare number without one is a pre-v2 remnant.
 ## Commands
 
 ```bash
-pytest                     # 129 tests, ~13 s
-pytest -m "not slow"       # 126 tests, ~6 s -- skips the calibration tests that
+pytest                     # 142 tests, ~27 s
+pytest -m "not slow"       # 139 tests, ~20 s -- skips the calibration tests that
                            # fit a few hundred realisations
 pytest tests/test_tanaka.py -q
 ```
@@ -85,6 +85,37 @@ CPU. `_fit` also supplies the two exact Jacobian columns (`dr/dzt = -2k/sigma`,
 `dr/dC = 1/sigma`); `beta` enters through the *order* of a Bessel function and
 `dz` costs the same analytically as by difference, so those two stay numerical.
 
+**The starting point is derived, not declared.** `beta`, `zt`, `dz` and `C`
+default to `None` in all five routines, meaning *read this off the spectrum*; a
+value still means *use it*, and the four are independent, so `dz=30` starts the
+other three from the best they can be at that thickness. `_initial_guess` scans
+an eight-node `dz` ladder on the objective with `C` and `zt` profiled out
+exactly — they are linear in `Phi = C·1 + zt·(-2k) + h(beta, dz)`, so
+`_solve_linear` gets them in one step. That reduced surface *is* the full
+objective profiled over the linear pair, which makes the scan a strictly better
+basin detector than multi-starting the fit over the same nodes.
+
+It fixes a real defect: the old `dz = 10` sat in the wrong basin on 7 of 20
+thick-layer synthetics at a 4000 km window, at a misfit 25% higher, taking
+`dz = 45` recovery from 32.6 ± 15.3 to 46.1 ± 5.9. Two things about it are
+easy to get wrong and are measured in `notes/derived-starting-values.md`:
+
+- **The asymptote band split is logarithmic.** `beta` comes from a regression
+  of `ln Phi` on `[1, ln k, k]` over the high-`k` band, and those two regressors
+  are nearly collinear unless the band spans several octaves. A linear split
+  gave `beta = 3.25 ± 1.13` at 200 km and moved a pinned `profile` interval.
+- **A `beta` prior outranks the estimate.** Where the high-`k` band carries
+  something the model does not contain the regression reads it as `beta` — on
+  WDMAM it returns 1.8 against a fitted 3.3, because of the unmodelled ~4 km
+  resolution rolloff. Weighting by `1/sigma` does not help. The prior is how a
+  dataset says so, and starting there cuts the fit cost by a third.
+
+`last_x0` carries the derived start on the instance, alongside `last_spectrum`.
+A fit that returns exactly its start never moved — `~/Global_CPD` raises
+`STARTING_GUESS` on it — and with a derived start that is no longer something a
+caller can reconstruct. A spectrum with fewer than two usable bins falls back to
+the old constants, deliberately, so that signal stays recognisable.
+
 **Pin the BLAS before timing anything.**
 
 ```bash
@@ -150,10 +181,39 @@ Bouligand uses finite differences.
 Beyond the covariance: `CurieOptimiseBouligand.profile()` gives profile-deviance
 intervals, which matter because `dz` and `CPD` are genuinely asymmetric;
 `metropolis_hastings()` samples the posterior; `sensitivity()` resamples the
-spectrum. `CurieOptimiseTanaka.sensitivity()` additionally jitters the band
-edges, since band placement usually dominates spectral scatter. There is
-deliberately no `profile` on the Tanaka side — each band is a straight-line fit,
-where profile and covariance intervals are provably identical.
+spectrum. `CurieOptimiseTanaka.sensitivity()`
+additionally jitters the band edges, since band placement usually dominates
+spectral scatter. There is deliberately no `profile` on the Tanaka side — each
+band is a straight-line fit, where profile and covariance intervals are provably
+identical.
+
+**`profile`'s interval is not calibrated, and it is not `profile`'s fault.**
+`_gls_covariance` corrects the covariance for correlation between neighbouring
+bins; `min_func` does not, so the likelihood the deviance is read off is too
+sharp. Over 200 synthetics a nominal 68.27% interval on `beta` covers **0.510**
+and a 95% one **0.850**, where `optimise`'s GLS-corrected sigma covers 0.650 and
+0.920 — and the correction's inflation factor of **1.298** predicts exactly
+that. The split (OLS point estimate, GLS uncertainty) was a deliberate, measured
+choice for the *fit*; what was missed is that it leaves the *deviance*
+uncorrected. Read a `profile` interval as a lower bound. This is the same
+0.5–0.6 that `sensitivity` reports against independent fields and that
+`sigma_dz`'s "understates by 40%" records.
+
+Putting `R^-1` in the objective was measured but **not** made
+(`notes/collapsed-posterior.md`, `posterior-mesh` branch): it takes `beta`
+coverage to 0.640/0.945, but `R` then has to be tabulated per taper rather than
+estimated — `_banded_correlation` reads model mismatch as correlation, giving
+`rho_1` from 0.24 to 0.42 depending where it is asked — `_covariance` must drop
+`_gls_covariance` or correct twice, and `_ANALYTIC_COLUMNS` must be whitened
+too, which unwhitened sent a `dz = 10` layer to 60.9.
+
+**`sensitivity`'s warm start is measured, not assumed.** Every realisation
+begins at one fit to the unresampled spectrum. Re-deriving a start per
+realisation costs 1.4x and moves the reported spread not at all — 13.28 against
+13.28 — because resampling `Phi` within `sigma_Phi` does not carry a realisation
+across a basin boundary. What *did* strand the ensemble was the old `dz = 10`
+constant, which put its median at 10.3 against a truth of 45. Do not re-derive
+per realisation again without a case the warm start demonstrably gets wrong.
 
 ## Synthetics
 
@@ -164,6 +224,24 @@ Returns `(data, extent)`, ready to splat: `CurieOptimiseBouligand(data, *extent)
 - True Curie depth is `zt + dz`; true centroid depth (Tanaka) is `zt + dz/2`.
 - `beta` and `zt` recover tightly. **`dz` does not** — roughly one realisation in
   five is tens of percent out, so assert on it across seeds or in the mean.
+- **`dz` has two band limits, not one** (`notes/dz-recoverability.md`). The
+  rolloff sits at `|k| dz ~ 1` and must be inside the band at *both* ends:
+  `2*pi*dz/window < 1` **and** `pi*dz/dx >> 1`. The second is a statement about
+  **cell size**, it is the one nobody checks, and it is the one that bites — at
+  `dz = 5` on 5 km cells it is 3.1 and recovery is hopeless at every window,
+  with **more window making it worse** (median error 32.7 km at 500 km, 212 km
+  at 4000 km). That is the only place in this package where a wider window
+  hurts, and it is the signature of a spectrum whose high-`k` band cannot locate
+  the rolloff. Above that floor, relative error at 4000 km is 5–7% for `dz` of
+  10–45 km and 9% at 60.
+- **On WDMAM, `dz` never converges — it tracks the window.** Over 162 L2
+  vertices the median `dz` grows monotonically from the 1500 km rung to 10,000
+  km by 2.8x (shallow third), 2.2x (middle) and 2.3x (deep), drifting 0.5–0.8 km
+  per 250 km of window without slowing. Synthetics converge; the difference is
+  the data, and a whitened objective reproduces the table to within 1–2 km. The
+  cause is the unmodelled ~4.2 km resolution rolloff reducing the *effective*
+  `k_max`, which puts every vertex on the wrong side of the second condition
+  above. **A WDMAM `dz` is a thickness-at-a-window, not a thickness.**
 - **`C` is not recoverable**; treat it as a nuisance parameter. Log-averaging
   costs the Euler-Mascheroni constant and a `np.hanning` taper costs
   `ln(3/8)**2`, so a fit returns `C` about 2.5 low under hanning.
@@ -246,6 +324,18 @@ left in place, which makes a correct `MANIFEST.in` look broken.
   pinning `zt` between them seem to remove it. Worth knowing if you profile a
   small unconstrained synthetic; not worth guarding against.
 
+  The sibling defect in `optimise` — walking into the same second basin and
+  reporting it without complaint — **is** fixed, by deriving the starting point
+  (`notes/derived-starting-values.md`). The interval construction here is not,
+  and is a separate thing.
+
+- **A better minimum is not always a better answer.** Where a window does not
+  constrain the fit, the likelihood has a second minimum at high `beta` and low
+  `dz`, and anything that searches harder finds it and reports a confident
+  worse number. Measured at a 200 km window on a 30 km layer: reaching lower
+  misfits on 8 of 20 realisations took median |error| from 19.6 to 27.4 km.
+  The lever is `add_prior(beta=...)`, not a worse optimiser.
+
 - **`install_documentation()` fails for an installed package.** It is still
   advertised in the README, but `[tool.setuptools] packages =
   ["pycurious"]` installs only the package directory, and `Examples/` sits at the
@@ -255,5 +345,12 @@ left in place, which makes a correct `MANIFEST.in` look broken.
 
 `notes/bouligand-findings.md` records seven findings from the Tanaka work and how
 each was resolved — including two whose prescribed fix turned out to be wrong on
-measurement. Worth reading before trusting any of them. (It lives in `notes/`,
-not `docs/`, so it stays out of the Sphinx build.)
+measurement. Worth reading before trusting any of them.
+`notes/derived-starting-values.md` records what deriving the starting point cost
+and bought, including where it is a straight regression.
+`notes/dz-recoverability.md` maps where `dz` is recoverable at all, and finds
+that on WDMAM it never converges — it tracks the window size by a factor of
+two. The `posterior-mesh` branch carries an unmerged second use of the same
+linear identity, evaluating the posterior on a mesh rather than seeding one
+fit with it; `notes/collapsed-posterior.md` there records what it measured.
+Everything in `notes/` stays out of the Sphinx build, unlike `docs/`.

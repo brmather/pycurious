@@ -430,6 +430,393 @@ def test_fit_honours_a_held_coordinate(bouligand):
     )
 
 
+def _analytic_spectrum(dz, seed, window_km=4000.0, nbins=158):
+    """
+    A spectrum that really is a `dz` layer, without transforming anything.
+
+    The seeder is a function of `(k, Phi, sigma)` alone, so testing it against a
+    field means paying for an 811x811 transform to reach the window sizes where
+    a thick layer is resolvable at all. Building the spectrum from the forward
+    model instead puts the same question in milliseconds, and pins the answer to
+    the model rather than to the details of one realisation of a grid.
+
+    `sigma` follows the real shape -- the per-cell scatter of a log periodogram,
+    `pi/sqrt(6)`, over the square root of a cell count that grows linearly with
+    `k` (`pycurious.grid.CurieGrid.window_spectrum`).
+    """
+    k = (2.0 * np.pi / window_km) * np.arange(1, nbins + 1)
+    sigma = (np.pi / np.sqrt(6.0)) / np.sqrt(
+        np.arange(1, nbins + 1) * np.pi / 1.65
+    )
+    truth = pycurious.bouligand2009(k, 3.0, 1.0, dz, 5.0)
+    noise = np.random.default_rng(seed).normal(0.0, sigma)
+    return k, truth + noise, sigma
+
+
+def _spectrum_fitter(dx_km=5.0):
+    """
+    A fitter with no window behind it, for fitting a spectrum directly.
+
+    The cell size is not decoration: `_max_thickness` scales the `dz` ceiling
+    with `self.dx`, so a dummy spanning one metre would bound `dz` near zero.
+    This is the same trick `~/Global_CPD` uses to refit cached spectra.
+    """
+    return pycurious.CurieOptimiseBouligand(
+        np.zeros((2, 2)), 0.0, dx_km * 1e3, 0.0, dx_km * 1e3
+    )
+
+
+def test_solve_linear_is_the_exact_conditional_minimum(bouligand):
+    """
+    `C` and `zt` are not guessed, they are solved, so the claim is exactness.
+
+    `bouligand2009` is `h(beta, dz) + C - 2 k zt`, which makes the best `(C, zt)`
+    at any `(beta, dz)` a two-column weighted linear solve. Checked against a
+    derivative-free minimisation of the real `min_func` over the same two
+    coordinates -- if the decomposition were even slightly wrong, a search would
+    beat a formula.
+    """
+    from scipy.optimize import minimize
+
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+
+    for beta, dz in ((3.0, 20.0), (2.0, 5.0), (4.0, 60.0)):
+        C, zt, cost = grid._solve_linear(k, Phi, sigma, beta, dz)
+        searched = minimize(
+            lambda p: grid.min_func([beta, p[1], dz, p[0]], k, Phi, sigma),
+            [C, zt],
+            method="Nelder-Mead",
+            options=dict(xatol=1e-12, fatol=1e-14, maxiter=20000),
+        )
+        assert cost <= searched.fun * (1.0 + 1e-9), (
+            "a search beat the closed form at beta={}, dz={}".format(beta, dz)
+        )
+        assert C == pytest.approx(searched.x[0], rel=1e-6)
+        assert zt == pytest.approx(searched.x[1], rel=1e-6)
+
+
+def test_solve_linear_cost_is_min_func(bouligand):
+    """
+    The scan ranks basins, so its cost must be the one the fit then minimises.
+
+    `_solve_linear` builds the misfit from pieces it already holds rather than
+    calling `min_func`, which halves what a ladder node costs -- and puts two
+    expressions for one quantity in the module. This is what stops them
+    drifting. Equality is to floating point, not to the bit: the two sum the
+    same terms in a different order.
+    """
+    grid, xc, yc = bouligand
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+
+    for priors in ({}, {"zt": (1.0, 0.05)},
+                   {"beta": (3.0, 0.2), "zt": (1.0, 0.05),
+                    "dz": (20.0, 5.0), "C": (5.0, 1.0)}):
+        grid.reset_priors()
+        grid.add_prior(**priors)
+        for held in ({}, {"zt": 2.0}, {"C": 4.0}, {"zt": 2.0, "C": 4.0}):
+            C, zt, cost = grid._solve_linear(k, Phi, sigma, 3.0, 20.0, **held)
+            assert cost == pytest.approx(
+                grid.min_func([3.0, zt, 20.0, C], k, Phi, sigma), rel=1e-12
+            ), "cost disagrees with min_func at priors={}, held={}".format(
+                priors, held
+            )
+
+    grid.reset_priors()
+
+
+def test_solve_linear_respects_the_zt_bound(bouligand):
+    """
+    An unconstrained solve can pay for a thick layer with a negative `zt`.
+
+    That is a cheaper misfit than any fit is allowed to reach, so leaving it in
+    would let the scan prefer a basin the optimiser cannot enter. The clamp
+    holds `zt` at its bound and re-solves `C`, which is the exact constrained
+    answer while only one bound is active.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+
+    # a thickness far past what this window resolves drives zt negative
+    thick = 400.0
+    C, zt, cost = grid._solve_linear(k, Phi, sigma, 3.0, thick)
+    assert zt >= 0.0, "zt came back at {}".format(zt)
+    assert cost == pytest.approx(
+        grid.min_func([3.0, zt, thick, C], k, Phi, sigma), rel=1e-12
+    )
+
+    # and C is still the best it can be with zt held there
+    for nudge in (-0.5, 0.5):
+        assert grid.min_func([3.0, zt, thick, C + nudge], k, Phi, sigma) >= cost
+
+
+def test_solve_linear_folds_in_a_prior(bouligand):
+    """
+    Pinning zt is what a production run does, so the solve must see the prior.
+
+    Without it the scan would rank thicknesses by a misfit the fit does not use.
+    """
+    from scipy.optimize import minimize
+
+    grid, xc, yc = bouligand
+    k, Phi, sigma = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+
+    grid.reset_priors()
+    recovered = [grid._solve_linear(k, Phi, sigma, 3.0, 60.0)[1]]
+
+    # Tightening the prior must walk zt monotonically from the data's answer to
+    # the prior's centre, which is the conjugate compromise a Gaussian prior on
+    # a linear coefficient has to produce. Nothing weaker distinguishes the
+    # prior being folded in from it being ignored: at 249 bins the data term is
+    # 1.8e5 against the prior's 1/sigma_p^2, so a 0.01 km prior moves zt to 2.3,
+    # not to 5.
+    for width in (1.0, 0.1, 0.01, 1e-3, 1e-4):
+        grid.reset_priors()
+        grid.add_prior(zt=(5.0, width))
+        zt = grid._solve_linear(k, Phi, sigma, 3.0, 60.0)[1]
+        assert zt > recovered[-1], "narrowing the prior did not pull zt further"
+        recovered.append(zt)
+
+    assert recovered[0] < 1.1, recovered[0]
+    assert abs(recovered[-1] - 5.0) < 0.01, recovered[-1]
+
+    # and it is still the exact minimum of the objective that carries the prior
+    grid.reset_priors()
+    grid.add_prior(zt=(5.0, 0.01))
+    C, zt, cost = grid._solve_linear(k, Phi, sigma, 3.0, 60.0)
+    searched = minimize(
+        lambda p: grid.min_func([3.0, p[1], 60.0, p[0]], k, Phi, sigma),
+        [C, zt],
+        method="Nelder-Mead",
+        options=dict(xatol=1e-12, fatol=1e-14, maxiter=20000),
+    )
+    assert cost <= searched.fun * (1.0 + 1e-9)
+
+    grid.reset_priors()
+
+
+def test_an_explicit_start_bypasses_the_seeder(bouligand):
+    """
+    Supplying all four must give exactly the fit those four would have given.
+
+    This is what makes the change to the defaults a change to the defaults and
+    nothing else: anything that used to pass the old constants explicitly, or
+    that reproduces an archived result, is untouched.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+    old = np.array([3.0, 1.0, 10.0, 5.0])
+
+    # no spectrum is consulted at all when there is nothing left to derive
+    assert np.array_equal(grid._initial_guess(spectrum, *old), old)
+    assert np.array_equal(grid._initial_guess((None, None, None), *old), old)
+
+    direct = grid._fit(old, spectrum).x
+    routed = grid.optimise(
+        WINDOW, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0,
+        taper=np.hanning, spectrum=spectrum,
+    )[:4]
+    assert np.array_equal(np.asarray(routed), direct)
+
+
+def test_a_held_start_is_honoured_and_the_rest_derived(bouligand):
+    """
+    The four are independent, so `dz=30` alone means "start there, and put the
+    others where they best sit at that thickness" -- which the four-constant
+    form could not express.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, power=2.0)
+
+    x0 = grid._initial_guess(spectrum, dz=30.0)
+    assert x0[2] == 30.0
+    C, zt, _ = grid._solve_linear(*spectrum, x0[0], 30.0)
+    assert x0[1] == zt and x0[3] == C
+
+    # a held beta is used as given, and reaches the linear solve
+    assert grid._initial_guess(spectrum, beta=2.0, dz=30.0)[0] == 2.0
+    assert grid._initial_guess(spectrum, zt=4.0)[1] == 4.0
+
+    # and a derived beta is the one the high band measured, not the fallback
+    assert x0[0] == grid._asymptote_estimates(*spectrum[:2])[0]
+
+
+@pytest.mark.parametrize(
+    "spectrum",
+    [
+        (np.array([]), np.array([]), np.array([])),
+        (np.array([0.05]), np.array([3.0]), np.array([1.0])),
+        (np.array([np.nan, np.nan]), np.array([3.0, 2.0]), np.array([1.0, 1.0])),
+    ],
+    ids=["empty", "one bin", "all nan"],
+)
+def test_a_spectrum_with_nothing_in_it_falls_back(bouligand, spectrum):
+    """
+    A window carrying a NaN comes back with an empty spectrum, and a band cut
+    can empty one too. There is nothing to derive from, so the start must fall
+    back to the old constants rather than reduce over an empty axis.
+
+    Which constants matters. `~/Global_CPD` detects an unusable window by the
+    fit returning its own starting guess -- `optimise` is documented there as
+    "silently returns x0 on a NaN window" -- so the fallback has to stay
+    recognisable, not merely finite.
+    """
+    grid, _, _ = bouligand
+    grid.reset_priors()
+
+    x0 = grid._initial_guess(spectrum)
+    assert np.array_equal(x0, [3.0, 1.0, 10.0, 5.0]), x0
+
+    # anything supplied still wins over the fallback
+    assert np.array_equal(
+        grid._initial_guess(spectrum, zt=4.2, dz=25.0), [3.0, 4.2, 25.0, 5.0]
+    )
+
+
+def test_last_x0_records_where_the_fit_started(bouligand):
+    """
+    A derived start cannot be reconstructed from the arguments the caller
+    passed, so the routines leave it on the instance the way they leave
+    `last_spectrum`. `~/Global_CPD` needs it: its `STARTING_GUESS` status bit
+    fires when a fit comes back exactly equal to its own start, which is the
+    signature of a window the optimiser could not move in.
+    """
+    grid, xc, yc = bouligand
+    grid.reset_priors()
+    spectrum = grid.window_spectrum(WINDOW, xc, yc, taper=np.hanning, power=2.0)
+
+    fresh = synthetic_grid.__wrapped__(
+        pycurious.CurieOptimiseBouligand, n=128, seed=11, **TRUTH
+    )[0]
+    assert fresh.last_x0 is None
+
+    grid.optimise(WINDOW, xc, yc, taper=np.hanning, spectrum=spectrum)
+    derived = np.array(grid.last_x0)
+    assert derived.shape == (4,) and np.isfinite(derived).all()
+    np.testing.assert_allclose(derived, grid._initial_guess(spectrum))
+
+    # an explicit start is recorded as given, so the bit means the same thing
+    # on both paths
+    grid.optimise(WINDOW, xc, yc, beta=3.0, zt=1.0, dz=10.0, C=5.0,
+                  taper=np.hanning, spectrum=spectrum)
+    assert np.array_equal(grid.last_x0, [3.0, 1.0, 10.0, 5.0])
+
+    # and it survives the pickling `parallelise_routine` does
+    import pickle
+    assert np.array_equal(pickle.loads(pickle.dumps(grid)).last_x0,
+                          grid.last_x0)
+
+
+def test_derived_start_finds_the_basin_the_constant_missed():
+    """
+    The defect this change exists to fix.
+
+    On a thick layer the misfit is bimodal in `dz` and the old `dz = 10`
+    constant sat in the wrong basin -- at a misfit about 25% higher, so not the
+    flat-likelihood tie where both answers are equally good. Measured over
+    clean synthetics at a 4000 km window it cost roughly one realisation in five
+    (`notes/spectrum-binning-weighting-multitaper.md`), and `optimise` reported
+    it without complaint.
+
+    Seed 1 of the spectrum below is one of those: the constant stops at
+    dz = 10.2 against a truth of 45.
+    """
+    grid = _spectrum_fitter()
+    spectrum = _analytic_spectrum(dz=45.0, seed=1)
+
+    constant = grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), spectrum)
+    derived = grid._fit(grid._initial_guess(spectrum), spectrum)
+
+    assert constant.x[2] < 15.0, "the constant no longer misses: {}".format(
+        constant.x[2]
+    )
+    assert derived.cost < 0.85 * constant.cost, (
+        "derived cost {:.3f} is not clearly below the constant's {:.3f}".format(
+            derived.cost, constant.cost
+        )
+    )
+    assert abs(derived.x[2] - 45.0) < 10.0, "dz {:.2f}".format(derived.x[2])
+
+
+def test_derived_start_costs_less_than_it_saves():
+    """
+    The ladder is only worth running if a node is cheap next to a fit.
+
+    Counted in evaluations of the forward model, which is the measurement a
+    loaded machine cannot distort. The ladder is a fixed `_LADDER_NODES + 2`;
+    what it has to earn back is the iterations a fit does not then spend.
+    """
+    from pycurious import optimise_bouligand as ob
+
+    grid = _spectrum_fitter()
+    spectrum = _analytic_spectrum(dz=45.0, seed=1)
+
+    calls = {"n": 0}
+    real = ob.bouligand2009
+
+    def counted(*args):
+        calls["n"] += 1
+        return real(*args)
+
+    ob.bouligand2009 = counted
+    try:
+        x0 = grid._initial_guess(spectrum)
+        seeding = calls["n"]
+        grid._fit(x0, spectrum)
+        derived_total = calls["n"]
+
+        calls["n"] = 0
+        grid._fit(np.array([3.0, 1.0, 10.0, 5.0]), spectrum)
+        constant_total = calls["n"]
+    finally:
+        ob.bouligand2009 = real
+
+    assert seeding == ob._LADDER_NODES + 2, seeding
+    assert derived_total < constant_total, (
+        "seeding cost {} + {} against the constant's {}".format(
+            seeding, derived_total - seeding, constant_total
+        )
+    )
+
+
+def test_sensitivity_ensemble_is_not_stranded_in_the_wrong_basin():
+    """
+    `sensitivity` used to strand its whole ensemble in the basin the `dz = 10`
+    constant reached, and report a confident spread about it.
+
+    Measured on the spectrum below, whose truth is 45 km: started at the
+    constant the ensemble has median 10.3, started at the derived seed it has
+    median 46.9. What fixes it is the seed, not anything about the ensemble --
+    re-deriving a start for every realisation gives sd 13.28 against the warm
+    start's 13.28, indistinguishable, because resampling `Phi` within
+    `sigma_Phi` does not move a realisation across a basin boundary. So the
+    warm start stays, and this guards the thing that actually mattered.
+    """
+    grid = _spectrum_fitter()
+    spectrum = _analytic_spectrum(dz=45.0, seed=1)
+
+    derived = np.asarray(
+        grid.sensitivity(0.0, 0.0, 0.0, 24, seed=3, spectrum=spectrum)[2]
+    )
+    stranded = np.asarray(
+        grid.sensitivity(0.0, 0.0, 0.0, 24, seed=3, beta=3.0, zt=1.0, dz=10.0,
+                         C=5.0, spectrum=spectrum)[2]
+    )
+
+    assert np.median(stranded) < 20.0, (
+        "the constant no longer strands the ensemble: {:.2f}".format(
+            np.median(stranded))
+    )
+    assert abs(np.median(derived) - 45.0) < 10.0, (
+        "median {:.2f} over {}".format(np.median(derived), np.round(derived, 1))
+    )
+    assert np.all(derived > 0.0)
+
+
 def test_sensitivity_does_not_disturb_priors(bouligand):
     """
     sensitivity used to redraw each prior centre by mutating self.prior in

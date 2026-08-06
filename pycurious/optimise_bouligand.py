@@ -69,6 +69,12 @@ _JACOBIAN_STEP = 1.0e-6
 # `zt`, which the Curie constraint dz = CPD - zt differentiates through.
 _ZT = _PARAMETERS.index("zt")
 
+# `beta` and `dz`, the two the ladder scan works in, and `C`, the other half of
+# the linear pair `_solve_linear` recovers.
+_BETA = _PARAMETERS.index("beta")
+_DZ = _PARAMETERS.index("dz")
+_C = _PARAMETERS.index("C")
+
 # Width given to a bound the caller collapsed to a point. Relative, so it pins
 # a parameter of any magnitude to its own last few bits.
 _DEGENERATE_BOUND = 1.0e-12
@@ -106,6 +112,119 @@ _PROFILE_XTOL = 1.0e-3
 # `profile` can also work on the Curie depth, which is not a parameter of the
 # forward model but a sum of two of them.
 _CPD = "CPD"
+
+# What a starting value falls back to when the spectrum cannot supply one --
+# either because the high-`k` band is too short to regress a `beta` out of, or,
+# for all four, because the spectrum has no usable bins at all.
+#
+# These are the constants `optimise` started every fit at before the start was
+# derived, and keeping them is deliberate. A window poisoned by a NaN comes
+# back with an empty spectrum, and the fit then returns its start untouched --
+# which is exactly how a caller detects that nothing happened
+# (`~/Global_CPD` raises `STARTING_GUESS` on it). Falling back to anything else
+# would move a value whose only job is to be recognisable.
+_FALLBACK_START = (3.0, 1.0, 10.0, 5.0)
+
+#: Where `beta` lands when the high band cannot supply one. Named separately
+#: because it is reached far more often than the whole-vector fallback.
+_BETA_START = _FALLBACK_START[0]
+
+# Fewest usable bins the linear solve can run on: two columns, `1` and `-2k`,
+# need two rows to determine them.
+_MIN_BINS = 2
+
+# Range within which a `beta` read off the high-`k` asymptote is believed. It is
+# a regression slope on a handful of noisy bins, so it can come back at
+# anything; outside this it is noise rather than a measurement, and the fallback
+# is the better guess. The same range the earlier prototype bounded `beta` to.
+_BETA_SANE = (0.0, 8.0)
+
+# Number of nodes on the `dz` ladder `_initial_guess` scans. Each node costs one
+# `bouligand2009` evaluation plus a 2x2 solve, so this is the whole price of
+# seeding -- against a fit that spends 15 to 45 of the same evaluations.
+#
+# Eight is where measurement put it, and the surprise is how flat the choice is:
+# over 20 synthetics at a 4000 km window the recovered `dz` is *identical* at 5,
+# 6, 8, 10, 12 and 16 nodes. The ladder only has to name the basin; the fit
+# resolves it. So the node count is chosen on cost, and more nodes buy nothing.
+_LADDER_NODES = 8
+
+# Ends of the ladder, as multiples of `1/k_max` and `1/k_min`.
+#
+# The layer rolloff sits at `|k| dz ~ 1`, so a `dz` outside `[1/k_max, 1/k_min]`
+# puts the rolloff outside the band this window measured. Past the top of that
+# range the spectrum is in its low-`k` asymptote across the whole band, where
+# `dz` survives only as `2 ln dz` inside the constant and is degenerate with `C`
+# -- so nodes above it are not a wider search, they are a search of a direction
+# the data cannot see. The bottom is extended half a rolloff because the
+# fractal half-space asymptote beyond it still constrains `zt`.
+_LADDER_MARGIN = (0.5, 1.0)
+
+# Where the two straight-line bands of the asymptote estimate meet, as a
+# fraction of the **logarithmic** wavenumber range: 0.5 is the geometric mean of
+# `k_min` and `k_max`. A fraction rather than a wavenumber, so it works at every
+# window size without being told anything about the window.
+#
+# Logarithmic, and this is the whole of it. The high band has to separate
+# `(1-beta) ln k` from `-2 k z_t`, and over a narrow range in `k` those two
+# regressors are nearly collinear. A *linear* split leaves the high band
+# spanning a factor of ~2.8 in `k` whatever the window, which is not enough: at
+# a 200 km window it returned beta = 3.25 +/- 1.13 against a truth of 3, wild
+# enough on one realisation in eight to send the ladder scan to the wrong
+# surface. In log space the same split gives 3.5 to 6 octaves and
+# 3.12 +/- 0.48 there, 2.98 +/- 0.05 at 1000 km.
+_ASYMPTOTE_SPLIT = 0.5
+
+# Smallest `dz` the seeder will propose, in km. The reduced misfit is flat as
+# `dz -> 0` -- the layer becomes a half-space and `dz` stops being identifiable
+# -- so a node there is a start with no gradient to descend.
+_MIN_THICKNESS = 0.5
+
+# Deviance within which two ladder nodes count as indistinguishable, and the
+# thinner layer wins. One unit is about one standard error on a single
+# coordinate, and the competing basin that motivated the ladder sits 25% of the
+# misfit away -- tens of units -- so this separates a tie from a real second
+# minimum by a wide margin.
+_LADDER_TIE = 1.0
+
+# Relative determinant below which `_solve_small` gives up on the closed form
+# and decomposes instead. Forming the normal equations squares the condition
+# number, so this sits well above the double-precision floor.
+_SINGULAR_RTOL = 1.0e-12
+
+
+def _solve_small(A, b):
+    """
+    Solve a symmetric 1x1 or 2x2 system in closed form.
+
+    `_solve_linear` runs this once per node of a `dz` ladder, and the whole
+    argument for seeding a fit rather than multi-starting it is that the ladder
+    costs a few percent of one fit. At that size the answer is three
+    multiplications, and `numpy.linalg.solve` -- let alone `lstsq`, which
+    decomposes -- is dominated by its own dispatch. Measured across a twelve
+    node ladder that overhead is comparable to the forward-model evaluations
+    the nodes exist to spend.
+
+    Falls back to `lstsq` when the system is singular, which is the case where
+    the shortcut has nothing to offer anyway: a spectrum too short, or one
+    whose two columns have collapsed onto each other.
+    """
+    if A.shape[0] == 1:
+        if A[0, 0] > 0.0:
+            return np.array([b[0] / A[0, 0]])
+    else:
+        determinant = A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0]
+        # scale free: the columns differ by orders of magnitude, so an absolute
+        # threshold would call a healthy system singular at one window size and
+        # a singular one healthy at another
+        if abs(determinant) > _SINGULAR_RTOL * abs(A[0, 0] * A[1, 1]):
+            return np.array([
+                (A[1, 1] * b[0] - A[0, 1] * b[1]) / determinant,
+                (A[0, 0] * b[1] - A[1, 0] * b[0]) / determinant,
+            ])
+
+    solution, *_ = np.linalg.lstsq(A, b, rcond=None)
+    return solution
 
 
 def _prior_loc_scale(pdf):
@@ -206,6 +325,12 @@ class CurieOptimiseBouligand(CurieGrid):
 
         # initialise prior dictionary
         self.reset_priors()
+
+        # the starting point most recently derived, alongside `last_spectrum`.
+        # A start that is computed rather than declared cannot be recovered from
+        # the arguments a caller passed, and it is what says whether a fit that
+        # came back looking untouched ever moved -- see `_initial_guess`.
+        self.last_x0 = None
 
         # lower / upper bounds for [beta, zt, dz, C]. Only the thickness gets
         # a ceiling: it is the one the data routinely fail to constrain, and
@@ -453,6 +578,448 @@ class CurieOptimiseBouligand(CurieGrid):
             np.array([np.inf if hi is None else hi for _, hi in pairs], dtype=float),
         )
 
+    def _solve_linear(self, kh, Phi, sigma_Phi, beta, dz, prior=None, zt=None, C=None):
+        """
+        Exact weighted :math:`C, z_t` at fixed :math:`\\beta, \\Delta z`, and the
+        misfit there.
+
+        Writing `pycurious.grid.bouligand2009` out,
+
+        .. math::
+            \\Phi = C \\cdot 1 + z_t \\cdot (-2k) + h(k; \\beta, \\Delta z)
+
+        :math:`C` appears once, additively, and :math:`z_t` once, as
+        :math:`-2 k z_t`; the Bessel term depends on neither. So at any
+        :math:`\\beta, \\Delta z` the best :math:`C, z_t` is a two-column
+        weighted linear solve -- exact, one step, no iteration. That is variable
+        projection (Golub & Pereyra, 1973), and it is the same manoeuvre
+        `_ANALYTIC_COLUMNS` already relies on for the Jacobian.
+
+        A Gaussian prior is one more row of the same system, so pinning
+        :math:`z_t` -- which is what a production run does -- is not lost.
+        Either parameter can also be held: pass it and it becomes a known
+        offset rather than an unknown, and the solve drops to one column.
+
+        Args:
+            kh : array shape (n,)
+                wavenumbers (rad/km)
+            Phi : array shape (n,)
+                radial power spectrum :math:`\\Phi`
+            sigma_Phi : array shape (n,)
+                uncertainty of :math:`\\Phi`
+            beta, dz : float
+                the two parameters this solve is conditional on
+            prior : dict, optional
+                priors to use in place of `self.prior`
+            zt, C : float, optional
+                hold this parameter rather than solving for it
+
+        Returns:
+            C, zt : float
+                the solution, clipped into `self.bounds`
+            cost : float
+                `min_func` at :math:`\\beta, z_t, \\Delta z, C`, which is what
+                makes this comparable across a ladder of :math:`\\Delta z`
+
+        Notes:
+            The 2x2 normal equations are solved in closed form rather than by
+            `numpy.linalg.lstsq`. The whole reason to seed a fit rather than
+            multi-start it is that a scan costs a few percent of one fit, and
+            `lstsq` does an SVD whose Python overhead alone is comparable to
+            the forward-model evaluation the node exists to spend. The
+            condition number is squared by forming the normal equations, but
+            the two columns are :math:`1/\\sigma` and :math:`-2k/\\sigma` --
+            smooth, well separated, and never near collinear -- so this is safe
+            in double precision. `lstsq` is kept as a fallback for the singular
+            case rather than as the default.
+
+            Only one bound can be active at a time in practice, because `C` is
+            unbounded by default. Where one is, clamping it and re-solving for
+            the other is the exact constrained solution; where both would be,
+            this returns the corner, which is not.
+        """
+        if prior is None:
+            prior = self.prior
+
+        # `bouligand2009` at C = zt = 0 is exactly the part of the model those
+        # two add onto, so this is a decomposition rather than an approximation.
+        with np.errstate(all="ignore"):
+            shape = bouligand2009(kh, beta, 0.0, dz, 0.0)
+
+        weight = 1.0 / sigma_Phi
+        columns = {_C: weight, _ZT: -2.0 * kh * weight}
+        base = (Phi - shape) * weight
+
+        usable = np.isfinite(base) & np.isfinite(weight) & np.isfinite(columns[_ZT])
+
+        held = {_C: C, _ZT: zt}
+        solved = self._solve_columns(columns, base, usable, held, prior)
+
+        # Clamp into the bounds. `zt >= 0` is the one that binds: a thick enough
+        # layer can otherwise be paid for with a negative depth to the top, and
+        # the scan would then prefer a basin no fit is allowed to reach.
+        # Re-solving whatever is left is exact while only one bound is active,
+        # which is the only case that arises -- `C` is unbounded by default.
+        lower, upper = self._bound_arrays()
+        for index in (_ZT, _C):
+            if held[index] is not None:
+                continue
+            clamped = float(np.clip(solved[index], lower[index], upper[index]))
+            if clamped == solved[index]:
+                continue
+            held[index] = clamped
+            solved = self._solve_columns(columns, base, usable, held, prior)
+
+        C, zt = solved[_C], solved[_ZT]
+
+        # The misfit from the pieces already in hand rather than from
+        # `min_func`, which would evaluate the forward model a second time --
+        # `bouligand2009(k, beta, zt, dz, C)` is `shape + C - 2 k zt` exactly,
+        # so there is nothing left to compute. That halves what a ladder node
+        # costs, and the ladder's whole claim on being worth running is that a
+        # node is cheap next to a fit. `test_solve_linear_cost_is_min_func`
+        # holds the two together.
+        residual = np.where(
+            usable, C * columns[_C] + zt * columns[_ZT] - base, _OVERFLOW_RESIDUAL
+        )
+        cost = np.dot(residual, residual)
+
+        x = np.array([beta, zt, dz, C], dtype=float)
+        for name, value in zip(_PARAMETERS, x):
+            prior_args = prior.get(name)
+            if prior_args is not None:
+                loc, scale = prior_args
+                cost += ((value - loc) / scale) ** 2
+
+        return C, zt, 0.5 * float(cost)
+
+    @staticmethod
+    def _solve_columns(columns, base, usable, held, prior):
+        """
+        Weighted least squares over whichever of `columns` is not in `held`.
+
+        The normal equations, with a Gaussian prior contributing
+        :math:`1/\\sigma_p^2` to its own diagonal and
+        :math:`p/\\sigma_p^2` to the right-hand side -- which is the same row it
+        contributes to `residuals`, written in these coordinates rather than in
+        the residual vector.
+
+        Returns a full mapping, so a held parameter comes back alongside a
+        solved one and the caller does not have to reassemble them.
+        """
+        unknowns = [index for index in (_C, _ZT) if held[index] is None]
+
+        target = base
+        for index in (_C, _ZT):
+            if held[index] is not None:
+                target = target - held[index] * columns[index]
+
+        if not unknowns:
+            return dict(held)
+
+        if np.count_nonzero(usable) < len(unknowns):
+            # nothing to fit against; fall back to the prior centre, or to zero
+            return {
+                index: (
+                    held[index]
+                    if held[index] is not None
+                    else (prior.get(_PARAMETERS[index]) or (0.0,))[0]
+                )
+                for index in (_C, _ZT)
+            }
+
+        size = len(unknowns)
+        A = np.zeros((size, size))
+        b = np.zeros(size)
+        for row, index in enumerate(unknowns):
+            column = columns[index][usable]
+            for col, other in enumerate(unknowns):
+                A[row, col] = np.dot(column, columns[other][usable])
+            b[row] = np.dot(column, target[usable])
+            prior_args = prior.get(_PARAMETERS[index])
+            if prior_args is not None:
+                loc, scale = prior_args
+                A[row, row] += 1.0 / scale ** 2
+                b[row] += loc / scale ** 2
+
+        solution = _solve_small(A, b)
+        out = dict(held)
+        for row, index in enumerate(unknowns):
+            out[index] = float(solution[row])
+        return out
+
+    @staticmethod
+    def _asymptote_estimates(kh, Phi):
+        """
+        :math:`\\beta` and :math:`\\Delta z` read off the two straight-line
+        limits of the model.
+
+        Either side of the layer rolloff the spectrum is a line in
+        :math:`\\ln k` and :math:`k` together
+        (`notes/bouligand-rederivation.md`):
+
+        .. math::
+            k \\Delta z \\gg 1: \\quad \\ln \\Phi = C' + (1-\\beta)\\ln k - 2 k z_t
+
+            k \\Delta z \\ll 1: \\quad \\ln \\Phi = C'' + (3-\\beta)\\ln k - 2 k z_0
+
+        so one three-column regression per band gives :math:`\\beta` and
+        :math:`z_t` from the high band, the centroid :math:`z_0` from the low
+        one, and :math:`\\Delta z = 2(z_0 - z_t)`. No evaluation of the forward
+        model at all, and read off the `power=2` spectrum already in hand rather
+        than by computing Tanaka's `power=1` version of the same window.
+
+        Returns:
+            beta : float or None
+                the useful one. Measured against synthetics at a 1000 km
+                window it lands within about 0.2 of the truth at
+                :math:`\\beta` of both 2 and 3, which is close enough to put
+                the ladder scan on the right surface -- and the scan is
+                sensitive to it, because a ladder run at :math:`\\beta = 3`
+                against a spectrum whose :math:`\\beta` is 2 ranks the
+                thicknesses wrongly.
+            dz : float or None
+                the weak one. The low-band slope only gives the centroid once
+                :math:`k \\Delta z \\ll 1`, which a window merely large enough
+                to fit does not reach: at a true 15 km this comes back near 4.
+                It is offered as one more ladder node, where being wrong costs
+                nothing, and never used on its own.
+
+        Notes:
+            Each is None where its band is too short to regress or the result
+            is not physical, and the caller falls back rather than propagating
+            a nonsense value.
+        """
+        kmin, kmax = float(np.min(kh)), float(np.max(kh))
+        if not (kmin > 0.0 and kmax > kmin):
+            return None, None
+        cut = kmin * (kmax / kmin) ** _ASYMPTOTE_SPLIT
+        high, low = kh > cut, kh <= cut
+
+        if high.sum() < 4 or low.sum() < 4:
+            return None, None
+
+        def line(mask):
+            # [1, ln k, k] against ln Phi, which is both asymptotes' shape
+            design = np.column_stack(
+                [np.ones(int(mask.sum())), np.log(kh[mask]), kh[mask]]
+            )
+            coefficients, *_ = np.linalg.lstsq(design, Phi[mask], rcond=None)
+            return coefficients
+
+        with np.errstate(all="ignore"):
+            upper = line(high)
+            lower = line(low)
+
+        beta = 1.0 - upper[1]
+        if not (np.isfinite(beta) and _BETA_SANE[0] <= beta <= _BETA_SANE[1]):
+            beta = None
+
+        # -2 k zt in the high band, -2 k z0 in the low one
+        dz = 2.0 * (-0.5 * lower[2] - -0.5 * upper[2])
+        if not (np.isfinite(dz) and dz > 0.0):
+            dz = None
+
+        return beta, dz
+
+    def _thickness_ladder(self, kh, asymptote=None):
+        """
+        The :math:`\\Delta z` the scan tries, in km.
+
+        The layer rolloff sits at :math:`k \\Delta z \\sim 1`, so a thickness
+        outside :math:`[1/k_{max}, 1/k_{min}]` puts the rolloff outside the band
+        this window measured, and the spectrum has nothing to say about it. The
+        ladder is that range scaled by `_LADDER_MARGIN`, log spaced because it
+        spans three orders of magnitude, and clipped to `self.bounds`.
+
+        `asymptote`, when the straight-line limits gave one, joins as one more
+        node. It is biased low and is never trusted on its own -- but a node
+        costs one forward-model evaluation and the scan ranks it against the
+        rest, so a wrong one is harmless and a right one is free.
+        """
+        lower, upper = self._bound_arrays()
+        kmin, kmax = float(np.min(kh)), float(np.max(kh))
+
+        low = max(_LADDER_MARGIN[0] / kmax, _MIN_THICKNESS, lower[_DZ])
+        high = min(_LADDER_MARGIN[1] / kmin, upper[_DZ])
+        if not (high > low):
+            return np.array([max(low, _MIN_THICKNESS)])
+
+        ladder = np.geomspace(low, high, _LADDER_NODES)
+        if asymptote is not None:
+            ladder = np.append(ladder, np.clip(asymptote, low, high))
+
+        return np.unique(ladder)
+
+    def _initial_guess(self, args, beta=None, zt=None, dz=None, C=None, prior=None):
+        """
+        Starting point for the fit, derived from the spectrum where it can be.
+
+        Anything the caller supplied is used as given; anything left `None` is
+        derived. :math:`C` and :math:`z_t` come from the exact linear solve in
+        `_solve_linear`, so they are never guessed at all.
+        :math:`\\Delta z` comes from a scan over `_thickness_ladder` of the
+        objective with those two profiled out.
+
+        That reduced objective *is* `min_func` minimised over :math:`C, z_t`, so
+        a scan of it is a strictly better basin detector than multi-starting the
+        fit itself over the same nodes -- and costs a few percent of one fit
+        rather than one fit per node. :math:`\\beta` is left at `_BETA_START`:
+        it is not the direction the misfit is multimodal in.
+
+        Args:
+            args : tuple
+                `(kh, Phi, sigma_Phi)`, as `residuals` takes them
+            beta, zt, dz, C : float, optional
+                hold this parameter rather than deriving it
+            prior : dict, optional
+                priors to use in place of `self.prior`
+
+        Returns:
+            x0 : array shape (4,)
+                :math:`\\beta, z_t, \\Delta z, C`. Also left on the instance as
+                `last_x0`, because a derived start is no longer something a
+                caller can reconstruct from the arguments it passed -- and a
+                fit that returned exactly its start is the signature of a
+                window the optimiser could not move in, which is worth being
+                able to detect. `sensitivity` derives one per realisation, so
+                there it is the last of them.
+
+        Notes:
+            The misfit is genuinely bimodal in :math:`\\Delta z`, and the
+            constant this replaced sat in the wrong basin on about one
+            thick-layer synthetic in five -- at a misfit 25% higher, so not the
+            flat-likelihood tie where both answers are equally good. See
+            `notes/spectrum-binning-weighting-multitaper.md`.
+
+            Measured over 20 synthetics per cell with
+            `notes/bench/score_starting_values.py`, against a dense ten-point
+            multi-start standing in for the global minimum:
+
+            =============== ===================== =====================
+            regime          constant              derived
+            =============== ===================== =====================
+            4000 km, dz 45  32.61 +/- 15.32, 7/20 46.08 +/- 5.85, 0/20
+            4000 km, dz 30  28.93 +/- 4.83,  1/20 30.42 +/- 3.32, 0/20
+            1000 km, any    identical             identical
+            200 km, any     unusable              unusable
+            =============== ===================== =====================
+
+            where the count is realisations that missed the global minimum.
+            The gain is concentrated where a window resolves the layer at all
+            and the constant is furthest from it. At 200 km neither start is
+            worth anything: both land tens of km from a truth of 30, because
+            that window cannot see a layer that thick.
+
+            **Cost.** The ladder is a flat `_LADDER_NODES + 2` evaluations of
+            the forward model, and it earns them back in iterations the fit
+            does not then spend -- 44.5 evaluations down to 18.1 at
+            4000 km and dz 45, so 27.9 in total against 44.5. It does not
+            always earn them back: on a *thin* layer at a large window the
+            constant was already almost exactly right, and there the derived
+            start costs 48.5 against 18.6 for the same answer. Two ways of
+            avoiding that were measured and both made the average worse -- a
+            coarse `beta` axis on the scan, and scanning at the measured
+            `beta` and 3.0 together, each buying identical accuracy for 1.4x
+            to 2x the evaluations.
+
+            Where two nodes are within `_LADDER_TIE` of each other in deviance
+            the smaller :math:`\\Delta z` wins. A thicker layer that fits no
+            better is the unidentifiable regime -- past the rolloff
+            :math:`\\Delta z` survives only as :math:`2 \\ln \\Delta z` inside
+            the constant -- and the thinner one is the more conservative reading
+            of a spectrum that cannot tell them apart.
+
+            **A lower misfit is not always a better answer.** Where the window
+            does not constrain the fit the likelihood has a second minimum at
+            high :math:`\\beta` and low :math:`\\Delta z`, and a start that
+            finds it reports a confident, worse number. The old constant
+            avoided that by anchoring rather than by being right. Use
+            `add_prior` on :math:`\\beta` where the window is small, which is
+            what a production run does -- and which this then starts from,
+            ahead of the spectrum's own estimate.
+
+            Nothing here is random, and nothing is read from the instance
+            except `bounds` and `prior`, so the same spectrum always gives the
+            same start. Routines that hand a spectrum straight to a second call
+            depend on that.
+        """
+        if beta is not None and zt is not None and dz is not None and C is not None:
+            self.last_x0 = np.array([beta, zt, dz, C], dtype=float)
+            return self.last_x0
+
+        if prior is None:
+            prior = self.prior
+
+        kh, Phi, sigma_Phi = args
+        kh = np.asarray(kh, dtype=float)
+
+        # A window carrying a NaN comes back with an empty spectrum, and a band
+        # cut can empty one too. There is nothing to derive from, so fall back
+        # to the constants rather than reducing over an empty axis -- and the
+        # fit then returns its start untouched, which is how a caller sees that
+        # the window was unusable.
+        if np.count_nonzero(np.isfinite(kh) & (kh > 0.0)) < _MIN_BINS:
+            supplied = (beta, zt, dz, C)
+            self.last_x0 = np.array(
+                [_FALLBACK_START[i] if supplied[i] is None else supplied[i]
+                 for i in range(len(_PARAMETERS))], dtype=float
+            )
+            return self.last_x0
+
+        # Both come from the straight-line limits, and neither costs an
+        # evaluation of the forward model. `beta` is the one that matters: the
+        # ladder is scanned at a fixed `beta`, and at the wrong one it ranks the
+        # thicknesses wrongly -- a spectrum whose `beta` is 2, scanned at 3,
+        # sends the fit into a basin 14% worse in misfit than the one it should
+        # have found. Reading `beta` off the high band instead of assuming 3.0
+        # is what makes the scan meaningful on a spectrum that is not the
+        # textbook one.
+        # A prior on `beta` outranks the spectrum's own estimate. `C` and
+        # `zt` are linear, so their priors enter `_solve_linear` as extra rows
+        # and shape the answer directly; `beta` is not, and starting it
+        # anywhere other than where the prior says is asking the optimiser to
+        # walk back to it. It also guards the one case the straight-line
+        # estimate cannot handle: where the high-`k` band carries something the
+        # model does not contain, the regression reads that as `beta` and comes
+        # back low. On WDMAM -- whose high-`k` band is an unmodelled ~4 km
+        # resolution rolloff -- it returns 1.7 to 2.0 against a fitted 3.0 to
+        # 3.5, and a `beta` prior of sigma 0.15 is precisely how that dataset
+        # says so.
+        prior_beta = prior.get(_PARAMETERS[_BETA])
+        if beta is None and prior_beta is not None:
+            beta = prior_beta[0]
+
+        asymptote_beta, asymptote_dz = (
+            self._asymptote_estimates(kh, Phi)
+            if beta is None or dz is None
+            else (None, None)
+        )
+
+        if beta is None:
+            beta = _BETA_START if asymptote_beta is None else asymptote_beta
+        lower, upper = self._bound_arrays()
+        beta = float(np.clip(beta, lower[_BETA], upper[_BETA]))
+
+        if dz is None:
+            ladder = self._thickness_ladder(kh, asymptote_dz)
+            costs = np.array([
+                self._solve_linear(
+                    kh, Phi, sigma_Phi, beta, node, prior, zt=zt, C=C
+                )[2]
+                for node in ladder
+            ])
+            # deviance is twice the misfit, and `_LADDER_TIE` is in its units
+            close = costs <= costs.min() + 0.5 * _LADDER_TIE
+            dz = float(ladder[np.argmax(close)])
+
+        C_hat, zt_hat, _ = self._solve_linear(
+            kh, Phi, sigma_Phi, beta, dz, prior, zt=zt, C=C
+        )
+
+        self.last_x0 = np.array([beta, zt_hat, dz, C_hat], dtype=float)
+        return self.last_x0
+
     def _fit(self, y0, args, prior=None, free=None, fixed=None, curie=False):
         """
         Bounded least-squares fit of `residuals`, with the Jacobian supplied.
@@ -662,10 +1229,10 @@ class CurieOptimiseBouligand(CurieGrid):
         window,
         xc,
         yc,
-        beta=3.0,
-        zt=1.0,
-        dz=10.0,
-        C=5.0,
+        beta=None,
+        zt=None,
+        dz=None,
+        C=None,
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
@@ -685,14 +1252,14 @@ class CurieOptimiseBouligand(CurieGrid):
                 centroid x values
             yc : float
                 centroid y values
-            beta : float
-                fractal parameter (starting value)
-            zt : float
-                top of magnetic layer (starting value)
-            dz : float
-                thickness of magnetic layer (starting value)
-            C : float
-                field constant (starting value)
+            beta : float, optional
+                starting fractal parameter, derived from the spectrum if None
+            zt : float, optional
+                starting top of magnetic layer, derived if None
+            dz : float, optional
+                starting thickness of magnetic layer, derived if None
+            C : float, optional
+                starting field constant, derived if None
             taper : taper (default=`numpy.hanning`)
                 taper function, set to None for no taper function
             process_subgrid : function
@@ -759,13 +1326,18 @@ class CurieOptimiseBouligand(CurieGrid):
                 ...     beta=beta, zt=zt, dz=dz, C=C)
 
             which takes 41% off the pair at a 2049-cell window.
-        """
 
-        x0 = np.array([beta, zt, dz, C])
+            A starting value left at None is derived from the spectrum by
+            `_initial_guess` rather than guessed. Supply one to override it --
+            they are independent, so `dz=30` alone starts the other three from
+            the best they can be at that thickness.
+        """
 
         k, Phi, sigma_Phi = self._resolve_spectrum(
             spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
+
+        x0 = self._initial_guess((k, Phi, sigma_Phi), beta, zt, dz, C)
 
         x = self._fit(x0, (k, Phi, sigma_Phi)).x
 
@@ -801,10 +1373,10 @@ class CurieOptimiseBouligand(CurieGrid):
         window,
         xc_list,
         yc_list,
-        beta=3.0,
-        zt=1.0,
-        dz=10.0,
-        C=5.0,
+        beta=None,
+        zt=None,
+        dz=None,
+        C=None,
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
@@ -813,22 +1385,22 @@ class CurieOptimiseBouligand(CurieGrid):
         """
         Iterate through a list of centroids to compute the optimal values
         of :math:`\\beta, z_t, \\Delta z, C` for a given window size.
-        
+
         Args:
             window : float
                 size of window in metres
             xc_list : ndarray shape (l,)
-                centroid x values 
+                centroid x values
             yc_list : ndarray shape (l,)
-                centroid y values 
-            beta : float
-                fractal parameter 
-            zt : float
-                top of magnetic layer
-            dz : float
-                thickness of magnetic layer
-            C : float
-                field constant
+                centroid y values
+            beta : float, optional
+                starting fractal parameter, derived per centroid if None
+            zt : float, optional
+                starting top of magnetic layer, derived if None
+            dz : float, optional
+                starting thickness of magnetic layer, derived if None
+            C : float, optional
+                starting field constant, derived if None
             taper : function
                 taper function (default=`numpy.hanning`)
                 set to None for no taper function
@@ -859,6 +1431,11 @@ class CurieOptimiseBouligand(CurieGrid):
             `pycurious.parallel.CurieParallel.parallelise_routine` collects one
             array per returned quantity, which a 4x4 matrix per centroid does
             not fit. Call `optimise` directly with `return_cov=True` for that.
+
+            A starting value left at None is derived at *each* centroid from
+            that centroid's own spectrum, which is what a map wants: one
+            constant good for the middle of a grid is a poor start at its
+            edges.
         """
         return self.parallelise_routine(
             window,
@@ -909,10 +1486,10 @@ class CurieOptimiseBouligand(CurieGrid):
         level=0.95,
         npoints=21,
         bracket=None,
-        beta=3.0,
-        zt=1.0,
-        dz=10.0,
-        C=5.0,
+        beta=None,
+        zt=None,
+        dz=None,
+        C=None,
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
@@ -949,8 +1526,9 @@ class CurieOptimiseBouligand(CurieGrid):
             bracket : tuple, optional
                 (min, max) of the scan. Defaults to a range either side of the
                 fitted value, wider above than below because of the tail.
-            beta, zt, dz, C : float
-                starting values for the underlying fit
+            beta, zt, dz, C : float, optional
+                starting values for the underlying fit; each is derived from
+                the spectrum where it is left None
             taper : function (default=np.hanning)
                 taper function, or None for no taper
             process_subgrid : function, optional
@@ -998,13 +1576,12 @@ class CurieOptimiseBouligand(CurieGrid):
                     _PARAMETERS + (_CPD,), target
                 )
             )
-
         k, Phi, sigma_Phi = self._resolve_spectrum(
             spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
         args = (k, Phi, sigma_Phi)
 
-        x0 = np.array([beta, zt, dz, C])
+        x0 = self._initial_guess(args, beta, zt, dz, C)
         res = self._fit(x0, args)
         x_hat, F_min = res.x, res.cost
 
@@ -1140,10 +1717,10 @@ class CurieOptimiseBouligand(CurieGrid):
         nsim,
         burnin,
         x_scale=None,
-        beta=3.0,
-        zt=1.0,
-        dz=10.0,
-        C=5.0,
+        beta=None,
+        zt=None,
+        dz=None,
+        C=None,
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
@@ -1176,14 +1753,15 @@ class CurieOptimiseBouligand(CurieGrid):
                 initial width of the proposal in each parameter
                 (default=`[1,1,1,1]` for `[beta, zt, dz, C]`). With
                 `adapt=True` this is only a starting point.
-            beta : float
-                fractal parameter (starting value for the search)
-            zt : float
-                top of magnetic layer (starting value for the search)
-            dz : float
-                thickness of magnetic layer (starting value for the search)
-            C : float
-                field constant (starting value for the search)
+            beta : float, optional
+                fractal parameter (starting value for the search), derived
+                from the spectrum if None
+            zt : float, optional
+                top of magnetic layer (starting value), derived if None
+            dz : float, optional
+                thickness of magnetic layer (starting value), derived if None
+            C : float, optional
+                field constant (starting value), derived if None
             taper : function (default=np.hanning)
                 taper function, or None for no taper
             process_subgrid : function, optional
@@ -1289,9 +1867,8 @@ class CurieOptimiseBouligand(CurieGrid):
         # burn-in travelling instead of tuning. Measured on a synthetic, the
         # posterior mean from a default start sits at a misfit of 121 against
         # the mode's 50; started here it lands on 50.1.
-        start = self._fit(
-            np.array([beta, zt, dz, C], dtype=float), (k, Phi, sigma_Phi)
-        )
+        args = (k, Phi, sigma_Phi)
+        start = self._fit(self._initial_guess(args, beta, zt, dz, C), args)
 
         x = start.x
         F = log_posterior(x)
@@ -1373,10 +1950,10 @@ class CurieOptimiseBouligand(CurieGrid):
         xc,
         yc,
         nsim,
-        beta=3.0,
-        zt=1.0,
-        dz=10.0,
-        C=5.0,
+        beta=None,
+        zt=None,
+        dz=None,
+        C=None,
         taper=np.hanning,
         process_subgrid=None,
         dof_factor=None,
@@ -1398,14 +1975,14 @@ class CurieOptimiseBouligand(CurieGrid):
                 centroid y values
             nsim : int
                 number of Monte Carlo simulations
-            beta : float
-                starting fractal parameter
-            zt : float
-                starting top of magnetic layer
-            dz : float
-                starting thickness of magnetic layer
-            C : float
-                starting field constant
+            beta : float, optional
+                starting fractal parameter, derived per realisation if None
+            zt : float, optional
+                starting top of magnetic layer, derived if None
+            dz : float, optional
+                starting thickness of magnetic layer, derived if None
+            C : float, optional
+                starting field constant, derived if None
             taper : function (default=`numpy.hanning`)
                 taper function, set to None for no taper function
             process_subgrid : function, optional
@@ -1436,23 +2013,47 @@ class CurieOptimiseBouligand(CurieGrid):
             annuli -- so agreement between the two is not evidence that either
             is right. Only an ensemble over independent realisations of the
             field calibrates that.
+
+            Every realisation starts from one fit to the *unresampled*
+            spectrum, not from its own. That warm start is worth about a third
+            of the total, and it was measured rather than assumed: re-deriving
+            a start per realisation costs 1.4x the forward-model evaluations
+            and gives a spread of 13.28 against the warm start's 13.28.
+            Resampling :math:`\\Phi` within :math:`\\sigma_\\Phi` does not move
+            a realisation across a basin boundary, so there is nothing for the
+            extra work to find.
+
+            What that warm start does depend on is the fit it starts from. This
+            routine used to strand its whole ensemble in one basin and report a
+            confident spread about it -- on a synthetic whose true
+            :math:`\\Delta z` is 45 km the ensemble came back with a median of
+            10.3 -- and the cause was the old constant :math:`\\Delta z = 10`,
+            not the sharing. Deriving the start (`_initial_guess`) is what
+            fixed it. Supplying all four puts the anchoring fit wherever the
+            caller says, which is the way to ask the narrower question of how
+            the spectrum's scatter alone moves the answer from a chosen point.
+
+            The result is not calibrated either way: measured against the
+            spread over independent realisations of the *field*, this reports
+            about 0.5 to 0.6 of it. That is the bin-independence assumption
+            above, and no choice of starting point touches it.
         """
         rng = np.random.default_rng(seed)
 
         samples = np.empty((nsim, 4))
-        x0 = np.array([beta, zt, dz, C])
 
         use_keys = [key for key, pdf in self.prior_pdf.items() if pdf is not None]
 
         k, Phi, sigma_Phi = self._resolve_spectrum(
             spectrum, window, xc, yc, taper, process_subgrid, dof_factor, **kwargs
         )
+        args = (k, Phi, sigma_Phi)
 
         # Every resampled spectrum lands in the same basin, so start each
-        # simulation from the unresampled solution rather than from the
-        # caller's guess. One extra fit up front, and about a third off the
-        # total for any useful `nsim`.
-        x0 = self._fit(x0, (k, Phi, sigma_Phi)).x
+        # simulation from the unresampled solution rather than from the start
+        # itself. One extra fit up front, and about a third off the total for
+        # any useful `nsim`.
+        x0 = self._fit(self._initial_guess(args, beta, zt, dz, C), args).x
 
         for sim in range(0, nsim):
             # a fresh set of prior centres, drawn without disturbing the ones
